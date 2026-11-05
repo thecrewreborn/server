@@ -79,11 +79,11 @@ The Crew (2014) auf deinem eigenen Server zu Hause, für PS4, PS5 und PC. Mehr u
 
 Von der [Release-Seite](https://github.com/thecrewreborn/server/releases) brauchst du:
 
-1. **Den Server, für alle:** den **Source code (zip)**. Entpack ihn auf einem Rechner in deinem Heimnetz und starte
-   ihn: `start-server.bat` unter Windows (Doppelklick), `./start-server.sh` unter macOS und Linux (im Terminal).
-2. **Spielen auf PS4 / PS5:** `TheCrewReborn-PS4-<Version>.zip`. Kopier `CUSA00161.xml` auf der Konsole nach
+1. **Den Server, für alle:** den **Source code (zip)**. Entpacke ihn auf einem Rechner in deinem Heimnetz und
+   starte ihn: `start-server.bat` unter Windows (Doppelklick), `./start-server.sh` unter macOS und Linux (im Terminal).
+2. **Spielen auf PS4 / PS5:** `TheCrewReborn-PS4-<Version>.zip`. Kopiere `CUSA00161.xml` auf der Konsole nach
    `/data/GoldHEN/patches/xml/` und schalte den Patch im Patch-Menü von GoldHEN ein.
-3. **Spielen am PC:** `TheCrewReborn-PC-<Version>.zip`. Kopier `dinput8.dll` und `reborn.ini` in den Spielordner,
+3. **Spielen am PC:** `TheCrewReborn-PC-<Version>.zip`. Kopiere `dinput8.dll` und `reborn.ini` in den Spielordner,
    neben `TheCrew.exe`.
 
 Starte zuerst den Server, dann das Spiel. Konsole und PC finden den Server im Heimnetz von selbst.
@@ -95,8 +95,8 @@ Starte zuerst den Server, dann das Spiel. Konsole und PC finden den Server im He
     auf einer Konsole mit GoldHEN. Getestet auf einer PS4 mit Firmware 11.50.
   - **PC:** Ubisoft-Connect-Version, `TheCrew.exe` 1.2.0.0 (Build 502193). Getestet unter Windows 11.
 
-  Noch nicht getestet: die Steam-Version für PC und die PS5. Andere PS4-Regionen und Spielversionen gehen noch
-  nicht; der Patch passt nur auf CUSA00161 mit Update 1.21.
+  Noch nicht getestet: die Steam-Version für PC und die PS5. Andere PS4-Regionen und Spielversionen werden
+  noch nicht unterstützt; der Patch passt nur auf CUSA00161 mit Update 1.21.
 - Einen Rechner im selben Netzwerk wie die Konsole oder der Spiele-PC: Windows, macOS oder Linux. Der Server kann
   auch auf dem Spiele-PC selbst laufen. Linux braucht Python 3.10 oder neuer mit venv (Debian/Ubuntu:
   `sudo apt install python3 python3-venv`); unter Windows und macOS installiert das Startskript Python bei Bedarf.
@@ -105,7 +105,8 @@ Starte zuerst den Server, dann das Spiel. Konsole und PC finden den Server im He
 
 Der erste Start richtet den Server ein und dauert eine Minute (macOS fragt nach deinem Passwort, falls Python
 installiert werden muss). Spätere Starts dauern ein paar Sekunden. Der Server läuft, bis du das Fenster schließt
-oder Strg+C drückst. Windows fragt einmal, ob Python das Netzwerk nutzen darf: für private Netzwerke erlauben.
+oder Strg+C drückst. Windows fragt einmal, ob Python das Netzwerk nutzen darf: Erlaube den Zugriff für private
+Netzwerke.
 
 ## Dein Fortschritt, auf PS4 und PC
 
@@ -113,8 +114,8 @@ Spielstände liegen im Ordner `save` neben dem Server, eine Datei pro Spielernam
 `Name` in `reborn.ini` (leer = dein Windows-Benutzername). Sichere diesen Ordner, um deinen Fortschritt zu behalten.
 
 Cross-Save: Derselbe Name auf PS4 und PC spielt denselben Spielstand. Um deinen PS4-Fortschritt am PC
-weiterzuspielen, trag in `reborn.ini` bei `Name` deinen PS4-Benutzernamen ein, genau gleich geschrieben; umgekehrt
-geht es genauso.
+weiterzuspielen, trage in `reborn.ini` bei `Name` deinen PS4-Benutzernamen in exakt derselben Schreibweise ein;
+umgekehrt funktioniert es ebenso.
 
 Ein Name spielt immer nur auf einem Gerät. Solange ein Spiel mit einem Namen online ist, lehnt der Server eine zweite
 Anmeldung mit diesem Namen von einem anderen Gerät ab, damit nie zwei Spiele in denselben Spielstand schreiben; das
@@ -125,13 +126,13 @@ und melde dich erneut an.
 
 TCP 80 und 443, UDP 4000 und 4001. Für das Spielen zu Hause muss am Router nichts freigegeben werden. Wenn das
 System Port 80 oder 443 verweigert (ein anderes Programm nutzt ihn, oder Linux ohne root), nimmt der Server 8080 und
-8443 und sagt das dem Spiel; beim Start steht das im Fenster. Findet das Spiel den Server nicht, trag am PC `Host` in
-`reborn.ini` ein oder auf der PS4 die Serveradresse in `/data/TheCrew/server.txt`.
+8443 und teilt das dem Spiel mit; beim Start steht der Hinweis im Fenster. Findet das Spiel den Server nicht, trage
+am PC `Host` in `reborn.ini` ein oder auf der PS4 die Serveradresse in `/data/TheCrew/server.txt`.
 
 ## Fehler und Ideen
 
-Meld sie unter https://github.com/thecrewreborn/server/issues (dafür brauchst du ein GitHub-Konto). Der Ordner
-`captures` neben dem Server enthält die Logs; häng sie an, sie helfen sehr.
+Melde sie bitte unter https://github.com/thecrewreborn/server/issues (dafür ist ein GitHub-Konto nötig). Der
+Ordner `captures` neben dem Server enthält die Logs; hänge sie bitte an, sie helfen bei der Fehlersuche sehr.
 
 ## Lizenz
 
