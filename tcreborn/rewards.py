@@ -6,7 +6,9 @@ import random
 import struct
 from dataclasses import dataclass, field
 
-PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), "data", "rewards.json")
+from tcreborn import paths
+
+PATH = paths.table("rewards.json")
 TOP_LEVEL, MAX_BUCKS, MAX_LEVEL = 0, 1, 3
 LEVEL_UP_PERK = 7
 LEVEL_UP_CHANCE = [0, 2, 4, 6, 8, 10, 12, 14, 16, 18, 20]

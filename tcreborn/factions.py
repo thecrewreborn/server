@@ -4,8 +4,9 @@ import json
 import os
 import random
 
-ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-PATH = os.path.join(ROOT, "save", "factions.json")
+from tcreborn import paths
+
+PATH = paths.home("save", "factions.json")
 HOUR = 3600
 MAX_CATCH_UP = 24 * 14
 FIELDS = list(range(0x50, 0xA0, 4))

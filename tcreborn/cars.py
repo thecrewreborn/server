@@ -5,9 +5,10 @@ import os
 import struct
 from dataclasses import dataclass
 
+from tcreborn import paths
 from tcreborn.wire import T_ARRAY, blob, frame
 
-PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), "data", "cars.json")
+PATH = paths.table("cars.json")
 NONE = 0xFFFFFFFFFFFFFFFF
 OWNED_WORDS = 0x8C
 OWNED_SLOTS = 11

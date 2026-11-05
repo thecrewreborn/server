@@ -4,7 +4,9 @@ import configparser
 import os
 import socket
 
-ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+from tcreborn import paths
+
+ROOT = paths.HOME
 GAME_RELAY = ("185.38.20.88", 4000)
 RELAY = ("0.0.0.0", 4000)
 
@@ -17,7 +19,10 @@ def _load() -> configparser.ConfigParser:
 
 def lan_ip() -> str:
     with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as s:
-        s.connect(("10.255.255.255", 1))
+        try:
+            s.connect(("10.255.255.255", 1))
+        except OSError:
+            return "127.0.0.1"
         return s.getsockname()[0]
 
 
@@ -55,6 +60,11 @@ def relay_address() -> tuple[str, int]:
 def save_path() -> str:
     path = _load().get("server", "save_path", fallback="") or os.path.join("save", "player.json")
     return path if os.path.isabs(path) else os.path.join(ROOT, path)
+
+
+def game_data() -> str | None:
+    path = _load().get("server", "game_data", fallback="").strip()
+    return (path if os.path.isabs(path) else os.path.join(ROOT, path)) if path else None
 
 
 def abilities() -> str:

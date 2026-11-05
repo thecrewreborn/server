@@ -8,9 +8,10 @@ import re
 import struct
 import zlib
 
-ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-FOLDER = os.path.join(ROOT, "save", "avatars")
-LOGO = os.path.join(ROOT, "tcreborn", "data", "avatar_logo.png")
+from tcreborn import paths
+
+FOLDER = paths.home("save", "avatars")
+LOGO = paths.bundled("avatar_logo.png")
 FIT = 256
 USER_PATH = re.compile(r"/avatars/(0x[0-9A-F]{8})\.png")
 NAME_PATH = re.compile(r"/avatars/name/([A-Za-z0-9_-]{3,16})\.png")

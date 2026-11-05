@@ -5,7 +5,9 @@ import json
 import os
 import random
 
-PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), "data", "summit.json")
+from tcreborn import paths
+
+PATH = paths.table("summit.json")
 NONE = 0xFFFF
 FEE = 1000
 EVENT_BUCKS, EVENT_XP = 3000, 800
