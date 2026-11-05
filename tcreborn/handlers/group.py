@@ -4,7 +4,7 @@ import struct
 
 from tcreborn import factions, rewards
 from tcreborn.handlers import Ctx, register
-from tcreborn.handlers.replies import TEMPLATES, fill
+from tcreborn.handlers.replies import STATUS_SLOTS, TEMPLATES, fill
 
 DAY = 86400
 DAILY_BUCKS = 2040
@@ -15,26 +15,7 @@ def _template(req: int) -> tuple[int, bytes, list]:
     return int(t["type"], 16), bytes.fromhex(t["body"]), t["fields"]
 
 
-def _slots(body: bytes) -> list[tuple[int, str, int, int]]:
-    out, taken = [], set()
-    for o in range(len(body) - 7):
-        v = struct.unpack_from(">Q", body, o)[0]
-        for g, rec in enumerate(factions.START):
-            for off in (0x54, 0x58, 0x5C, 0x60, 0x64):
-                if v == factions.field(rec, off) and o not in taken:
-                    out.append((o, ">Q", g, off))
-                    taken.update(range(o, o + 8))
-    for o in range(len(body) - 3):
-        if o in taken:
-            continue
-        v = struct.unpack_from(">I", body, o)[0]
-        for g, rec in enumerate(factions.START):
-            if v == factions.field(rec, 0x68):
-                out.append((o, ">I", g, 0x68))
-    return out
-
-
-SLOTS = {req: _slots(bytes.fromhex(TEMPLATES[f"0x{req:08x}"]["body"])) for req in (0xA7476B7D, 0x594BCC53, 0x82B2A771)}
+SLOTS = STATUS_SLOTS
 OWN_BLOCK = {0xA7476B7D: 26, 0x594BCC53: 54, 0x82B2A771: 53}
 
 
