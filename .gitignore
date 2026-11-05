@@ -1,0 +1,9 @@
+__pycache__/
+*.pyc
+.venv/
+.DS_Store
+config.ini
+save/
+captures/
+tcreborn/data/*.json
+!tcreborn/data/auto_replies.json
