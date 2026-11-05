@@ -3,7 +3,7 @@
 import argparse
 import os
 
-from tcreborn import config, discovery, ubi
+from tcreborn import config, discovery, tls, ubi
 from tcreborn.server import Server
 from tcreborn.version import VERSION
 
@@ -26,6 +26,8 @@ def main(argv: list[str] | None = None) -> None:
     requests_log = os.path.join(os.path.dirname(args.log), "requests.jsonl")
     ubi.serve(args.http_port, requests_log)
     if config.https_port():
+        if tls.ensure(*config.tls_cert(), config.advertised_ip()):
+            print(f"created the HTTPS certificate {config.tls_cert()[0]}", flush=True)
         ubi.serve_tls(config.https_port(), *config.tls_cert(), requests_log)
         print(f"https on tcp 0.0.0.0:{config.https_port()} (PC game)", flush=True)
     discovery.serve(args.port, args.http_port, config.advertised_ip(), bots=config.bots(), afk=config.afk_kick(),

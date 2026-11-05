@@ -7,3 +7,4 @@ save/
 captures/
 tcreborn/data/*.json
 !tcreborn/data/auto_replies.json
+certs/
