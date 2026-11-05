@@ -16,6 +16,15 @@ SERVICES = [
     "ScoresService", "LoginService", "RichPresence", "SummitService", "LFPService", "RMTService", "UGCService",
     "ChaseService", "UserPresence", "RewardService", "PushService", "IDGenerator"]
 RULE_ANY_INSTANCE = 0xD4150057
+RULE_ZONES = 0xA74C51D7
+ZONE_SERVICES = {"SessionService"}
+HANDOVER_MARGIN = 1000.0
+
+
+def zone_rule() -> bytes:
+    zones = [(0.0, 0.0, 0)]
+    entries = b"".join(struct.pack(">ffB", x, y, i) for x, y, i in zones)
+    return blob(frame(T_ARRAY, struct.pack(">I", len(zones)) + entries)) + struct.pack(">f", HANDOVER_MARGIN)
 
 
 def service_address(index: int) -> tuple[str, int]:
@@ -34,7 +43,9 @@ def query_services(ctx: Ctx, body: bytes):
 
 @register(0x27C711C5, "SCALABILITY_RULES")
 def scalability_rules(ctx: Ctx, body: bytes):
-    return 0xBFA116CC, blob(serializer_list([frame(RULE_ANY_INSTANCE, blob(n.encode())) for n in SERVICES]))
+    rules = [frame(RULE_ZONES, blob(n.encode()) + zone_rule()) if n in ZONE_SERVICES
+             else frame(RULE_ANY_INSTANCE, blob(n.encode())) for n in SERVICES]
+    return 0xBFA116CC, blob(serializer_list(rules))
 
 
 @register(0xA1155286, "GAME_CONTENT")
