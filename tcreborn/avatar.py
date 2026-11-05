@@ -92,10 +92,13 @@ def _box(width: int, height: int, rgba: bytes, size: int) -> bytes:
 
 
 def fit(data: bytes) -> bytes:
-    width, height = struct.unpack(">II", data[16:24])
-    if data[:8] == b"\x89PNG\r\n\x1a\n" and width == height and width & (width - 1) == 0 and width <= FIT:
+    width, height, depth, color, _, _, interlace = struct.unpack(">IIBBBBB", data[16:29])
+    square = width == height and width & (width - 1) == 0 and width <= FIT
+    if data[:8] == b"\x89PNG\r\n\x1a\n" and square and (depth, color, interlace) == (8, 6, 0):
         return data
     width, height, rgba = _decode(data)
+    if square:
+        return _encode(width, height, rgba)
     return _encode(FIT, FIT, _box(width, height, rgba, FIT))
 
 
