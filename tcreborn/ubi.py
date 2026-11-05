@@ -253,7 +253,9 @@ class _Server(ThreadingHTTPServer):
     def handle_error(self, request, client_address):
         err = sys.exc_info()[1]
         if isinstance(err, (ConnectionError, ssl.SSLError, TimeoutError)):
-            print(f"[{datetime.datetime.now():%H:%M:%S}] http {client_address[0]} {type(err).__name__}", flush=True)
+            reason = getattr(err, "reason", None) or getattr(err, "strerror", None) or ""
+            print(f"[{datetime.datetime.now():%H:%M:%S}] http {client_address[0]} {type(err).__name__} {reason}".rstrip(),
+                  flush=True)
         else:
             super().handle_error(request, client_address)
 
