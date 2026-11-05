@@ -7,6 +7,7 @@ import re
 import ssl
 import sys
 import threading
+import time
 import urllib.parse
 import uuid
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
@@ -93,11 +94,49 @@ def ticket_name(auth: str) -> str:
     return ticket.split("|", 1)[0].strip()
 
 
-def session(body: dict, client_ip: str, auth: str = "") -> dict:
+ONLINE: dict[str, tuple[str, float]] = {}
+ONLINE_TIMEOUT = 90.0
+_ONLINE_LOCK = threading.Lock()
+
+
+def _now() -> float:
+    return time.monotonic()
+
+
+def _save_key(name: str) -> str:
+    from tcreborn.server import save_name
+    return save_name(name)
+
+
+def touch(name: str, client_ip: str) -> None:
+    with _ONLINE_LOCK:
+        ONLINE[_save_key(name)] = (client_ip, _now())
+
+
+def online_elsewhere(name: str, client_ip: str) -> str | None:
+    with _ONLINE_LOCK:
+        entry = ONLINE.get(_save_key(name))
+    if entry and entry[0] != client_ip and _now() - entry[1] < ONLINE_TIMEOUT:
+        return entry[0]
+    return None
+
+
+def logout(client_ip: str) -> None:
+    with _ONLINE_LOCK:
+        for key in [k for k, (ip, _) in ONLINE.items() if ip == client_ip]:
+            del ONLINE[key]
+
+
+def login_name(body: dict, auth: str = "") -> tuple[str, str]:
     name, platform = body.get("nameOnPlatform"), "psn"
     if not name and ticket_name(auth):
         name, platform = ticket_name(auth), "uplay"
-    name = name or "Player"
+    return name or "Player", platform
+
+
+def session(body: dict, client_ip: str, auth: str = "") -> dict:
+    name, platform = login_name(body, auth)
+    touch(name, client_ip)
     SESSIONS[client_ip] = name
     PLATFORMS[client_ip] = platform
     profile = stable_id("profile", name)
@@ -181,7 +220,18 @@ def route(method: str, path: str, body: dict, host: str, client: tuple[str, int]
     if path.startswith("/avatars/") and path.endswith(".png"):
         return 200, avatar.for_request(SESSIONS.get(client[0]), path, client[0])
     if path.endswith("/profiles/sessions"):
-        return 200, session(body, client[0], auth) if method == "POST" else {}
+        if method == "DELETE":
+            logout(client[0])
+            return 200, {}
+        if method != "POST":
+            return 200, {}
+        name, _ = login_name(body, auth)
+        other = online_elsewhere(name, client[0]) if name != "Player" else None
+        if other:
+            print(f"[{datetime.datetime.now():%H:%M:%S}] login {client[0]} refused: {name} is playing on {other}",
+                  flush=True)
+            return 409, {"error": f"{name} is already playing on another device", "errorCode": 409}
+        return 200, session(body, client[0], auth)
     if "/applications/" in path and path.endswith("/configuration"):
         return 200, configuration(host)
     if path.endswith("/native/token"):

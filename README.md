@@ -4,7 +4,13 @@ The Crew (2014) on your own home server, for PS4, PS5 and PC. More at https://th
 
 ## What you need
 
-- Your own copy of The Crew: PS4 (European version 1.21, CUSA00161) or PC.
+- Your own copy of The Crew for PS4 or PC, in one of these versions:
+  - **PS4:** European version CUSA00161, version 1.00 with update 1.21 installed (the game info shows 01.21), on a
+    console with GoldHEN. Tested on a PS4 with firmware 11.50.
+  - **PC:** Ubisoft Connect version, `TheCrew.exe` 1.2.0.0 (build 502193). Tested on Windows 11.
+
+  Not tested yet: the Steam version for PC and the PS5. Other PS4 regions and game versions don't work yet; the
+  patch fits only CUSA00161 with update 1.21.
 - A computer on the same network as the console or the gaming PC: Windows, macOS or Linux. The server can also run
   on the gaming PC itself.
 
@@ -35,10 +41,17 @@ Windows asks once whether Python may use the network: allow it for private netwo
   The game finds the server on your network by itself; set `Host` in `reborn.ini` if it doesn't. Your Windows user
   name is your player name unless you set `Name` in `reborn.ini`.
 
-## Your progress
+## Your progress, on PS4 and PC
 
-Saves live in the `save` folder next to the server, one file per PS4 profile or PC player name. Back up that folder
-to keep your progress.
+Saves live in the `save` folder next to the server, one file per player name: the PS4 user name, or the PC's `Name`
+in `reborn.ini` (your Windows user name if empty). Back up that folder to keep your progress.
+
+Cross-save: the same name on PS4 and PC plays the same save. To continue your PS4 progress on the PC, set `Name` in
+`reborn.ini` to your PS4 user name, spelled exactly the same; it works the other way round too.
+
+One name plays on one device at a time. While a game is online with a name, the server refuses a second login with
+that name from another device, so two games never write the same save; the game then shows error #0_35. Quit the
+first game, or wait 90 seconds after it lost its connection, and log in again.
 
 ## Ports
 

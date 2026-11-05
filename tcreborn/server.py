@@ -193,6 +193,8 @@ class Server:
         msg = parse_message(plain)
         self.log({"dir": "in", "src": peer, "kind": "tunnel", "dst": f"{dst[0]}:{dst[1]}", "target": target,
                   "plain": plain.hex()})
+        if sess.ctx is not None:
+            ubi.touch(sess.ctx.player_name, addr[0])
         if not (msg and msg.crc_ok):
             return []
         if msg.type == T_DATA and msg.flags is not None and msg.flags & 1:

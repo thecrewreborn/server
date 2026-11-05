@@ -1,5 +1,5 @@
-rem The Crew Reborn - Knutwurst
-rem https://thecrewreborn.github.io - https://ko-fi.com/knutwurst
+@rem The Crew Reborn - Knutwurst
+@rem https://thecrewreborn.github.io - https://ko-fi.com/knutwurst
 @echo off
 setlocal
 cd /d "%~dp0"
