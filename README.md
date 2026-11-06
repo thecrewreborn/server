@@ -6,9 +6,9 @@ The Crew (2014) on your own home server, for PS4, PS5 and PC. More at https://th
 
 ## Quick start
 
-From the [release page](https://github.com/thecrewreborn/server/releases) you need:
+From the [download page](https://thecrewreborn.github.io/#download) you need:
 
-1. **The server, for everyone:** the **Source code (zip)**. Unpack it on a computer in your home network and start
+1. **The server, for everyone:** `TheCrewReborn-Server-<version>.zip`. Unpack it on a computer in your home network and start
    it: `start-server.bat` on Windows (double-click), `./start-server.sh` on macOS and Linux (in a terminal).
 2. **Playing on PS4 / PS5:** `TheCrewReborn-PS4-<version>.zip`. Copy `CUSA00161.xml` to
    `/data/GoldHEN/patches/xml/` on the console and switch the patch on in GoldHEN's patch menu.
@@ -77,9 +77,9 @@ The Crew (2014) auf deinem eigenen Server zu Hause, für PS4, PS5 und PC. Mehr u
 
 ## Schnellstart
 
-Von der [Release-Seite](https://github.com/thecrewreborn/server/releases) brauchst du:
+Von der [Download-Seite](https://thecrewreborn.github.io/#download) brauchst du:
 
-1. **Den Server, für alle:** den **Source code (zip)**. Entpacke ihn auf einem Rechner in deinem Heimnetz und
+1. **Den Server, für alle:** `TheCrewReborn-Server-<Version>.zip`. Entpacke ihn auf einem Rechner in deinem Heimnetz und
    starte ihn: `start-server.bat` unter Windows (Doppelklick), `./start-server.sh` unter macOS und Linux (im Terminal).
 2. **Spielen auf PS4 / PS5:** `TheCrewReborn-PS4-<Version>.zip`. Kopiere `CUSA00161.xml` auf der Konsole nach
    `/data/GoldHEN/patches/xml/` und schalte den Patch im Patch-Menü von GoldHEN ein.
