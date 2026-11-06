@@ -154,5 +154,5 @@ def region_reward(ctx: Ctx, body: bytes):
             p.save()
             return 0x6939A37D, (struct.pack(">HQ", 0, model) + cars.array(1, cars.with_state(cfg, REWARD_STATE))
                                 + cars.part_list(s))
-    from tcreborn.handlers.replies import region_reward_without_car
-    return 0x6939A37D, region_reward_without_car()
+    from tcreborn.handlers.replies import TEMPLATES
+    return 0x6939A37D, bytes.fromhex(TEMPLATES["0x88648ce9"]["body"])
