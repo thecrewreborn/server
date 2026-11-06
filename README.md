@@ -24,7 +24,8 @@ again in the game. The very first start needs the server running.
 - Your own copy of The Crew for PS4 or PC, in one of these versions:
   - **PS4:** European version CUSA00161, version 1.00 with update 1.21 installed (the game info shows 01.21), on a
     console with GoldHEN. Tested on a PS4 with firmware 11.50.
-  - **PC:** Ubisoft Connect version, `TheCrew.exe` 1.2.0.0 (build 502193). Tested on Windows 11.
+  - **PC:** Ubisoft Connect version, `TheCrew.exe` 1.2.0.0 (build 502193). Tested on Windows 11, also Windows 11 on ARM
+    (Parallels on a Mac with Apple silicon).
 
   Not tested yet: the Steam version for PC and the PS5. Other PS4 regions and game versions don't work yet; the
   patch fits only CUSA00161 with update 1.21.
@@ -97,7 +98,8 @@ im Spiel erneut an. Beim allerersten Start muss der Server bereits laufen.
 - Dein eigenes The Crew für PS4 oder PC, in einer dieser Versionen:
   - **PS4:** europäische Version CUSA00161, Version 1.00 mit installiertem Update 1.21 (die Spielinfo zeigt 01.21),
     auf einer Konsole mit GoldHEN. Getestet auf einer PS4 mit Firmware 11.50.
-  - **PC:** Ubisoft-Connect-Version, `TheCrew.exe` 1.2.0.0 (Build 502193). Getestet unter Windows 11.
+  - **PC:** Ubisoft-Connect-Version, `TheCrew.exe` 1.2.0.0 (Build 502193). Getestet unter Windows 11, auch unter Windows 11
+    für ARM (Parallels auf einem Mac mit Apple-Chip).
 
   Noch nicht getestet: die Steam-Version für PC und die PS5. Andere PS4-Regionen und Spielversionen werden
   noch nicht unterstützt; der Patch passt nur auf CUSA00161 mit Update 1.21.
