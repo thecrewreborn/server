@@ -81,6 +81,9 @@ def give(p, model: int, spec: int, parts: list[int], mount: bool = False) -> boo
 REWARD_PART = "CAbility_RewardPart"
 
 
+REWARD_PARTS = False
+
+
 def has_ability(p, name: str) -> bool:
     from tcreborn import rewards
     t = rewards.TABLES
@@ -91,7 +94,7 @@ def has_ability(p, name: str) -> bool:
 def mission_part(p, mission: int, medal: int, model: int, spec: int, rng=random) -> int | None:
     t = TABLE
     m = t["missions"].get(f"{mission:#x}") if t is not None else None
-    if m is None or not 0 <= medal < 4 or not has_ability(p, REWARD_PART):
+    if not REWARD_PARTS or m is None or not 0 <= medal < 4 or not has_ability(p, REWARD_PART):
         return None
     quality = m["quality"][min(medal, 2)]
     if quality < 0:
