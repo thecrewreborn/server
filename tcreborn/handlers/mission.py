@@ -2,7 +2,7 @@
 # https://thecrewreborn.github.io - https://ko-fi.com/knutwurst
 import struct
 
-from tcreborn import cars, rewards
+from tcreborn import cars, physparts, rewards
 from tcreborn.handlers import Ctx, register
 from tcreborn.player import ALL_ABILITIES
 from tcreborn.wire import T_ARRAY, blob, empty_array, frame, u64_array
@@ -45,17 +45,29 @@ def dealer_car(p, body: bytes) -> bytes | None:
             + struct.pack(">H", 0))
 
 
+def reward_part(p, mission: int, score: int, body: bytes) -> int | None:
+    t = rewards.TABLES
+    m = t.missions.get(mission) if t is not None else None
+    if m is None or len(m.get("thresholds", [])) < 4 or len(body) < 0x38:
+        return None
+    medal = rewards._medal(t, m["thresholds"], score, p.level) if score >= m["thresholds"][0] else -1
+    model, spec = struct.unpack_from(">QQ", body, 0x28)
+    return physparts.mission_part(p, mission, medal, model, spec)
+
+
 @register(0xBB6835CF, "MISSION_END")
 def mission_end(ctx: Ctx, body: bytes):
     mission, score = struct.unpack_from(">QI", body, 0x1C)
     p = ctx.player
     finish_mission(p, mission, score)
+    part = reward_part(p, mission, score, body)
     car = dealer_car(p, body) if cars.CATALOG is not None and mission == cars.CATALOG.dealer else None
     p.save()
     if car is None:
         car = struct.pack(">q", -1) + 2 * empty_array() + struct.pack(">H", 0x20)
+    granted = u64_array([physparts.TABLE["ids"][part]]) if part is not None else empty_array()
     return 0x02459285, (struct.pack(">BQ5I", 1, mission, p.level, p.xp, p.bucks, p.cc, p.perk_points)
-                        + empty_array() + u64_array(p.abilities) + car + empty_array() + struct.pack(">I", 0))
+                        + granted + u64_array(p.abilities) + car + empty_array() + struct.pack(">I", 0))
 
 
 @register(0xC43C7F34, "PROGRESS_BIT")

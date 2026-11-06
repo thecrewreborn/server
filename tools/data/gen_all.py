@@ -9,7 +9,7 @@ import traceback
 HERE = os.path.dirname(os.path.abspath(__file__))
 TABLES = [("gen_summit.py", "summit.json"), ("gen_regions.py", "regions.json"), ("gen_collectibles.py", "collectibles.json"),
           ("gen_cars.py", "cars.json"), ("gen_unlocks.py", "dlc.json"), ("gen_rewards.py", "rewards.json"),
-          ("gen_npc.py", "npc.json")]
+          ("gen_npc.py", "npc.json"), ("gen_physparts.py", "physparts.json")]
 
 
 def run(script: str, args: list[str]) -> bool:
