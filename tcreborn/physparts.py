@@ -47,13 +47,12 @@ def owned(cfg: bytes) -> list[int]:
 
 def own(cfg: bytes, part: int) -> bytes:
     o = _owned_at(cfg)
-    (n,) = struct.unpack_from(">I", cfg, o + 16)
+    size, n = struct.unpack_from(">I", cfg, o)[0], struct.unpack_from(">I", cfg, o + 16)[0]
     if part >> 6 >= n:
         return cfg
-    out = bytearray(cfg)
-    at = o + 20 + 8 * (part >> 6)
-    struct.pack_into(">Q", out, at, struct.unpack_from(">Q", out, at)[0] | 1 << (part & 63))
-    return bytes(out)
+    words = list(struct.unpack_from(f">{n}Q", cfg, o + 20))
+    words[part >> 6] |= 1 << (part & 63)
+    return cfg[:o] + cars.array(n, struct.pack(f">{n}Q", *words)) + cfg[o + 4 + size:]
 
 
 def fit(cfg: bytes, part: int, slot: int) -> bytes:
