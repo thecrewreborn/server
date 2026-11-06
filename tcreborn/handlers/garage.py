@@ -203,6 +203,17 @@ def _npc_items(body: bytes, o: int):
     return [struct.unpack_from(">QQQ", body, o + 20 + 0x19 * k) for k in range(count)], o + 4 + n
 
 
+ZONE_START = {0x37568E: 450, 0x375691: 450, 0x375693: 1125, 0x375692: 2200, 0x375690: 3700, 0x37568F: 6000,
+              0x7938315: 6000, 0x7938316: 6000, 0x7938317: 6000}
+
+
+def tuner_item(item_id: int, model: int, spec: int, models: set[int]) -> dict | None:
+    c = cars.CATALOG
+    if c is None or c.part(item_id) == 0xFFFF or model not in models or spec not in ZONE_START:
+        return None
+    return {"catalog": 1, "price": ZONE_START[spec], "model": f"{model:#x}", "config": False}
+
+
 @register(0xF93D21DA, "NPC_PURCHASE")
 def npc_purchase(ctx: Ctx, body: bytes):
     p = ctx.player
@@ -217,6 +228,8 @@ def npc_purchase(ctx: Ctx, body: bytes):
     for currency, items in ((1, first), (2, second)):
         for item_id, a, b in items:
             item = NPC.get(f"{item_id:#x}") if NPC is not None else None
+            if item is None:
+                item = tuner_item(item_id, a, b, models)
             if item is None or item["config"] or (item["model"] and int(item["model"], 16) not in models):
                 continue
             if item["catalog"] == 2 and a not in models:
