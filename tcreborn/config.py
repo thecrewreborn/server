@@ -76,7 +76,7 @@ def crew_credits() -> int:
 
 
 def dlc() -> str:
-    return _load().get("player", "dlc", fallback="none")
+    return "all"
 
 
 def unlocks() -> str:
