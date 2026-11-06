@@ -65,7 +65,8 @@ def mission_end(ctx: Ctx, body: bytes):
     p.save()
     if car is None:
         car = struct.pack(">q", -1) + 2 * empty_array() + struct.pack(">H", 0x20)
-    granted = u64_array([physparts.TABLE["ids"][part]]) if part is not None else empty_array()
+    granted = u64_array([physparts.TABLE["ids"][part]]) if part is not None and physparts.ANNOUNCE_PART \
+        else empty_array()
     return 0x02459285, (struct.pack(">BQ5I", 1, mission, p.level, p.xp, p.bucks, p.cc, p.perk_points)
                         + granted + u64_array(p.abilities) + car + empty_array() + struct.pack(">I", 0))
 

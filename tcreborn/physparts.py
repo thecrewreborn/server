@@ -80,7 +80,10 @@ def give(p, model: int, spec: int, parts: list[int], mount: bool = False) -> boo
 REWARD_PART = "CAbility_RewardPart"
 
 
-REWARD_PARTS = False
+REWARD_PARTS = True
+
+
+ANNOUNCE_PART = False
 
 
 def has_ability(p, name: str) -> bool:
