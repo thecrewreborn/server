@@ -54,7 +54,7 @@ def mission_end(ctx: Ctx, body: bytes):
     p.save()
     if car is None:
         car = struct.pack(">q", -1) + 2 * empty_array() + struct.pack(">H", 0x20)
-    return 0x02459285, (struct.pack(">BQ5I", 1, mission, p.level, p.xp, p.bucks, p.crew_credits, p.perk_points)
+    return 0x02459285, (struct.pack(">BQ5I", 1, mission, p.level, p.xp, p.bucks, p.cc, p.perk_points)
                         + empty_array() + u64_array(p.abilities) + car + empty_array() + struct.pack(">I", 0))
 
 

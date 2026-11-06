@@ -101,7 +101,7 @@ def get_player(ctx: Ctx, body: bytes):
     values = dict(NEW_PLAYER_FIELDS)
     p = ctx.player
     p.update_charge = 0
-    values.update({7: p.level, 8: p.xp, 9: p.bucks, 10: p.crew_credits, 12: p.field12, 13: p.perk_points, 15: p.zone, 16: p.ids[0], 17: p.ids[1],
+    values.update({7: p.level, 8: p.xp, 9: p.bucks, 10: p.cc, 12: p.field12, 13: p.perk_points, 15: p.zone, 16: p.ids[0], 17: p.ids[1],
                    **{18 + i: w for i, w in enumerate(p.position + p.direction)}})
     if p.progress:
         values[30] = u64_array(p.progress)

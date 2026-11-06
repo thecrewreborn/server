@@ -37,8 +37,7 @@ def perks(ctx: Ctx, body: bytes):
             p.bucks -= PERK_POINT_BUCKS
             p.perk_points += 1
     for _ in range(body[0x1E]):
-        if p.crew_credits >= PERK_POINT_CREDITS:
-            p.crew_credits -= PERK_POINT_CREDITS
+        if p.spend_cc(PERK_POINT_CREDITS):
             p.perk_points += 1
     ok = True
     if body[0x1C] == 1:
@@ -53,7 +52,7 @@ def perks(ctx: Ctx, body: bytes):
         if sum(p.perks) > p.perk_points:
             p.perks, ok = [0] * PERKS, False
     p.save()
-    return 0xB37AA94C, struct.pack(">BIIHH", ok, p.bucks, p.crew_credits, p.perk_points, 0)
+    return 0xB37AA94C, struct.pack(">BIIHH", ok, p.bucks, p.cc, p.perk_points, 0)
 
 
 @register(0xE6D82939, "FIRST_REWARD")

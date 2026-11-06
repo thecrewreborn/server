@@ -65,8 +65,8 @@ def _spec_purchase(p, body: bytes) -> bytes:
         token = TOKENS.get((currency, int(c.variants[variant]["spec"], 16)))
         if currency == 1 and p.bucks >= price:
             p.bucks -= price
-        elif currency == 2 and p.crew_credits >= int(price / cars.CC_RATE):
-            p.crew_credits -= int(price / cars.CC_RATE)
+        elif currency == 2 and p.spend_cc(int(price / cars.CC_RATE)):
+            pass
         elif token is not None and summit.state(p)["tokens"][token] > 0:
             summit.state(p)["tokens"][token] -= 1
         else:
@@ -88,7 +88,7 @@ def spec_purchase(ctx: Ctx, body: bytes):
     p = ctx.player
     element = _spec_purchase(p, body)
     p.save()
-    return 0x05E0DCFF, (struct.pack(">H3I", 0, p.bucks, p.crew_credits, 0) + cars.array(1, element)
+    return 0x05E0DCFF, (struct.pack(">H3I", 0, p.bucks, p.cc, 0) + cars.array(1, element)
                         + SPEC_REPLY_TAIL)
 
 
@@ -165,7 +165,7 @@ def car_purchase(ctx: Ctx, body: bytes):
     variant, paint, _2, _3, part, _5, livery = struct.unpack_from(">7Q", body, 0x25)
     v = c.variants.get(variant) if c is not None else None
     if v is None:
-        return 0x4239B014, (struct.pack(">HIIIq", 0xFFFF, p.bucks, p.crew_credits, 0, -1) + cars.array(0, b"")
+        return 0x4239B014, (struct.pack(">HIIIq", 0xFFFF, p.bucks, p.cc, 0, -1) + cars.array(0, b"")
                             + cars.array(0, b""))
     model = int(v["model"], 16)
     price = c.prices.get(model, 0)
@@ -179,8 +179,7 @@ def car_purchase(ctx: Ctx, body: bytes):
         if p.bucks >= price:
             p.bucks -= price
             ok = True
-    elif currency == 2 and p.crew_credits >= int(price / cars.CC_RATE):
-        p.crew_credits -= int(price / cars.CC_RATE)
+    elif currency == 2 and p.spend_cc(int(price / cars.CC_RATE)):
         ok = True
     if ok:
         if configs is None:
@@ -190,7 +189,7 @@ def car_purchase(ctx: Ctx, body: bytes):
         configs.append(cfg)
         cars.store(p, garage)
         p.save()
-    return 0x4239B014, (struct.pack(">HIIIq", 0 if ok else 0xFFFF, p.bucks, p.crew_credits, 0, model if ok else -1)
+    return 0x4239B014, (struct.pack(">HIIIq", 0 if ok else 0xFFFF, p.bucks, p.cc, 0, model if ok else -1)
                         + cars.array(1, cars.with_state(cfg, cars.BOUGHT)) + cars.part_list(s))
 
 
@@ -223,17 +222,16 @@ def npc_purchase(ctx: Ctx, body: bytes):
             if item["catalog"] == 2 and a not in models:
                 continue
             price = item["price"] if currency == 1 else int(item["price"] / cars.CC_RATE)
-            have = p.bucks if currency == 1 else p.crew_credits
-            if have < price:
-                continue
             if currency == 1:
+                if p.bucks < price:
+                    continue
                 p.bucks -= price
-            else:
-                p.crew_credits -= price
+            elif not p.spend_cc(price):
+                continue
             part = c.part(item_id) if c is not None else 0xFFFF
             if part != 0xFFFF:
                 set_bit(p.owned_items, part)
             bought = True
     if bought:
         p.save()
-    return 0x27A7C7FE, struct.pack(">HIII", 0, p.bucks, p.crew_credits, 0)
+    return 0x27A7C7FE, struct.pack(">HIII", 0, p.bucks, p.cc, 0)

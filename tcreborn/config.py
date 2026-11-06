@@ -71,6 +71,10 @@ def abilities() -> str:
     return _load().get("player", "abilities", fallback="none")
 
 
+def crew_credits() -> int:
+    return max(0, _load().getint("player", "crew_credits", fallback=100000))
+
+
 def dlc() -> str:
     return _load().get("player", "dlc", fallback="none")
 

@@ -37,5 +37,5 @@ if [ ! -x .venv/bin/python ]; then
 fi
 .venv/bin/python -m pip install -q --disable-pip-version-check -r requirements-server.txt
 
-echo "Starting The Crew Reborn server. Stop it with Ctrl+C."
+echo "Starting The Crew Reborn server..."
 exec .venv/bin/python -m tcreborn "$@"

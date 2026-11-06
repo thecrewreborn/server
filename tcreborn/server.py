@@ -11,7 +11,7 @@ import traceback
 
 from tcreborn.crypto import IV0, K0, decrypt, encrypt
 from tcreborn.discovery import local_ip_for
-from tcreborn import peers, ubi
+from tcreborn import config, paths, peers, ubi
 from tcreborn.handlers import NO_REPLY, Ctx, handle, name_of, player_id_for
 from tcreborn.player import ALL_ABILITIES, Player, dlc_fields, unlock_fields
 from tcreborn.handlers.replies import SERVICE_BY_ADDR
@@ -67,6 +67,7 @@ class Server:
             ctx.player.save()
         ctx.player.unlocks = unlock_fields(self.unlocks)
         ctx.player.dlc = dlc_fields(self.dlc)
+        ctx.player.cc_fixed = config.crew_credits()
         return ctx
 
     def ctx_for_name(self, name: str | None) -> Ctx:
@@ -212,7 +213,10 @@ class Server:
                     peers.PEERS.forget(player_id_for(name))
                 if rpc == GET_PLAYER and (name := player_name(request[12:])) and self.save_path:
                     sess.ctx = self.ctx_for_name(name)
-                    self.say(addr, f"player {name}")
+                    device = "PC" if ubi.PLATFORMS.get(addr[0]) == "uplay" else "PS4"
+                    save = sess.ctx.player.path
+                    print(f"[{_ts()}] {name} connected from {addr[0]} ({device})"
+                          + (f", save: {os.path.relpath(save, paths.HOME)}" if save else ""), flush=True)
                 chunks = self._reply_chunks(msg, rpc, request, self.ctx_for(addr, sess))
                 if chunks is not None:
                     sess.replies[(rpc, msg.transfer)] = list(chunks)
@@ -260,7 +264,6 @@ class Server:
         sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
         sock.bind((self.ip, self.port))
         self.sender = self.sender or sock.sendto
-        print(f"[{_ts()}] relay listening on udp {self.ip}:{self.port}", flush=True)
         while True:
             data, addr = sock.recvfrom(65535)
             try:

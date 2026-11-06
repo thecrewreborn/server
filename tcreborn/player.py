@@ -41,6 +41,7 @@ class Player:
     level: int = 1
     xp: int = 0
     crew_credits: int = 0
+    cc_fixed: int = 0
     perk_points: int = 0
     perks: list[int] = field(default_factory=lambda: [0] * PERKS)
     field12: int = 0
@@ -84,6 +85,17 @@ class Player:
         if mission not in self.missions_done:
             self.missions_done.append(mission)
 
+    @property
+    def cc(self) -> int:
+        return self.cc_fixed or self.crew_credits
+
+    def spend_cc(self, amount: int) -> bool:
+        if self.cc < amount:
+            return False
+        if not self.cc_fixed:
+            self.crew_credits -= amount
+        return True
+
     def complete_activity(self, activity: int) -> None:
         if activity not in self.activities_done:
             self.activities_done.append(activity)
@@ -105,6 +117,10 @@ class Player:
             if "level2" in data and "perk_points" not in data:
                 p.perk_points = data["level2"]
             p.save_blob = bytes.fromhex(data.get("save_blob", ""))
+            for k, v in data.items():
+                if k.endswith("_fields") and k != "extra_fields" and isinstance(v, dict):
+                    for f, x in v.items():
+                        p.extra_fields.setdefault(f, x)
             p.extra_fields = {int(k): v for k, v in p.extra_fields.items()}
         return p
 

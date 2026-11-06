@@ -28,7 +28,7 @@ if not exist ".venv\Scripts\python.exe" (
     "%PYEXE%" -m venv .venv
 )
 ".venv\Scripts\python.exe" -m pip install -q --disable-pip-version-check -r requirements-server.txt
-echo Starting The Crew Reborn server. Stop it with Ctrl+C.
+echo Starting The Crew Reborn server...
 ".venv\Scripts\python.exe" -m tcreborn %*
 pause
 exit /b
