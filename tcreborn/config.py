@@ -92,7 +92,7 @@ def multiplayer() -> bool:
 
 
 def afk_kick() -> bool:
-    return _load().get("world", "afk_kick", fallback="on").strip().lower() in ("on", "1", "true", "yes")
+    return _load().get("world", "afk_kick", fallback="off").strip().lower() in ("on", "1", "true", "yes")
 
 
 def proxy_key() -> tuple[bytes, bytes]:
