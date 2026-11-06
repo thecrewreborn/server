@@ -15,7 +15,9 @@ From the [download page](https://thecrewreborn.github.io/#download) you need:
 3. **Playing on PC:** `TheCrewReborn-PC-<version>.zip`. Copy `dinput8.dll` and `reborn.ini` into the game folder,
    next to `TheCrew.exe`.
 
-Start the server first, then the game. Console and PC find the server on your network by themselves.
+Start the server first, then the game. Console and PC find the server on your network by themselves. The PS4
+remembers the server it found last: if you start the game before the server, start the server and try to log in
+again in the game. The very first start needs the server running.
 
 ## What you need
 
@@ -86,7 +88,9 @@ Von der [Download-Seite](https://thecrewreborn.github.io/#download) brauchst du:
 3. **Spielen am PC:** `TheCrewReborn-PC-<Version>.zip`. Kopiere `dinput8.dll` und `reborn.ini` in den Spielordner,
    neben `TheCrew.exe`.
 
-Starte zuerst den Server, dann das Spiel. Konsole und PC finden den Server im Heimnetz von selbst.
+Starte zuerst den Server, dann das Spiel. Konsole und PC finden den Server im Heimnetz von selbst. Die PS4
+merkt sich den zuletzt gefundenen Server: Startest du das Spiel vor dem Server, starte den Server und melde dich
+im Spiel erneut an. Beim allerersten Start muss der Server bereits laufen.
 
 ## Das brauchst du
 
