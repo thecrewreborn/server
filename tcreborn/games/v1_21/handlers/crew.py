@@ -4,7 +4,7 @@ import itertools
 import struct
 import threading
 
-from tcreborn.handlers import Ctx, register
+from tcreborn.games.v1_21.handlers import Ctx, register
 
 GROUP_BASE = 0x0000000100000000
 _ids = itertools.count(GROUP_BASE + 1)

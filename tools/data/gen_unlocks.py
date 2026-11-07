@@ -11,11 +11,11 @@ sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..",
 import fcb
 import gamefiles
 from gen_regions import DATA, ROOT
-from tcreborn import cars
+from tcreborn.games.v1_21 import cars
 from tcreborn.wire import u64_array
 import gen_cars
 
-OUT = os.path.join(ROOT, "tcreborn", "data", "dlc.json")
+OUT = os.path.join(ROOT, "tcreborn", "games", "v1_21", "data", "dlc.json")
 ID, FATHER, TYPE, PRICE = 0x11D3633A, 0x07F184FD, 0x4FB636DA, 0x22B53BE6
 CONTENT = 4
 MASK = 0x1FFFFFFFFFFFFFFF

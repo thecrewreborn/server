@@ -96,7 +96,7 @@ def generate(d: str) -> dict:
 
 def main() -> None:
     args = sys.argv[1:]
-    out = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "..", "tcreborn", "data", "physparts.json")
+    out = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "..", "tcreborn", "games", "v1_21", "data", "physparts.json")
     if "-o" in args:
         out = args[args.index("-o") + 1]
         args = args[:args.index("-o")] + args[args.index("-o") + 2:]

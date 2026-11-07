@@ -1,0 +1,32 @@
+# The Crew Reborn - Knutwurst
+# https://thecrewreborn.github.io - https://ko-fi.com/knutwurst
+import datetime
+import os
+import shutil
+
+from tcreborn import paths
+
+FOLDERS = {"1.21": "1.21", "1.00": "1.00"}
+OLD_1_21 = ("players", "player.json", "factions.json")
+
+
+def folder(version: str) -> str:
+    return paths.home("save", FOLDERS[version])
+
+
+def move_into_version_folders(save_root: str | None = None) -> list[str]:
+    root = save_root or paths.home("save")
+    target = os.path.join(root, FOLDERS["1.21"])
+    old = [n for n in OLD_1_21 if os.path.exists(os.path.join(root, n))]
+    if os.path.exists(target) or not old:
+        return []
+    backup = os.path.join(root, "backup", "before-version-folders-" + datetime.datetime.now().strftime("%Y%m%d-%H%M%S"))
+    os.makedirs(backup)
+    for n in old:
+        src = os.path.join(root, n)
+        (shutil.copytree if os.path.isdir(src) else shutil.copy2)(src, os.path.join(backup, n))
+    os.makedirs(target)
+    for n in old:
+        shutil.move(os.path.join(root, n), os.path.join(target, n))
+    print(f"Moved the saves into {target} (copy in {backup})", flush=True)
+    return old

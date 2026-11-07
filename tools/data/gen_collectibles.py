@@ -11,7 +11,7 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import fcb
 from gen_regions import DATA, ROOT, read_hash
 
-OUT = os.path.join(ROOT, "tcreborn", "data", "collectibles.json")
+OUT = os.path.join(ROOT, "tcreborn", "games", "v1_21", "data", "collectibles.json")
 COLLECTIBLES = 0xDF65B0AE78916BB3
 ID, TO_NODE, TO_ENTRY, SET = 0x11D3633A, 0x853C7235, 0x556B25A2, 0xB08B2324
 

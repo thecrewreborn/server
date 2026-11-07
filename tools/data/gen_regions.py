@@ -13,7 +13,7 @@ import lzo1x
 
 ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
 DATA = os.path.join(ROOT, "GAME", "The Crew", "data_win32")
-OUT = os.path.join(ROOT, "tcreborn", "data", "regions.json")
+OUT = os.path.join(ROOT, "tcreborn", "games", "v1_21", "data", "regions.json")
 ID = 0x11D3633A
 REGION_SET = 0x78E8C08
 REGION_FIELDS = (0xC4D8023D, 0x55F775FA, 0xF971766C, 0x4D3436A3, 0x538B11F7)

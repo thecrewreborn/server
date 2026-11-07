@@ -2,9 +2,9 @@
 # https://thecrewreborn.github.io - https://ko-fi.com/knutwurst
 import struct
 
-from tcreborn import cars, physparts, rewards
-from tcreborn.handlers import Ctx, register
-from tcreborn.player import ALL_ABILITIES
+from tcreborn.games.v1_21 import cars, physparts, rewards
+from tcreborn.games.v1_21.handlers import Ctx, register
+from tcreborn.games.v1_21.player import ALL_ABILITIES
 from tcreborn.wire import T_ARRAY, blob, empty_array, frame, u64_array
 
 

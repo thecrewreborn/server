@@ -47,7 +47,7 @@ def generate(data_dir: str, out: str) -> list[str]:
 def main() -> int:
     ap = argparse.ArgumentParser()
     ap.add_argument("data_dir")
-    ap.add_argument("-o", "--out", default=os.path.join(HERE, "..", "..", "tcreborn", "data"))
+    ap.add_argument("-o", "--out", default=os.path.join(HERE, "..", "..", "tcreborn", "games", "v1_21", "data"))
     args = ap.parse_args()
     failed = generate(args.data_dir, args.out)
     if failed:

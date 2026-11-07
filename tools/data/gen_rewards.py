@@ -275,7 +275,7 @@ def generate(data_dir: str) -> dict:
 def main() -> None:
     ap = argparse.ArgumentParser()
     ap.add_argument("data_dir")
-    ap.add_argument("-o", "--out", default=os.path.join(os.path.dirname(__file__), "..", "..", "tcreborn", "data",
+    ap.add_argument("-o", "--out", default=os.path.join(os.path.dirname(__file__), "..", "..", "tcreborn", "games", "v1_21", "data",
                                                         "rewards.json"))
     args = ap.parse_args()
     out, dst = generate(args.data_dir), args.out

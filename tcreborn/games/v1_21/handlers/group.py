@@ -2,9 +2,9 @@
 # https://thecrewreborn.github.io - https://ko-fi.com/knutwurst
 import struct
 
-from tcreborn import factions, rewards
-from tcreborn.handlers import Ctx, register
-from tcreborn.handlers.replies import TEMPLATES, fill
+from tcreborn.games.v1_21 import factions, rewards
+from tcreborn.games.v1_21.handlers import Ctx, register
+from tcreborn.games.v1_21.handlers.replies import TEMPLATES, fill
 
 DAY = 86400
 DAILY_BUCKS = 2040

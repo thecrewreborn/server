@@ -9,12 +9,13 @@ import socket
 import struct
 import traceback
 
-from tcreborn.crypto import IV0, K0, decrypt, encrypt
+from tcreborn.games.v1_21.crypto import IV0, K0, decrypt, encrypt
 from tcreborn.discovery import local_ip_for
-from tcreborn import config, paths, peers, ubi
-from tcreborn.handlers import NO_REPLY, Ctx, handle, name_of, player_id_for
-from tcreborn.player import ALL_ABILITIES, Player, dlc_fields, unlock_fields
-from tcreborn.handlers.replies import SERVICE_BY_ADDR
+from tcreborn import config, paths, ubi
+from tcreborn.games.v1_21 import peers
+from tcreborn.games.v1_21.handlers import NO_REPLY, Ctx, handle, name_of, player_id_for
+from tcreborn.games.v1_21.player import ALL_ABILITIES, Player, dlc_fields, unlock_fields
+from tcreborn.games.v1_21.handlers.replies import SERVICE_BY_ADDR
 from tcreborn.session import Session
 from tcreborn.wire import (DIRECT_HEADER, REPLY_FLAGS, T_ACK, T_ACK_CONFIRM, T_DATA, T_RESOLVE, ack, ack_confirm,
                         assemble, data_chunks, parse_message, resolve_reply)

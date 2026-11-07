@@ -2,8 +2,8 @@
 # https://thecrewreborn.github.io - https://ko-fi.com/knutwurst
 import struct
 
-from tcreborn.handlers import Ctx, register
-from tcreborn.player import STAT_COUNT
+from tcreborn.games.v1_21.handlers import Ctx, register
+from tcreborn.games.v1_21.player import STAT_COUNT
 from tcreborn.wire import T_ARRAY, blob, empty_array, frame
 
 

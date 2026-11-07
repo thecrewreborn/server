@@ -87,7 +87,7 @@ def records(archetypes: bytes, strings: Strings | None = None) -> list[dict]:
 def main() -> None:
     ap = argparse.ArgumentParser()
     ap.add_argument("source")
-    ap.add_argument("-o", "--out", default=os.path.join(os.path.dirname(__file__), "..", "..", "tcreborn", "data",
+    ap.add_argument("-o", "--out", default=os.path.join(os.path.dirname(__file__), "..", "..", "tcreborn", "games", "v1_21", "data",
                                                         "summit.json"))
     args = ap.parse_args()
     recs = records(load(args.source), Strings(args.source) if os.path.isdir(args.source) else None)

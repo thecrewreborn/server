@@ -7,7 +7,8 @@ import shutil
 import socket
 import sys
 
-from tcreborn import config, gamedata, paths
+from tcreborn import config, paths
+from tcreborn.games.v1_21 import gamedata
 from tcreborn.version import VERSION
 
 ROOT = paths.HOME
@@ -75,14 +76,16 @@ def main(argv: list[str] | None = None) -> None:
     gamedata.first_start(config.game_data(), interactive=sys.stdin is not None and sys.stdin.isatty())
 
 
-    from tcreborn import discovery, tls, ubi
-    from tcreborn.server import Server
+    from tcreborn import discovery, games, saves, tls, ubi
+    from tcreborn.games.v1_21.relay import Server
 
     taken = _udp_in_use(args.port, discovery.DISCOVERY_PORT)
     if taken:
         raise SystemExit(f"\nThe Crew Reborn server is already running on this computer (udp port {taken} is in use).\n"
                          f"Use that one, or close its window first.")
     os.makedirs(os.path.dirname(args.log), exist_ok=True)
+    if not config.save_path_configured():
+        saves.move_into_version_folders()
     detail = print if args.verbose else (lambda *a, **k: None)
     detail(f"player save: {args.save}")
     detail(f"abilities: {config.abilities()}, unlocks: {config.unlocks()}, dlc: {config.dlc()}")
@@ -102,6 +105,7 @@ def main(argv: list[str] | None = None) -> None:
     print(f"\nServer address: {config.server_ip()}\n"
           f"Ready. Start The Crew on your PS4 or PC; the game finds the server on the local network by itself.\n"
           f"Stop the server with Ctrl+C.\n", flush=True)
+    games.start_beside(args.ip, args.port, os.path.dirname(args.log), paths.home("save"))
     Server(args.ip, args.port, args.log, args.save,
            abilities=config.abilities(), unlocks=config.unlocks(), dlc=config.dlc(),
            proxy_key=config.proxy_key()).serve_forever()

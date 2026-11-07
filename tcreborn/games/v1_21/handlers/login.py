@@ -2,8 +2,8 @@
 # https://thecrewreborn.github.io - https://ko-fi.com/knutwurst
 import struct
 
-from tcreborn import cars, summit
-from tcreborn.handlers import Ctx, register
+from tcreborn.games.v1_21 import cars, summit
+from tcreborn.games.v1_21.handlers import Ctx, register
 from tcreborn.wire import T_ARRAY, blob, empty_array, frame, serializer_list, u64_array
 
 GETPLAYER_REPLY_FIELDS = [

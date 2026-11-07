@@ -2,8 +2,8 @@
 # https://thecrewreborn.github.io - https://ko-fi.com/knutwurst
 import struct
 
-from tcreborn import rewards
-from tcreborn.handlers import Ctx, register
+from tcreborn.games.v1_21 import rewards
+from tcreborn.games.v1_21.handlers import Ctx, register
 
 
 SKILL_CAP = 100000

@@ -5,7 +5,8 @@ import os
 import random
 import struct
 
-from tcreborn import cars, paths
+from tcreborn import paths
+from tcreborn.games.v1_21 import cars
 
 PATH = paths.table("physparts.json")
 BRONZE, SILVER, GOLD, PLATINUM, CAU_PLATINUM = range(5)
@@ -87,7 +88,7 @@ ANNOUNCE_PART = False
 
 
 def has_ability(p, name: str) -> bool:
-    from tcreborn import rewards
+    from tcreborn.games.v1_21 import rewards
     t = rewards.TABLES
     bit = t.abilities.get(name) if t is not None else None
     return bit is not None and bit // 64 < len(p.abilities) and p.abilities[bit // 64] >> (bit % 64) & 1 == 1

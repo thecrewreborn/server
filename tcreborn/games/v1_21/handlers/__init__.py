@@ -8,7 +8,7 @@ from dataclasses import dataclass, field
 from typing import Callable
 
 from tcreborn.codec import encode_default
-from tcreborn.player import Player
+from tcreborn.games.v1_21.player import Player
 from tcreborn.wire import frame
 
 
@@ -26,7 +26,8 @@ class Ctx:
     crew_group: int = 0
 
     def client_now_us(self) -> int:
-        from tcreborn import config, summit
+        from tcreborn import config
+        from tcreborn.games.v1_21 import summit
         return summit.calendar_time_us(self.now_us()) if self.pc or config.multiplayer() else self.now_us()
 
 
@@ -67,5 +68,6 @@ def handle(ctx: Ctx, req_id: int, body: bytes) -> bytes | None:
     return None
 
 
-from tcreborn.handlers import crew, entity, garage, group, login, mission, notify, police, presence, progress, session, skill, stats, summit, ticket
-from tcreborn.handlers import replies
+from tcreborn.games.v1_21.handlers import (crew, entity, garage, group, login, mission, notify, police,
+                                           presence, progress, session, skill, stats, summit, ticket)
+from tcreborn.games.v1_21.handlers import replies

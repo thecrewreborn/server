@@ -2,8 +2,8 @@
 # https://thecrewreborn.github.io - https://ko-fi.com/knutwurst
 import struct
 
-from tcreborn import peers
-from tcreborn.handlers import Ctx, register
+from tcreborn.games.v1_21 import peers
+from tcreborn.games.v1_21.handlers import Ctx, register
 
 
 @register(0x8B70F3EB, "SESSION_UPDATE")

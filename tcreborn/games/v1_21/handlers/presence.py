@@ -2,7 +2,7 @@
 # https://thecrewreborn.github.io - https://ko-fi.com/knutwurst
 import struct
 
-from tcreborn.handlers import Ctx, register
+from tcreborn.games.v1_21.handlers import Ctx, register
 from tcreborn.wire import empty_array
 
 PRESENCE = 0x49466F25

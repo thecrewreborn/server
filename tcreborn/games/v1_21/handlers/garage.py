@@ -4,9 +4,10 @@ import json
 import os
 import struct
 
-from tcreborn import cars, paths, peers, summit
-from tcreborn.handlers import Ctx, register
-from tcreborn.player import set_bit
+from tcreborn import paths
+from tcreborn.games.v1_21 import cars, peers, summit
+from tcreborn.games.v1_21.handlers import Ctx, register
+from tcreborn.games.v1_21.player import set_bit
 
 
 CONDITION = 0x11

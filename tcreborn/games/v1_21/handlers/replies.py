@@ -6,7 +6,7 @@ import socket
 import struct
 import zlib
 
-from tcreborn.handlers import Ctx, register
+from tcreborn.games.v1_21.handlers import Ctx, register
 
 _FILE = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "data", "replies.json")
 with open(_FILE) as _f:
@@ -36,7 +36,7 @@ def fill(ctx: Ctx, body: bytes, fields: list) -> bytes:
 
 
 def _activity_end(ctx: Ctx, request: bytes, template: bytes) -> bytes:
-    from tcreborn import rewards
+    from tcreborn.games.v1_21 import rewards
     activity, value = struct.unpack_from(">QI", request, 0x1C)
     p = ctx.player
     p.complete_activity(activity)
@@ -50,8 +50,8 @@ BUILDER_FACTOR = 100.0
 
 
 def _mission_result(ctx: Ctx, request: bytes, template: bytes) -> bytes:
-    from tcreborn import rewards
-    from tcreborn.handlers.mission import finish_mission
+    from tcreborn.games.v1_21 import rewards
+    from tcreborn.games.v1_21.handlers.mission import finish_mission
     mission = struct.unpack_from(">Q", request, 0x1C)[0] if len(request) >= 0x24 else 0
     p = ctx.player
     t = rewards.TABLES

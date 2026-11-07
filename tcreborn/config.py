@@ -57,8 +57,12 @@ def relay_address() -> tuple[str, int]:
     return cfg.get("relay", "ip", fallback=RELAY[0]), cfg.getint("relay", "port", fallback=RELAY[1])
 
 
+def save_path_configured() -> bool:
+    return bool(_load().get("server", "save_path", fallback=""))
+
+
 def save_path() -> str:
-    path = _load().get("server", "save_path", fallback="") or os.path.join("save", "player.json")
+    path = _load().get("server", "save_path", fallback="") or os.path.join("save", "1.21", "player.json")
     return path if os.path.isabs(path) else os.path.join(ROOT, path)
 
 
@@ -96,7 +100,7 @@ def afk_kick() -> bool:
 
 
 def proxy_key() -> tuple[bytes, bytes]:
-    from tcreborn.crypto import IV0, K0
+    from tcreborn.games.v1_21.crypto import IV0, K0
     cfg = _load()
     return (bytes.fromhex(cfg.get("proxy", "key", fallback="")) or K0,
             bytes.fromhex(cfg.get("proxy", "iv", fallback="")) or IV0)

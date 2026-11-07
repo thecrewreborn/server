@@ -2,9 +2,9 @@
 # https://thecrewreborn.github.io - https://ko-fi.com/knutwurst
 import struct
 
-from tcreborn import rewards, summit
-from tcreborn.handlers import Ctx, register
-from tcreborn.player import NO_ID
+from tcreborn.games.v1_21 import rewards, summit
+from tcreborn.games.v1_21.handlers import Ctx, register
+from tcreborn.games.v1_21.player import NO_ID
 from tcreborn.wire import T_ARRAY, blob, empty_array, frame, u64_array
 
 WINDOW_2017 = (0x554F34B42AC00, 0x560F920FB0C00)

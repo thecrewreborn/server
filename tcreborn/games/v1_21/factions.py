@@ -6,7 +6,7 @@ import random
 
 from tcreborn import paths
 
-PATH = paths.home("save", "factions.json")
+PATH = paths.home("save", "1.21", "factions.json")
 HOUR = 3600
 MAX_CATCH_UP = 24 * 14
 FIELDS = list(range(0x50, 0xA0, 4))

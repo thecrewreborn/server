@@ -2,9 +2,9 @@
 # https://thecrewreborn.github.io - https://ko-fi.com/knutwurst
 import struct
 
-from tcreborn import rewards
-from tcreborn.handlers import Ctx, register
-from tcreborn.handlers.mission import _rating
+from tcreborn.games.v1_21 import rewards
+from tcreborn.games.v1_21.handlers import Ctx, register
+from tcreborn.games.v1_21.handlers.mission import _rating
 from tcreborn.wire import T_ARRAY, blob, empty_array, frame
 
 NO_ID = 0xFFFFFFFFFFFFFFFF

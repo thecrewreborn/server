@@ -4,9 +4,10 @@ import json
 import os
 import struct
 
-from tcreborn import cars, paths, rewards
-from tcreborn.handlers import Ctx, register
-from tcreborn.player import PERKS, set_bit
+from tcreborn import paths
+from tcreborn.games.v1_21 import cars, rewards
+from tcreborn.games.v1_21.handlers import Ctx, register
+from tcreborn.games.v1_21.player import PERKS, set_bit
 from tcreborn.wire import blob, frame, serializer_list, u64_array
 
 PERK_POINT_BUCKS, PERK_POINT_CREDITS = 100000, 2000
@@ -154,5 +155,5 @@ def region_reward(ctx: Ctx, body: bytes):
             p.save()
             return 0x6939A37D, (struct.pack(">HQ", 0, model) + cars.array(1, cars.with_state(cfg, REWARD_STATE))
                                 + cars.part_list(s))
-    from tcreborn.handlers.replies import TEMPLATES
+    from tcreborn.games.v1_21.handlers.replies import TEMPLATES
     return 0x6939A37D, bytes.fromhex(TEMPLATES["0x88648ce9"]["body"])
