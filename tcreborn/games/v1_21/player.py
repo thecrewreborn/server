@@ -4,7 +4,7 @@ import json
 import os
 from dataclasses import dataclass, field
 
-from tcreborn import paths
+from tcreborn.games.v1_21 import tables
 
 PERKS = 30
 STAT_COUNT = 438
@@ -162,7 +162,7 @@ def set_bit(words: list[int], n: int) -> bool:
 def dlc_fields(owned: str) -> dict[int, bytes]:
     if owned.strip() == "none":
         return {}
-    with open(paths.table("dlc.json")) as f:
+    with open(tables.path("dlc.json")) as f:
         return {int(k): bytes.fromhex(v) for k, v in json.load(f)["fields"].items()}
 
 

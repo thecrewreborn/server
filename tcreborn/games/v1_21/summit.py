@@ -5,9 +5,9 @@ import json
 import os
 import random
 
-from tcreborn import paths
+from tcreborn.games.v1_21 import tables
 
-PATH = paths.table("summit.json")
+PATH = tables.path("summit.json")
 NONE = 0xFFFF
 FEE = 1000
 EVENT_BUCKS, EVENT_XP = 3000, 800

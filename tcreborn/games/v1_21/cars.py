@@ -5,10 +5,10 @@ import os
 import struct
 from dataclasses import dataclass
 
-from tcreborn import paths
+from tcreborn.games.v1_21 import tables
 from tcreborn.wire import T_ARRAY, blob, frame
 
-PATH = paths.table("cars.json")
+PATH = tables.path("cars.json")
 NONE = 0xFFFFFFFFFFFFFFFF
 OWNED_WORDS = 0x8C
 OWNED_SLOTS = 11

@@ -5,10 +5,10 @@ import os
 import random
 import struct
 
-from tcreborn import paths
+from tcreborn.games.v1_21 import tables
 from tcreborn.games.v1_21 import cars
 
-PATH = paths.table("physparts.json")
+PATH = tables.path("physparts.json")
 BRONZE, SILVER, GOLD, PLATINUM, CAU_PLATINUM = range(5)
 NO_BONUS, ALL_BONUSES = -1, 4
 

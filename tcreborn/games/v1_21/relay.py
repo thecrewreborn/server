@@ -3,7 +3,6 @@
 import datetime
 import json
 import os
-import re
 import shutil
 import socket
 import struct
@@ -12,6 +11,7 @@ import traceback
 from tcreborn.games.v1_21.crypto import IV0, K0, decrypt, encrypt
 from tcreborn.discovery import local_ip_for
 from tcreborn import config, paths, ubi
+from tcreborn.saves import DEFAULT_NAME, save_name
 from tcreborn.games.v1_21 import peers
 from tcreborn.games.v1_21.handlers import NO_REPLY, Ctx, handle, name_of, player_id_for
 from tcreborn.games.v1_21.player import ALL_ABILITIES, Player, dlc_fields, unlock_fields
@@ -23,7 +23,6 @@ from tcreborn.wire import (DIRECT_HEADER, REPLY_FLAGS, T_ACK, T_ACK_CONFIRM, T_D
 Packet = tuple[bytes, tuple[str, int]]
 NO_ACK_CHANNELS = {0x49466F25, 0x5ABA06B7}
 GET_PLAYER = 0x589F57FB
-DEFAULT_NAME = "Player"
 
 
 def player_name(get_player_body: bytes) -> str | None:
@@ -32,10 +31,6 @@ def player_name(get_player_body: bytes) -> str | None:
     n = struct.unpack_from(">I", get_player_body, 0x2C)[0]
     raw = get_player_body[0x30:0x30 + n]
     return raw.decode("utf-8", "replace") if 0 < n <= 64 and len(raw) == n else None
-
-
-def save_name(name: str) -> str:
-    return re.sub(r"[^A-Za-z0-9_-]", "_", name)[:32] or DEFAULT_NAME
 
 
 def _ts() -> str:

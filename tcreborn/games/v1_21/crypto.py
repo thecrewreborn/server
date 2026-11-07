@@ -2,8 +2,7 @@
 # https://thecrewreborn.github.io - https://ko-fi.com/knutwurst
 from cryptography.hazmat.primitives.ciphers import Cipher, algorithms, modes
 
-K0 = b"TqLkG0EWgq4QWq9ccUCi82XNB3YKrmIK"
-IV0 = b"euPvz7ih6SgzlAMM"
+from tcreborn.keys import IV0, K0
 
 
 def _pad16(data: bytes) -> bytes:

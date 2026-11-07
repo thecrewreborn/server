@@ -6,9 +6,9 @@ import os
 import shutil
 import socket
 import sys
+import threading
 
-from tcreborn import config, paths
-from tcreborn.games.v1_21 import gamedata
+from tcreborn import config, games, paths
 from tcreborn.version import VERSION
 
 ROOT = paths.HOME
@@ -68,16 +68,17 @@ def main(argv: list[str] | None = None) -> None:
                     help="build the game tables from your game files (PC data_win32 or PS4 app0/patch0) and exit")
     args = ap.parse_args(argv)
     print(f"The Crew Reborn server {VERSION}", flush=True)
+    versions = games.available()
     if args.generate:
-        folder = gamedata.resolve(args.generate)
-        if not folder:
-            raise SystemExit(f"no game files in {args.generate}")
-        raise SystemExit(1 if gamedata.build(folder) else 0)
-    gamedata.first_start(config.game_data(), interactive=sys.stdin is not None and sys.stdin.isatty())
+        raise SystemExit(max(g.generate(args.generate) for g in versions if hasattr(g, "generate")))
+    start = games.Start(args.ip, args.port, os.path.dirname(args.log), paths.home("save"), args.save,
+                        log_path=args.log, game_data=config.game_data(),
+                        interactive=sys.stdin is not None and sys.stdin.isatty())
+    for game in versions:
+        game.prepare(start)
 
 
-    from tcreborn import discovery, games, saves, tls, ubi
-    from tcreborn.games.v1_21.relay import Server
+    from tcreborn import discovery, saves, tls, ubi
 
     taken = _udp_in_use(args.port, discovery.DISCOVERY_PORT)
     if taken:
@@ -105,10 +106,10 @@ def main(argv: list[str] | None = None) -> None:
     print(f"\nServer address: {config.server_ip()}\n"
           f"Ready. Start The Crew on your PS4 or PC; the game finds the server on the local network by itself.\n"
           f"Stop the server with Ctrl+C.\n", flush=True)
-    games.start_beside(args.ip, args.port, os.path.dirname(args.log), paths.home("save"))
-    Server(args.ip, args.port, args.log, args.save,
-           abilities=config.abilities(), unlocks=config.unlocks(), dlc=config.dlc(),
-           proxy_key=config.proxy_key()).serve_forever()
+    relays = [game.make_relay(start) for game in versions]
+    for beside in relays[1:]:
+        threading.Thread(target=beside.serve_forever, daemon=True).start()
+    relays[0].serve_forever()
 
 
 if __name__ == "__main__":

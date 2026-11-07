@@ -1,18 +1,33 @@
 # The Crew Reborn - Knutwurst
 # https://thecrewreborn.github.io - https://ko-fi.com/knutwurst
 import importlib
+import os
+from dataclasses import dataclass, field
+
+VERSIONS = ("v1_21", "v1_00")
 
 
-BESIDE_1_21 = ("v1_00",)
+@dataclass
+class Start:
+    ip: str
+    port: int
+    log_dir: str
+    save_root: str
+    save_path: str
+    log_path: str = ""
+    game_data: str | None = None
+    interactive: bool = False
+    extra: dict = field(default_factory=dict)
+
+    def save_folder(self, name: str) -> str:
+        return os.path.join(self.save_root, name)
 
 
-def start_beside(relay_ip: str, relay_port: int, log_dir: str, save_dir: str) -> list[str]:
-    started = []
-    for name in BESIDE_1_21:
+def available() -> list:
+    found = []
+    for name in VERSIONS:
         try:
-            relay = importlib.import_module(f"tcreborn.games.{name}.relay")
+            found.append(importlib.import_module(f"tcreborn.games.{name}"))
         except ModuleNotFoundError:
             continue
-        relay.serve(relay_ip, relay_port, log_dir, save_dir)
-        started.append(name)
-    return started
+    return found

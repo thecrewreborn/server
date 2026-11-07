@@ -4,6 +4,7 @@ import os
 import sys
 
 from tcreborn import paths
+from tcreborn.games.v1_21 import tables
 
 INSTALLS = [
     r"Program Files (x86)\Ubisoft\Ubisoft Game Launcher\games\The Crew",
@@ -28,7 +29,7 @@ def names() -> list[str]:
 
 
 def missing() -> list[str]:
-    return [n for n in names() if not os.path.exists(paths.table(n))]
+    return [n for n in names() if not os.path.exists(tables.path(n))]
 
 
 def _has_bigfiles(d: str) -> bool:
@@ -67,11 +68,11 @@ def find_install() -> str | None:
 
 def build(folder: str) -> list[str]:
     print(f"Building the game tables from {folder} (takes about a minute)...", flush=True)
-    failed = _gen_all().generate(folder, paths.TABLES)
+    failed = _gen_all().generate(folder, tables.FOLDER)
     if failed:
         print(f"Could not build: {', '.join(failed)}", flush=True)
     else:
-        print(f"Game tables ready in {paths.TABLES}", flush=True)
+        print(f"Game tables ready in {tables.FOLDER}", flush=True)
     return failed
 
 

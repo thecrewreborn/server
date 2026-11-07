@@ -100,7 +100,7 @@ def afk_kick() -> bool:
 
 
 def proxy_key() -> tuple[bytes, bytes]:
-    from tcreborn.games.v1_21.crypto import IV0, K0
+    from tcreborn.keys import IV0, K0
     cfg = _load()
     return (bytes.fromhex(cfg.get("proxy", "key", fallback="")) or K0,
             bytes.fromhex(cfg.get("proxy", "iv", fallback="")) or IV0)

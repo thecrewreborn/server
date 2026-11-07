@@ -2,6 +2,7 @@
 # https://thecrewreborn.github.io - https://ko-fi.com/knutwurst
 import datetime
 import os
+import re
 import shutil
 
 from tcreborn import paths
@@ -10,8 +11,11 @@ FOLDERS = {"1.21": "1.21", "1.00": "1.00"}
 OLD_1_21 = ("players", "player.json", "factions.json")
 
 
-def folder(version: str) -> str:
-    return paths.home("save", FOLDERS[version])
+DEFAULT_NAME = "Player"
+
+
+def save_name(name: str) -> str:
+    return re.sub(r"[^A-Za-z0-9_-]", "_", name)[:32] or DEFAULT_NAME
 
 
 def move_into_version_folders(save_root: str | None = None) -> list[str]:

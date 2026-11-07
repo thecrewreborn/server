@@ -4,7 +4,7 @@ import json
 import os
 import struct
 
-from tcreborn import paths
+from tcreborn.games.v1_21 import tables
 from tcreborn.games.v1_21 import cars, rewards
 from tcreborn.games.v1_21.handlers import Ctx, register
 from tcreborn.games.v1_21.player import PERKS, set_bit
@@ -80,7 +80,7 @@ def table_bit(ctx: Ctx, body: bytes):
 T_COLLECTIBLE = 0x9234FC36
 
 
-SETS_PATH = paths.table("collectibles.json")
+SETS_PATH = tables.path("collectibles.json")
 SETS = json.load(open(SETS_PATH)) if os.path.exists(SETS_PATH) else None
 
 
@@ -125,7 +125,7 @@ def collectible_list(ctx: Ctx, body: bytes):
     return 0x573316DD, struct.pack(">Q", ctx.player_id) + blob(serializer_list(items))
 
 
-REGIONS_PATH = paths.table("regions.json")
+REGIONS_PATH = tables.path("regions.json")
 REGIONS = json.load(open(REGIONS_PATH)) if os.path.exists(REGIONS_PATH) else None
 REWARD_STATE = 5
 

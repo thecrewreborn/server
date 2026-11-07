@@ -104,7 +104,7 @@ def _now() -> float:
 
 
 def _save_key(name: str) -> str:
-    from tcreborn.games.v1_21.relay import save_name
+    from tcreborn.saves import save_name
     return save_name(name)
 
 

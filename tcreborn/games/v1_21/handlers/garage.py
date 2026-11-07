@@ -4,7 +4,7 @@ import json
 import os
 import struct
 
-from tcreborn import paths
+from tcreborn.games.v1_21 import tables
 from tcreborn.games.v1_21 import cars, peers, summit
 from tcreborn.games.v1_21.handlers import Ctx, register
 from tcreborn.games.v1_21.player import set_bit
@@ -194,7 +194,7 @@ def car_purchase(ctx: Ctx, body: bytes):
                         + cars.array(1, cars.with_state(cfg, cars.BOUGHT)) + cars.part_list(s))
 
 
-NPC_PATH = paths.table("npc.json")
+NPC_PATH = tables.path("npc.json")
 NPC = json.load(open(NPC_PATH))["items"] if os.path.exists(NPC_PATH) else None
 
 
