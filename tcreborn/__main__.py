@@ -70,7 +70,10 @@ def main(argv: list[str] | None = None) -> None:
     print(f"The Crew Reborn server {VERSION}", flush=True)
     versions = games.available()
     if args.generate:
-        raise SystemExit(max(g.generate(args.generate) for g in versions if hasattr(g, "generate")))
+        builders = [g for g in versions if hasattr(g, "generate")]
+        if not builders:
+            raise SystemExit("this server builds no game tables")
+        raise SystemExit(max(g.generate(args.generate) for g in builders))
     start = games.Start(args.ip, args.port, os.path.dirname(args.log), paths.home("save"), args.save,
                         log_path=args.log, game_data=config.game_data(),
                         interactive=sys.stdin is not None and sys.stdin.isatty())
@@ -80,12 +83,12 @@ def main(argv: list[str] | None = None) -> None:
 
     from tcreborn import discovery, saves, tls, ubi
 
-    taken = _udp_in_use(args.port, discovery.DISCOVERY_PORT)
+    taken = _udp_in_use(*sorted({args.port + g.PORT_OFFSET for g in versions}), discovery.DISCOVERY_PORT)
     if taken:
         raise SystemExit(f"\nThe Crew Reborn server is already running on this computer (udp port {taken} is in use).\n"
                          f"Use that one, or close its window first.")
     os.makedirs(os.path.dirname(args.log), exist_ok=True)
-    if not config.save_path_configured():
+    if not config.save_path_configured() and os.path.abspath(args.save) == config.save_path():
         saves.move_into_version_folders()
     detail = print if args.verbose else (lambda *a, **k: None)
     detail(f"player save: {args.save}")

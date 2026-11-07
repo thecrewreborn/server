@@ -57,12 +57,20 @@ def relay_address() -> tuple[str, int]:
     return cfg.get("relay", "ip", fallback=RELAY[0]), cfg.getint("relay", "port", fallback=RELAY[1])
 
 
+OLD_SAVE_PATH = "save/player.json"
+
+
+def _configured_save_path() -> str:
+    path = _load().get("server", "save_path", fallback="").strip()
+    return "" if path.replace("\\", "/") in ("", OLD_SAVE_PATH) else path
+
+
 def save_path_configured() -> bool:
-    return bool(_load().get("server", "save_path", fallback=""))
+    return bool(_configured_save_path())
 
 
 def save_path() -> str:
-    path = _load().get("server", "save_path", fallback="") or os.path.join("save", "1.21", "player.json")
+    path = _configured_save_path() or os.path.join("save", "1.21", "player.json")
     return path if os.path.isabs(path) else os.path.join(ROOT, path)
 
 

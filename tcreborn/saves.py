@@ -7,7 +7,7 @@ import shutil
 
 from tcreborn import paths
 
-FOLDERS = {"1.21": "1.21", "1.00": "1.00"}
+FOLDER_1_21 = "1.21"
 OLD_1_21 = ("players", "player.json", "factions.json")
 
 
@@ -20,7 +20,7 @@ def save_name(name: str) -> str:
 
 def move_into_version_folders(save_root: str | None = None) -> list[str]:
     root = save_root or paths.home("save")
-    target = os.path.join(root, FOLDERS["1.21"])
+    target = os.path.join(root, FOLDER_1_21)
     old = [n for n in OLD_1_21 if os.path.exists(os.path.join(root, n))]
     if os.path.exists(target) or not old:
         return []
