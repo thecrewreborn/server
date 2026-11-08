@@ -66,6 +66,21 @@ crew_credits_refill = off
 A new player then starts with `crew_credits`, and every purchase takes from the balance. Restart the server after
 a change.
 
+## DLC
+
+The DLC is off: the content of the paid add-ons (Wild Run's motorbikes and specs, Calling All Units, the car
+packs) stays locked. If you own the DLC for your copy of the game, switch it on in one place,
+the server. Copy `config.example.ini` to `config.ini` next to the server and set under `[player]`:
+
+```ini
+dlc = on
+```
+
+Restart the server, then the game. The server cannot check whether you own the DLC, because the official servers
+are gone. It unlocks the DLC for everyone who plays on it, so switch it on only if you own it. The PS4 patch and
+the PC game take the setting from the server; nothing changes on the console or the PC. With a server in another
+network (`server.txt` on the PS4), the console asks that server on UDP port 4001. The base game 1.00 has no DLC.
+
 ## Ports
 
 TCP 80 and 443, UDP 4000, 4001 and 4100 (4100: the base game 1.00). Nothing has to be opened on the router for play at home. When the system refuses
@@ -158,6 +173,23 @@ crew_credits_refill = off
 
 Ein neuer Spieler startet dann mit `crew_credits`, und jeder Kauf zieht vom Kontostand ab. Starte den Server nach
 einer Änderung neu.
+
+## DLC
+
+Die DLCs sind aus: Die Inhalte der kostenpflichtigen Add-ons (die Motorräder und Specs von Wild
+Run, Calling All Units, die Autopakete) bleiben gesperrt. Wenn du die DLCs für deine Kopie des Spiels besitzt, schalte sie
+an einer Stelle ein, im Server. Kopiere `config.example.ini` nach `config.ini` neben dem Server und trage unter
+`[player]` ein:
+
+```ini
+dlc = on
+```
+
+Starte den Server neu, danach das Spiel. Der Server kann nicht prüfen, ob du die DLCs besitzt, weil es die offiziellen
+Server nicht mehr gibt. Er schaltet sie für alle frei, die auf ihm spielen. Schalte sie deshalb nur ein, wenn du sie
+besitzt. Der PS4-Patch und das PC-Spiel übernehmen die Einstellung vom Server; an Konsole und PC änderst du nichts.
+Bei einem Server in einem anderen Netzwerk (`server.txt` auf der PS4) fragt die Konsole diesen Server über den UDP-Port
+4001. Das Basisspiel 1.00 hat keine DLCs.
 
 ## Ports
 

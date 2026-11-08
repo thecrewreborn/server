@@ -93,6 +93,7 @@ def main(argv: list[str] | None = None) -> None:
     detail = print if args.verbose else (lambda *a, **k: None)
     detail(f"player save: {args.save}")
     detail(f"abilities: {config.abilities()}, unlocks: {config.unlocks()}, dlc: {config.dlc()}")
+    print(f"DLC: {'on' if config.dlc() == 'all' else 'off'} (config.ini [player] dlc)", flush=True)
     requests_log = os.path.join(os.path.dirname(args.log), "requests.jsonl")
     _, http_port = _bind(ubi.serve, args.http_port, "http", requests_log)
     https_port = config.https_port()
@@ -102,7 +103,7 @@ def main(argv: list[str] | None = None) -> None:
         _, https_port = _bind(ubi.serve_tls, https_port, "https", *config.tls_cert(), requests_log)
         detail(f"https on tcp 0.0.0.0:{https_port}", flush=True)
     discovery.serve(args.port, http_port, config.advertised_ip(), bots=config.bots(), afk=config.afk_kick(),
-                    https_port=https_port)
+                    https_port=https_port, dlc=config.dlc() == "all")
     detail(f"http on tcp 0.0.0.0:{http_port}, discovery on udp 0.0.0.0:{discovery.DISCOVERY_PORT}, "
            f"relay on udp {args.ip}:{args.port}, freeride bots {'on' if config.bots() else 'off'}, "
            f"idle kick {'on' if config.afk_kick() else 'off'}", flush=True)

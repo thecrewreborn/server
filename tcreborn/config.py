@@ -92,7 +92,8 @@ def crew_credits_refill() -> bool:
 
 
 def dlc() -> str:
-    return "all"
+    value = _load().get("player", "dlc", fallback="off").strip().lower()
+    return "all" if value in ("on", "1", "true", "yes", "all") else "none"
 
 
 def unlocks() -> str:
