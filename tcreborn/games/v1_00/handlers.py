@@ -344,10 +344,12 @@ def delete_player(ctx, body: bytes):
         os.makedirs(backup, exist_ok=True)
         stem = os.path.splitext(os.path.basename(p.path))[0]
         shutil.copyfile(p.path, os.path.join(backup, f"{stem}-deleted-{time.strftime('%Y%m%d-%H%M%S')}.json"))
-    keep = {k: getattr(p, k) for k in ("unlocks", "dlc", "free_roam", "cc_fixed")}
+    keep = {k: getattr(p, k) for k in ("unlocks", "dlc", "free_roam")}
     fresh = type(p)(path=p.path)
     p.__dict__.update(fresh.__dict__)
     p.__dict__.update(keep)
+    from tcreborn.games.v1_21.relay import start_crew_credits
+    start_crew_credits(p, new=True)
     if p.free_roam:
         p.unlock_free_roam()
     p.save()

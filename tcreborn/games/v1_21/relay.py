@@ -41,6 +41,15 @@ def _addr_bytes(ip: str, port: int) -> bytes:
     return socket.inet_aton(ip) + struct.pack(">H", port)
 
 
+def start_crew_credits(player: Player, new: bool) -> None:
+    if config.crew_credits_refill():
+        player.cc_fixed = config.crew_credits()
+    else:
+        player.cc_fixed = 0
+        if new:
+            player.crew_credits = config.crew_credits()
+
+
 class Server:
     def __init__(self, ip: str, port: int, log_path: str | None, save_path: str | None = None,
                  sender=None, abilities: str = "none",
@@ -57,13 +66,14 @@ class Server:
         self.sender = sender
 
     def _new_ctx(self, name: str, path: str | None) -> Ctx:
+        new = not (path and os.path.exists(path))
         ctx = Ctx(player_name=name, player_id=player_id_for(name), player=Player.load(path))
         if self.abilities == "all" and not ctx.player.abilities:
             ctx.player.abilities = list(ALL_ABILITIES)
             ctx.player.save()
         ctx.player.unlocks = unlock_fields(self.unlocks)
         ctx.player.dlc = dlc_fields(self.dlc)
-        ctx.player.cc_fixed = config.crew_credits()
+        start_crew_credits(ctx.player, new)
         return ctx
 
     def ctx_for_name(self, name: str | None) -> Ctx:

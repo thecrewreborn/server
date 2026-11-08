@@ -53,6 +53,19 @@ One name plays on one device at a time. While a game is online with a name, the 
 that name from another device, so two games never write the same save; the game then shows error #0_35. Quit the
 first game, or wait 90 seconds after it lost its connection, and log in again.
 
+## Crew Credits
+
+Every player has 1,000,000 Crew Credits, and buying with them costs nothing: the balance stays where it is. To play
+with a balance of your own, copy `config.example.ini` to `config.ini` next to the server and set under `[player]`:
+
+```ini
+crew_credits = 1000000
+crew_credits_refill = off
+```
+
+A new player then starts with `crew_credits`, and every purchase takes from the balance. Restart the server after
+a change.
+
 ## Ports
 
 TCP 80 and 443, UDP 4000, 4001 and 4100 (4100: the base game 1.00). Nothing has to be opened on the router for play at home. When the system refuses
@@ -131,6 +144,20 @@ Ein Name spielt immer nur auf einem Gerät. Solange ein Spiel mit einem Namen on
 Anmeldung mit diesem Namen von einem anderen Gerät ab, damit nie zwei Spiele in denselben Spielstand schreiben; das
 Spiel zeigt dann Fehler #0_35. Beende das erste Spiel oder warte 90 Sekunden, nachdem es die Verbindung verloren hat,
 und melde dich erneut an.
+
+## Crew Credits
+
+Jeder Spieler hat 1.000.000 Crew Credits, und Käufe damit kosten nichts: Der Kontostand bleibt, wo er ist. Um mit
+einem eigenen Kontostand zu spielen, kopiere `config.example.ini` nach `config.ini` neben dem Server und trage unter
+`[player]` ein:
+
+```ini
+crew_credits = 1000000
+crew_credits_refill = off
+```
+
+Ein neuer Spieler startet dann mit `crew_credits`, und jeder Kauf zieht vom Kontostand ab. Starte den Server nach
+einer Änderung neu.
 
 ## Ports
 

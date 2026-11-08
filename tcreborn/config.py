@@ -87,6 +87,10 @@ def crew_credits() -> int:
     return max(0, _load().getint("player", "crew_credits", fallback=1000000))
 
 
+def crew_credits_refill() -> bool:
+    return _load().get("player", "crew_credits_refill", fallback="on").strip().lower() in ("on", "1", "true", "yes")
+
+
 def dlc() -> str:
     return "all"
 
