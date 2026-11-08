@@ -1,0 +1,967 @@
+{
+ "0x03CE5058": {
+  "layout": [
+   "u8*2",
+   "list"
+  ],
+  "reply": "NotificationService_A_GetChannelUserList(D4FF0979)",
+  "reply_id": "0xC95EFE6C",
+  "request": "NotificationService_R_GetChannelUserList(0B5DE94D)",
+  "why": "missing"
+ },
+ "0x0BE1ACD4": {
+  "layout": [
+   "u8",
+   "u32"
+  ],
+  "none": [
+   1
+  ],
+  "reply": "SessionService_A_CreateSession(915C6FF8)",
+  "reply_id": "0x56CEFAEE",
+  "request": "SessionService_R_CreateSession(43204278)",
+  "why": "missing"
+ },
+ "0x0D0AE2E9": {
+  "layout": [
+   "u32*2"
+  ],
+  "reply": "NPCService_A_SellItem(18E59387)",
+  "reply_id": "0x71F77321",
+  "request": "NPCService_R_SellItem(0D95EF69)",
+  "why": "missing"
+ },
+ "0x14577F42": {
+  "layout": [
+   "u8*2",
+   "u32",
+   "list"
+  ],
+  "reply": "NotificationService_A_RegisterChannel(C944A98D)",
+  "reply_id": "0x85CBCEE7",
+  "request": "NotificationService_R_RegisterChannel(36381E2F)",
+  "why": "missing"
+ },
+ "0x19B432B3": {
+  "layout": [
+   "u8",
+   "u32"
+  ],
+  "reply": "PlayerService_A_DeletePlayer(763233B1)",
+  "reply_id": "0x3EC53E54",
+  "request": "PlayerService_R_DeletePlayer(AB635AC4)",
+  "why": "missing"
+ },
+ "0x1E1D89AA": {
+  "layout": [
+   "u8",
+   "arr"
+  ],
+  "reply": "RecordsService_A_SetPVPScore(60ADE1CB)",
+  "reply_id": "0xAAEAFCFC",
+  "request": "RecordsService_R_SetPVPScore(765F0AEC)",
+  "why": "missing"
+ },
+ "0x1E6E235A": {
+  "layout": [
+   "u8",
+   "arr"
+  ],
+  "reply": "ScoresService_A_GetScore(229FAF4B)",
+  "reply_id": "0xBE4E7F1B",
+  "request": "ScoresService_R_GetScore(5F5AD19E)",
+  "why": "missing"
+ },
+ "0x1F77E3D9": {
+  "layout": [
+   "u8",
+   "list",
+   "u32"
+  ],
+  "reply": "NPCService_A_GetTraderStock(A78F4978)",
+  "reply_id": "0x6FC104E7",
+  "request": "NPCService_R_GetTraderStock(96C135F2)",
+  "why": "missing"
+ },
+ "0x202CCA6A": {
+  "layout": [
+   "u8"
+  ],
+  "reply": "PlayerService_A_SetFriendList(7199EDF1)",
+  "reply_id": "0x54AB1327",
+  "request": "PlayerService_R_SetFriendList(D1D409EE)",
+  "why": "missing"
+ },
+ "0x28FBB2DE": {
+  "layout": [
+   "u8",
+   "u32",
+   "arr"
+  ],
+  "reply": "ScoresService_A_GetLeaderboardForRank(3C2FF688)",
+  "reply_id": "0xB40DCDA8",
+  "request": "ScoresService_R_GetLeaderboardForRank(19CD5738)",
+  "why": "missing"
+ },
+ "0x2E0E24CB": {
+  "layout": [
+   "u8",
+   "u64",
+   "blob",
+   "u32"
+  ],
+  "reply": "EntityStorage_A_LoadEntityReadOnly(A29A3042)",
+  "reply_id": "0xCE8FE9D1",
+  "request": "EntityStorage_R_LoadEntityReadOnly(D9D105C6)",
+  "why": "missing"
+ },
+ "0x31414F5F": {
+  "layout": [
+   "u8",
+   "u64",
+   "u8",
+   "u64",
+   "u32*11",
+   "u64",
+   "arr",
+   "u16",
+   "u32*6"
+  ],
+  "none": [
+   1
+  ],
+  "reply": "MetaService_A_ValidateFactionMission(D587E676)",
+  "reply_id": "0x1D31095E",
+  "request": "MetaService_R_ValidateFactionMission(5881247F)",
+  "why": "missing"
+ },
+ "0x31FFE242": {
+  "layout": [
+   "u64*2",
+   "list"
+  ],
+  "reply": "AchievementsService_A_GetCompareAchievements(3766E6DC)",
+  "reply_id": "0x35650155",
+  "request": "AchievementsService_R_GetCompareAchievements(C8B0A0AF)",
+  "why": "missing"
+ },
+ "0x33F6A6A1": {
+  "layout": [
+   "u8",
+   "list"
+  ],
+  "reply": "RecordsService_A_GetPVPScore(D335CE8B)",
+  "reply_id": "0x2B1D5CA7",
+  "request": "RecordsService_R_GetPVPScore(3C73636B)",
+  "why": "missing"
+ },
+ "0x37D6825B": {
+  "layout": [
+   "u8",
+   "u32"
+  ],
+  "reply": "PlayerService_A_SetTutorials(906131B7)",
+  "reply_id": "0x63BCD579",
+  "request": "PlayerService_R_SetTutorials(C4E1CED1)",
+  "why": "wrong reply type"
+ },
+ "0x3CDDE44F": {
+  "layout": [
+   "u8",
+   "arr*2"
+  ],
+  "reply": "RichPresence_A_SetPlayerCustomContext(5051F31C)",
+  "reply_id": "0xD29B29D9",
+  "request": "RichPresence_R_SetPlayerCustomContext(32A64F47)",
+  "why": "missing"
+ },
+ "0x3E7AD038": {
+  "layout": [
+   "u8",
+   "u32"
+  ],
+  "reply": "NotificationService_A_SendObjectToUsers(D99F43D8)",
+  "reply_id": "0x46822A14",
+  "request": "NotificationService_R_SendObjectToUsers(BE0942B8)",
+  "why": "missing"
+ },
+ "0x3ECA0DDF": {
+  "layout": [
+   "u8",
+   "u64",
+   "arr",
+   "u8",
+   "u64"
+  ],
+  "none": [
+   1
+  ],
+  "reply": "MetaService_A_CreateSendFriendMission(0052521D)",
+  "reply_id": "0xB65F46DD",
+  "request": "MetaService_R_CreateSendFriendMission(209426E6)",
+  "why": "missing"
+ },
+ "0x3FA27EAA": {
+  "layout": [
+   "u8",
+   "blob",
+   "u64*2",
+   "u32",
+   "u16*6",
+   "u8*3",
+   "u32*2",
+   "u64*2",
+   "u32",
+   "u8"
+  ],
+  "none": [
+   2,
+   4,
+   5,
+   6,
+   7,
+   8,
+   9,
+   10,
+   16,
+   17
+  ],
+  "reply": "PlayerService_A_GetContactByName(080D75FF)",
+  "reply_id": "0x472CE4AD",
+  "request": "PlayerService_R_GetContactByName(4A177130)",
+  "why": "missing"
+ },
+ "0x473872EA": {
+  "layout": [
+   "u8",
+   "u64"
+  ],
+  "reply": "GroupService_A_CreateCrew(63D0E025)",
+  "reply_id": "0x10B92C81",
+  "request": "GroupService_R_CreateCrew(58468DFE)",
+  "why": "missing"
+ },
+ "0x4D6D14B1": {
+  "layout": [
+   "u8",
+   "arr"
+  ],
+  "reply": "NewsService_A_GetNewsByISOCode(DAE184B2)",
+  "reply_id": "0xD2737829",
+  "request": "NewsService_R_GetNewsByISOCode(8F10564F)",
+  "why": "missing"
+ },
+ "0x5EAA9404": {
+  "layout": [
+   "u8",
+   "u64*3",
+   "u32",
+   "u16*6",
+   "blob",
+   "u8",
+   "u32*4",
+   "u16",
+   "u64",
+   "u32",
+   "u64*2",
+   "u32*6",
+   "arr*7",
+   "u32",
+   "u8*31",
+   "u32*3",
+   "arr",
+   "u64",
+   "arr*2",
+   "u32",
+   "u8"
+  ],
+  "none": [
+   1,
+   2,
+   4,
+   5,
+   6,
+   7,
+   8,
+   9,
+   10,
+   18,
+   20,
+   21,
+   71
+  ],
+  "reply": "PlayerService_A_GetOrCreatePlayer(4A3847EB)",
+  "reply_id": "0xA555E30A",
+  "request": "PlayerService_R_GetOrCreatePlayer(40D4CC3C)",
+  "why": "missing"
+ },
+ "0x60875720": {
+  "layout": [
+   "u8",
+   "u64",
+   "u8",
+   "u64",
+   "u32*11",
+   "u64",
+   "arr",
+   "u16",
+   "u32*6"
+  ],
+  "none": [
+   1
+  ],
+  "reply": "MetaService_A_CollectSendFriendMission(D587E676)",
+  "reply_id": "0xD9F5D2BF",
+  "request": "MetaService_R_CollectSendFriendMission(7B3553F9)",
+  "why": "missing"
+ },
+ "0x68B6EEC5": {
+  "layout": [
+   "u8",
+   "u32*3"
+  ],
+  "reply": "NPCService_A_UpdateCarDamages(C9CE18D8)",
+  "reply_id": "0xC3F20ADF",
+  "request": "NPCService_R_UpdateCarDamages(9790796F)",
+  "why": "wrong reply type"
+ },
+ "0x691A7151": {
+  "layout": [
+   "list"
+  ],
+  "reply": "PlayerService_A_GetContactByGameID(B8CF2330)",
+  "reply_id": "0x96034575",
+  "request": "PlayerService_R_GetContactByGameID(E83FC163)",
+  "why": "missing"
+ },
+ "0x7932CE3E": {
+  "layout": [
+   "u8",
+   "u64",
+   "u8",
+   "u64",
+   "u32*11",
+   "u64",
+   "arr",
+   "u16",
+   "u32"
+  ],
+  "none": [
+   1
+  ],
+  "reply": "MetaService_A_ChangeFaction(B1433727)",
+  "reply_id": "0xBBAC8EBB",
+  "request": "MetaService_R_ChangeFaction(C0AADE77)",
+  "why": "wrong reply type"
+ },
+ "0x7C044567": {
+  "layout": [
+   "u8",
+   "arr",
+   "u32"
+  ],
+  "reply": "MissionService_A_ValidateCollectible(02865E42)",
+  "reply_id": "0x2BD575AA",
+  "request": "MissionService_R_ValidateCollectible(6115DBA5)",
+  "why": "wrong reply type"
+ },
+ "0x7C40F0EC": {
+  "layout": [
+   "u8"
+  ],
+  "reply": "UserStorage_A_SaveFogOfWar(CB53C960)",
+  "reply_id": "0x91A1A2C4",
+  "request": "UserStorage_R_SaveFogOfWar(E3AF6DE4)",
+  "why": "wrong reply type"
+ },
+ "0x7DC1F4F0": {
+  "layout": [
+   "u8",
+   "u32"
+  ],
+  "reply": "NPCService_A_MountItem(31A8F441)",
+  "reply_id": "0x0564612D",
+  "request": "NPCService_R_MountItem(75189866)",
+  "why": "wrong reply type"
+ },
+ "0x82B2A771": {
+  "layout": [
+   "u64",
+   "u8",
+   "u64",
+   "u32*11",
+   "u64",
+   "arr",
+   "u16",
+   "u32",
+   "u64*25"
+  ],
+  "none": [
+   0
+  ],
+  "reply": "MetaService_A_GetMetaData(38803D86)",
+  "reply_id": "0x325586D5",
+  "request": "MetaService_R_GetMetaData(65181A45)",
+  "why": "wrong reply type"
+ },
+ "0x84219DCC": {
+  "layout": [
+   "u8*6",
+   "list"
+  ],
+  "reply": "WallService_A_GetUpdates(BDE9EED4)",
+  "reply_id": "0x67C70017",
+  "request": "WallService_R_GetUpdates(1BD64DCA)",
+  "why": "missing"
+ },
+ "0x8711A3A7": {
+  "layout": [
+   "u8",
+   "u64",
+   "u32*4",
+   "arr",
+   "u32*10",
+   "arr",
+   "u32"
+  ],
+  "none": [
+   1
+  ],
+  "reply": "SkillService_A_ValidateSkill(E396BC3E)",
+  "reply_id": "0xA430D96A",
+  "request": "SkillService_R_ValidateSkill(DCA611BE)",
+  "why": "missing"
+ },
+ "0x96B5DE1D": {
+  "layout": [
+   "u8"
+  ],
+  "reply": "WallService_A_PostAward(CB53C960)",
+  "reply_id": "0x62EFE7BE",
+  "request": "WallService_R_PostAward(7299E04E)",
+  "why": "missing"
+ },
+ "0x9868D8CE": {
+  "layout": [
+   "u8",
+   "u32"
+  ],
+  "reply": "PlayerService_A_SetGroupID(763233B1)",
+  "reply_id": "0x6DEE2E81",
+  "request": "PlayerService_R_SetGroupID(550DF8F9)",
+  "why": "wrong reply type"
+ },
+ "0x98E651DE": {
+  "layout": [
+   "u8*2",
+   "u64*2",
+   "arr",
+   "u64",
+   "blob"
+  ],
+  "none": [
+   3,
+   5
+  ],
+  "reply": "GroupService_A_GetOrUpdateCrew(F5C40217)",
+  "reply_id": "0x79289FEF",
+  "request": "GroupService_R_GetOrUpdateCrew(CCD5E41F)",
+  "why": "missing"
+ },
+ "0x9D59B96C": {
+  "layout": [
+   "u8"
+  ],
+  "reply": "PVPSessionService_A_RemoveSession(0B03C2B2)",
+  "reply_id": "0x0CE6B65F",
+  "request": "PVPSessionService_R_RemoveSession(6C757A97)",
+  "why": "missing"
+ },
+ "0x9F47DB89": {
+  "layout": [
+   "arr",
+   "u8"
+  ],
+  "reply": "PlayerService_A_GetContactByExternalId(5162E273)",
+  "reply_id": "0x7D6B709C",
+  "request": "PlayerService_R_GetContactByExternalId(5454EACC)",
+  "why": "missing"
+ },
+ "0xA088A3FD": {
+  "layout": [
+   "u32"
+  ],
+  "reply": "PVPSessionService_A_CreateSession(96590976)",
+  "reply_id": "0x3A48BD77",
+  "request": "PVPSessionService_R_CreateSession(BD987699)",
+  "why": "missing"
+ },
+ "0xA7476B7D": {
+  "layout": [
+   "u8*2",
+   "u32*2",
+   "u8",
+   "u32",
+   "u8",
+   "u32",
+   "u8",
+   "u32",
+   "u8",
+   "u32",
+   "u8",
+   "u32",
+   "u8",
+   "u32",
+   "u64",
+   "u8",
+   "u64",
+   "u32*11",
+   "u64",
+   "arr",
+   "u16",
+   "u32",
+   "u64*25",
+   "u16*2",
+   "u64"
+  ],
+  "none": [
+   16
+  ],
+  "reply": "MetaService_A_GetSalary(13E55C9F)",
+  "reply_id": "0x664D5B47",
+  "request": "MetaService_R_GetSalary(B885CB56)",
+  "why": "wrong reply type"
+ },
+ "0xABBB99E1": {
+  "layout": [
+   "u8",
+   "u32",
+   "u64*3",
+   "u32",
+   "u16*6",
+   "blob",
+   "u8",
+   "u32*4",
+   "u16",
+   "u64",
+   "u32",
+   "u64*2",
+   "u32*6",
+   "arr*7",
+   "u32",
+   "u8*31",
+   "u32*3",
+   "arr",
+   "u64",
+   "arr*2"
+  ],
+  "none": [
+   2,
+   3,
+   5,
+   6,
+   7,
+   8,
+   9,
+   10,
+   11,
+   19,
+   21,
+   22,
+   72
+  ],
+  "reply": "PlayerService_A_CreatePlayer(2624C3AA)",
+  "reply_id": "0x86D9FE30",
+  "request": "PlayerService_R_CreatePlayer(260F5A90)",
+  "why": "missing"
+ },
+ "0xB10A0A6C": {
+  "layout": [
+   "u8*2",
+   "list"
+  ],
+  "reply": "WallService_A_GetComments(11C5BC4C)",
+  "reply_id": "0xEEC16116",
+  "request": "WallService_R_GetComments(D90F78B8)",
+  "why": "missing"
+ },
+ "0xB11F578E": {
+  "layout": [
+   "u32*4",
+   "u64",
+   "arr*2"
+  ],
+  "none": [
+   4
+  ],
+  "reply": "NPCService_A_BuyNewCar(336BB67C)",
+  "reply_id": "0xA0B9C4D7",
+  "request": "NPCService_R_BuyNewCar(E94B613A)",
+  "why": "missing"
+ },
+ "0xB15A00D8": {
+  "layout": [
+   "u8*7",
+   "list"
+  ],
+  "reply": "WallService_A_PostElement(BAEC885A)",
+  "reply_id": "0xC2B55385",
+  "request": "WallService_R_PostElement(19DC9801)",
+  "why": "missing"
+ },
+ "0xB19884C9": {
+  "layout": [
+   "u8",
+   "u64*3",
+   "u32",
+   "u16*6",
+   "blob",
+   "u8",
+   "u32*4",
+   "u16",
+   "u64",
+   "u32",
+   "u64*2",
+   "u32*6",
+   "arr*7",
+   "u32",
+   "u8*31",
+   "u32*3",
+   "arr",
+   "u64",
+   "arr*2",
+   "u32"
+  ],
+  "none": [
+   1,
+   2,
+   4,
+   5,
+   6,
+   7,
+   8,
+   9,
+   10,
+   18,
+   20,
+   21,
+   71
+  ],
+  "reply": "PlayerService_A_GetPlayer(2624C3AA)",
+  "reply_id": "0xC6C7511C",
+  "request": "PlayerService_R_GetPlayer(18128F92)",
+  "why": "missing"
+ },
+ "0xB2FFFBD9": {
+  "layout": [
+   "u8"
+  ],
+  "reply": "NotificationService_A_UnRegisterChannel(F75D760C)",
+  "reply_id": "0x27121CC2",
+  "request": "NotificationService_R_UnRegisterChannel(54885AC2)",
+  "why": "missing"
+ },
+ "0xB83BF40A": {
+  "layout": [
+   "u8"
+  ],
+  "reply": "GroupService_A_UpdateCrew(E41DC953)",
+  "reply_id": "0xA3EFE71A",
+  "request": "GroupService_R_UpdateCrew(58468DFE)",
+  "why": "missing"
+ },
+ "0xB84353AD": {
+  "layout": [
+   "u8",
+   "u64",
+   "u32*5",
+   "arr",
+   "u32*12",
+   "arr",
+   "u64",
+   "arr*2",
+   "u32"
+  ],
+  "none": [
+   1,
+   21
+  ],
+  "reply": "MissionService_A_ValidateMission(203C9112)",
+  "reply_id": "0xAED45904",
+  "request": "MissionService_R_ValidateMission(478C52EA)",
+  "why": "missing"
+ },
+ "0xB9BE3AE1": {
+  "layout": [
+   "u8",
+   "u32*6"
+  ],
+  "reply": "NPCService_A_UseMoney(08EE99BB)",
+  "reply_id": "0xFEB0D771",
+  "request": "NPCService_R_UseMoney(7ABA1243)",
+  "why": "missing"
+ },
+ "0xB9E38075": {
+  "layout": [
+   "u8",
+   "arr"
+  ],
+  "reply": "NewsService_A_GetNews(DAE184B2)",
+  "reply_id": "0x1D9F071A",
+  "request": "NewsService_R_GetNews(6FDFCA98)",
+  "why": "missing"
+ },
+ "0xC3443606": {
+  "layout": [
+   "u8"
+  ],
+  "reply": "WallService_A_DeleteComment(7199EDF1)",
+  "reply_id": "0x495B80A9",
+  "request": "WallService_R_DeleteComment(E20CC19B)",
+  "why": "missing"
+ },
+ "0xC3DB5BA6": {
+  "layout": [
+   "u8"
+  ],
+  "reply": "WallService_A_DeleteManualUpdate(7199EDF1)",
+  "reply_id": "0x1C74E5A1",
+  "request": "WallService_R_DeleteManualUpdate(88D3A62F)",
+  "why": "missing"
+ },
+ "0xC43C7F34": {
+  "layout": [
+   "u8",
+   "arr",
+   "u32"
+  ],
+  "reply": "MissionService_A_ValidateDataTower(1F46D191)",
+  "reply_id": "0x51495E7F",
+  "request": "MissionService_R_ValidateDataTower(253D65F4)",
+  "why": "wrong reply type"
+ },
+ "0xC751EB45": {
+  "layout": [
+   "arr"
+  ],
+  "reply": "SessionService_A_SearchSessions(9052749A)",
+  "reply_id": "0x58861800",
+  "request": "SessionService_R_SearchSessions(E694DE66)",
+  "why": "missing"
+ },
+ "0xC7B0C15C": {
+  "layout": [
+   "u16",
+   "u8*30",
+   "u32",
+   "arr",
+   "list"
+  ],
+  "reply": "NPCService_A_GiveGiftPacks(F63E2551)",
+  "reply_id": "0xEB2718E6",
+  "request": "NPCService_R_GiveGiftPacks(6CDFFB3B)",
+  "why": "missing"
+ },
+ "0xCCC51840": {
+  "layout": [
+   "list"
+  ],
+  "reply": "PlayerService_A_GetFriendsIDs(9FD4973F)",
+  "reply_id": "0x7AA9E35F",
+  "request": "PlayerService_R_GetFriendsIDs(D63A7EB6)",
+  "why": "missing"
+ },
+ "0xDE55B5B7": {
+  "layout": [
+   "u8*2",
+   "u32",
+   "blob",
+   "u64",
+   "u32*2",
+   "u16*2",
+   "u8*2",
+   "blob",
+   "u8",
+   "u32",
+   "u8",
+   "blob"
+  ],
+  "none": [
+   4
+  ],
+  "reply": "SessionService_A_MigrateHost(D66FBD95)",
+  "reply_id": "0x7F772AC7",
+  "request": "SessionService_R_MigrateHost(C70E4C5C)",
+  "why": "missing"
+ },
+ "0xE214F5C8": {
+  "layout": [
+   "u8",
+   "list",
+   "u32"
+  ],
+  "reply": "PVPSessionService_A_SearchSession(D6775DA2)",
+  "reply_id": "0xC989A0C8",
+  "request": "PVPSessionService_R_SearchSession(9DB45E17)",
+  "why": "missing"
+ },
+ "0xE6D82939": {
+  "layout": [
+   "u8",
+   "arr",
+   "u8",
+   "u32*2",
+   "u16",
+   "u32"
+  ],
+  "reply": "MissionService_A_ValidateLandmark(3D425BD0)",
+  "reply_id": "0xA0279137",
+  "request": "MissionService_R_ValidateLandmark(15E8657B)",
+  "why": "wrong reply type"
+ },
+ "0xE78886BA": {
+  "layout": [
+   "u8",
+   "u64",
+   "u32"
+  ],
+  "none": [
+   1
+  ],
+  "reply": "ScoresService_A_GetBestScore(0E9ABB81)",
+  "reply_id": "0x7C395F17",
+  "request": "ScoresService_R_GetBestScore(4EF4B304)",
+  "why": "missing"
+ },
+ "0xE9BC1C88": {
+  "layout": [
+   "u8",
+   "u32"
+  ],
+  "reply": "PlayerService_A_SetPlayerDesc(763233B1)",
+  "reply_id": "0x7305C2EC",
+  "request": "PlayerService_R_SetPlayerDesc(E148C735)",
+  "why": "missing"
+ },
+ "0xE9C343AE": {
+  "layout": [
+   "u8",
+   "list"
+  ],
+  "reply": "WallService_A_GetIvoryFeed(D95DDEC4)",
+  "reply_id": "0xCE0B4C15",
+  "request": "WallService_R_GetIvoryFeed(3BABCEC5)",
+  "why": "missing"
+ },
+ "0xEA9859E1": {
+  "layout": [
+   "u8",
+   "u32*2",
+   "u16",
+   "u32"
+  ],
+  "reply": "PlayerService_A_SaveCrewComforts(C7A92983)",
+  "reply_id": "0x8BA46605",
+  "request": "PlayerService_R_SaveCrewComforts(3F75292A)",
+  "why": "missing"
+ },
+ "0xF16252BC": {
+  "layout": [
+   "u8",
+   "u32*2"
+  ],
+  "reply": "SkillService_A_ValidateKudos(CDFE165B)",
+  "reply_id": "0x64087FA7",
+  "request": "SkillService_R_ValidateKudos(C19FD79B)",
+  "why": "wrong reply type"
+ },
+ "0xF70D87D3": {
+  "layout": [
+   "u32*4",
+   "arr"
+  ],
+  "reply": "NPCService_A_BuyDress(34AC4AE7)",
+  "reply_id": "0xDB5D1640",
+  "request": "NPCService_R_BuyDress(A60A083C)",
+  "why": "wrong reply type"
+ },
+ "0xF8D83003": {
+  "layout": [
+   "u8",
+   "list"
+  ],
+  "reply": "PlayerService_A_GetPlayersList(CD9E0C76)",
+  "reply_id": "0xC8D1676B",
+  "request": "PlayerService_R_GetPlayersList(19A3B9B0)",
+  "why": "missing"
+ },
+ "0xF93D21DA": {
+  "layout": [
+   "u32*4"
+  ],
+  "reply": "NPCService_A_BuyItem(A4FCF3E3)",
+  "reply_id": "0x5EB07938",
+  "request": "NPCService_R_BuyItem(20537E5F)",
+  "why": "wrong reply type"
+ },
+ "0xF977A5F8": {
+  "layout": [
+   "u64",
+   "u32*438"
+  ],
+  "none": [
+   0
+  ],
+  "reply": "StatsService_A_GetFriendStats(5BE54D18)",
+  "reply_id": "0xD6889336",
+  "request": "StatsService_R_GetFriendStats(65181A45)",
+  "why": "missing"
+ },
+ "0xF99ADFB6": {
+  "layout": [
+   "u8",
+   "u64",
+   "u8",
+   "u64",
+   "u32*11",
+   "u64",
+   "arr",
+   "u16",
+   "u32*7"
+  ],
+  "none": [
+   1
+  ],
+  "reply": "MetaService_A_ValidatePVPMission(7718DF29)",
+  "reply_id": "0xDC5C75CA",
+  "request": "MetaService_R_ValidatePVPMission(7ED526C4)",
+  "why": "missing"
+ },
+ "0xFDBA1DD5": {
+  "layout": [
+   "u8"
+  ],
+  "reply": "PVPSessionService_A_UpdateSession(73F4AE38)",
+  "reply_id": "0xFA975CC8",
+  "request": "PVPSessionService_R_UpdateSession(BD987699)",
+  "why": "missing"
+ },
+ "0xFFC6AB2F": {
+  "layout": [
+   "u8",
+   "u32"
+  ],
+  "reply": "NPCService_A_UnNewCars(31A8F441)",
+  "reply_id": "0xC8142BF6",
+  "request": "NPCService_R_UnNewCars(12339EEE)",
+  "why": "missing"
+ },
+ "_inline": {
+  "0x38FDEFAA": {
+   "reply": "SessionTimer_A_GetHostTime(F4DAEFBF)",
+   "reply_id": "0x864759DA",
+   "request": "SessionTimer_R_GetHostTime(0B0B04E2)",
+   "why": "missing"
+  }
+ }
+}

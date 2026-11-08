@@ -106,10 +106,15 @@ def main(argv: list[str] | None = None) -> None:
     detail(f"http on tcp 0.0.0.0:{http_port}, discovery on udp 0.0.0.0:{discovery.DISCOVERY_PORT}, "
            f"relay on udp {args.ip}:{args.port}, freeride bots {'on' if config.bots() else 'off'}, "
            f"idle kick {'on' if config.afk_kick() else 'off'}", flush=True)
+    relays = [versions[0].make_relay(start)]
+    for game in versions[1:]:
+        try:
+            relays.append(game.make_relay(start))
+        except Exception as e:
+            print(f"game version {game.NAME} not started: {type(e).__name__}: {e}", flush=True)
     print(f"\nServer address: {config.server_ip()}\n"
           f"Ready. Start The Crew on your PS4 or PC; the game finds the server on the local network by itself.\n"
           f"Stop the server with Ctrl+C.\n", flush=True)
-    relays = [game.make_relay(start) for game in versions]
     for beside in relays[1:]:
         threading.Thread(target=beside.serve_forever, daemon=True).start()
     relays[0].serve_forever()

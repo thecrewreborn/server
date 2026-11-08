@@ -3,6 +3,7 @@
 import json
 import os
 import random
+import threading
 
 from tcreborn import config, paths
 
@@ -45,7 +46,14 @@ def tick(rec: list[int], rng: random.Random) -> None:
 
 
 def load(now: int, path: str | None = None) -> list[list[int]]:
-    path = path or PATH
+    with _LOCK:
+        return _load(now, path or PATH)
+
+
+_LOCK = threading.Lock()
+
+
+def _load(now: int, path: str) -> list[list[int]]:
     try:
         with open(path) as f:
             state = json.load(f)

@@ -22,13 +22,14 @@ again in the game. The very first start needs the server running.
 ## What you need
 
 - Your own copy of The Crew for PS4 or PC, in one of these versions:
-  - **PS4:** European version CUSA00161, version 1.00 with update 1.21 installed (the game info shows 01.21), on a
-    console with GoldHEN. Tested on a PS4 with firmware 11.50.
+  - **PS4:** European version CUSA00161, on a console with GoldHEN, either with update 1.21 installed (the game info
+    shows 01.21, with Wild Run) or as the base game without any update (01.00). Tested on a PS4 with firmware 11.50.
+    The base game 1.00 is new and experimental: tested from the start of the story to the first tuning shop.
   - **PC:** Ubisoft Connect or Steam version, `TheCrew.exe` 1.2.0.0 (build 502193). Tested on Windows 11, also Windows 11 on ARM
     (Parallels on a Mac with Apple silicon).
 
   Not tested yet: the PS5. Other PS4 regions and game versions don't work yet; the
-  patch fits only CUSA00161 with update 1.21.
+  patch fits only CUSA00161 1.00 and 1.21.
 - A computer on the same network as the console or the gaming PC: Windows, macOS or Linux. The server can also run
   on the gaming PC itself. Linux needs Python 3.10 or newer with venv (Debian/Ubuntu:
   `sudo apt install python3 python3-venv`); on Windows and macOS the start script installs Python if it is missing.
@@ -42,7 +43,8 @@ whether Python may use the network: allow it for private networks.
 ## Your progress, on PS4 and PC
 
 Saves live in the `save` folder next to the server, one file per player name: the PS4 user name, or the PC's `Name`
-in `reborn.ini` (your Windows user name if empty). Back up that folder to keep your progress.
+in `reborn.ini` (your Windows user name if empty). Back up that folder to keep your progress. The base game 1.00 has its own saves
+(`save/1.00`); they are separate from those of 1.21 and the PC.
 
 Cross-save: the same name on PS4 and PC plays the same save. To continue your PS4 progress on the PC, set `Name` in
 `reborn.ini` to your PS4 user name, spelled exactly the same; it works the other way round too.
@@ -53,7 +55,7 @@ first game, or wait 90 seconds after it lost its connection, and log in again.
 
 ## Ports
 
-TCP 80 and 443, UDP 4000 and 4001. Nothing has to be opened on the router for play at home. When the system refuses
+TCP 80 and 443, UDP 4000, 4001 and 4100 (4100: the base game 1.00). Nothing has to be opened on the router for play at home. When the system refuses
 port 80 or 443 (another program uses it, or Linux without root) the server takes 8080 and 8443 instead and tells the
 game; it says so when it starts. If the game doesn't find the server, set `Host` in `reborn.ini` (PC) or put the
 server address into `/data/TheCrew/server.txt` on the console (PS4).
@@ -96,13 +98,14 @@ im Spiel erneut an. Beim allerersten Start muss der Server bereits laufen.
 ## Das brauchst du
 
 - Dein eigenes The Crew für PS4 oder PC, in einer dieser Versionen:
-  - **PS4:** europäische Version CUSA00161, Version 1.00 mit installiertem Update 1.21 (die Spielinfo zeigt 01.21),
-    auf einer Konsole mit GoldHEN. Getestet auf einer PS4 mit Firmware 11.50.
+  - **PS4:** europäische Version CUSA00161 auf einer Konsole mit GoldHEN, entweder mit installiertem Update 1.21 (die
+    Spielinfo zeigt 01.21, mit Wild Run) oder als Basisspiel ohne Update (01.00). Getestet auf einer PS4 mit Firmware
+    11.50. Das Basisspiel 1.00 ist neu und experimentell: getestet vom Beginn der Story bis zum ersten Tuning-Shop.
   - **PC:** Ubisoft-Connect- oder Steam-Version, `TheCrew.exe` 1.2.0.0 (Build 502193). Getestet unter Windows 11, auch unter Windows 11
     für ARM (Parallels auf einem Mac mit Apple-Chip).
 
   Noch nicht getestet: die PS5. Andere PS4-Regionen und Spielversionen werden
-  noch nicht unterstützt; der Patch passt nur auf CUSA00161 mit Update 1.21.
+  noch nicht unterstützt; der Patch passt nur auf CUSA00161 1.00 und 1.21.
 - Einen Rechner im selben Netzwerk wie die Konsole oder der Spiele-PC: Windows, macOS oder Linux. Der Server kann
   auch auf dem Spiele-PC selbst laufen. Linux braucht Python 3.10 oder neuer mit venv (Debian/Ubuntu:
   `sudo apt install python3 python3-venv`); unter Windows und macOS installiert das Startskript Python bei Bedarf.
@@ -117,7 +120,8 @@ Netzwerke.
 ## Dein Fortschritt, auf PS4 und PC
 
 Spielstände liegen im Ordner `save` neben dem Server, eine Datei pro Spielername: der PS4-Benutzername oder am PC der
-`Name` in `reborn.ini` (leer = dein Windows-Benutzername). Sichere diesen Ordner, um deinen Fortschritt zu behalten.
+`Name` in `reborn.ini` (leer = dein Windows-Benutzername). Sichere diesen Ordner, um deinen Fortschritt zu behalten. Das Basisspiel 1.00 hat eigene
+Spielstände (`save/1.00`), getrennt von denen der Version 1.21 und des PCs.
 
 Cross-Save: Derselbe Name auf PS4 und PC spielt denselben Spielstand. Um deinen PS4-Fortschritt am PC
 weiterzuspielen, trage in `reborn.ini` bei `Name` deinen PS4-Benutzernamen in exakt derselben Schreibweise ein;
@@ -130,7 +134,7 @@ und melde dich erneut an.
 
 ## Ports
 
-TCP 80 und 443, UDP 4000 und 4001. Für das Spielen zu Hause muss am Router nichts freigegeben werden. Wenn das
+TCP 80 und 443, UDP 4000, 4001 und 4100 (4100: das Basisspiel 1.00). Für das Spielen zu Hause muss am Router nichts freigegeben werden. Wenn das
 System Port 80 oder 443 verweigert (ein anderes Programm nutzt ihn, oder Linux ohne root), nimmt der Server 8080 und
 8443 und teilt das dem Spiel mit; beim Start steht der Hinweis im Fenster. Findet das Spiel den Server nicht, trage
 am PC `Host` in `reborn.ini` ein oder auf der PS4 die Serveradresse in `/data/TheCrew/server.txt`.
