@@ -6,6 +6,7 @@ import os
 import shutil
 import socket
 import struct
+import time
 import traceback
 
 from tcreborn.games.v1_21.crypto import IV0, K0, decrypt, encrypt
@@ -16,7 +17,7 @@ from tcreborn.games.v1_21 import peers
 from tcreborn.games.v1_21.handlers import NO_REPLY, Ctx, handle, name_of, player_id_for
 from tcreborn.games.v1_21.player import ALL_ABILITIES, Player, dlc_fields, unlock_fields
 from tcreborn.games.v1_21.handlers.replies import SERVICE_BY_ADDR
-from tcreborn.session import Session
+from tcreborn.session import STORE_NAME, Session, SessionStore
 from tcreborn.wire import (DIRECT_HEADER, REPLY_FLAGS, T_ACK, T_ACK_CONFIRM, T_DATA, T_RESOLVE, ack, ack_confirm,
                         assemble, data_chunks, parse_message, resolve_reply)
 
@@ -58,12 +59,34 @@ class Server:
         self.ip, self.port, self.log_path = ip, port, log_path
         self.proxy_key = proxy_key
         self.sessions: dict[tuple[str, int], Session] = {}
+
+        self.store = SessionStore(os.path.join(os.path.dirname(os.path.abspath(save_path)), STORE_NAME)) \
+            if save_path else None
+        self.unknown: set[tuple[str, int]] = set()
         self.direct_partial: dict[tuple[str, int], dict] = {}
         self.save_path, self.abilities, self.unlocks, self.dlc = save_path, abilities, unlocks, dlc
 
         self.players: dict[str, Ctx] = {}
         self.ctx = self._new_ctx(DEFAULT_NAME, save_path)
         self.sender = sender
+        self._restore()
+
+    def _restore(self) -> None:
+        restored = self.store.load() if self.store else {}
+        for addr, sess in restored.items():
+            self.sessions[addr] = sess
+            if sess.name:
+                ubi.SESSIONS.setdefault(addr[0], sess.name)
+            if sess.platform:
+                ubi.PLATFORMS.setdefault(addr[0], sess.platform)
+        if restored:
+            print(f"[{_ts()}] relay port {self.port}: {len(restored)} game session(s) from before the restart kept",
+                  flush=True)
+
+    def _remember(self, sess: Session | None) -> None:
+        if self.store and sess is not None:
+            sess.stamp = time.time()
+            self.store.save(self.sessions)
 
     def _new_ctx(self, name: str, path: str | None) -> Ctx:
         new = not (path and os.path.exists(path))
@@ -92,8 +115,10 @@ class Server:
     def ctx_for(self, addr: tuple[str, int], sess: Session | None = None) -> Ctx:
         if sess is not None and sess.ctx is not None:
             return sess.ctx
-        ctx = self.ctx_for_name(ubi.SESSIONS.get(addr[0]))
-        ctx.pc = ubi.PLATFORMS.get(addr[0]) == "uplay"
+
+        restored = sess is not None and sess.name
+        ctx = self.ctx_for_name(sess.name if restored else ubi.SESSIONS.get(addr[0]))
+        ctx.pc = (sess.platform if restored and sess.platform else ubi.PLATFORMS.get(addr[0])) == "uplay"
         if sess is not None:
             sess.ctx = ctx
         return ctx
@@ -120,13 +145,24 @@ class Server:
         if len(data) == 6 and header[4:6] == b"\x00\x00":
             return self._probe(addr)
         if len(data) == 6 and header[4:6] == b"\x00\x01":
-            return self._key_exchange(addr)
+            out = self._key_exchange(addr)
+            self.unknown.discard(addr)
+            self._remember(self.sessions.get(addr))
+            return out
         if header == DIRECT_HEADER:
             return self._direct(header, body, addr)
         sess = self.sessions.get(addr)
         if not (sess and sess.connected and body):
             self.log({"dir": "in", "src": peer, "kind": "unknown"})
+            if body and addr not in self.unknown:
+                self.unknown.add(addr)
+                self.say(addr, "packets of a game session this server does not know (no key): dropped until the "
+                               "game connects again")
             return []
+        if sess.restored:
+            sess.restored = False
+            self.say(addr, f"game session from before the restart goes on"
+                           + (f" (player {sess.name})" if sess.name else ""))
         return self._tunnel(sess, header, body, addr)
 
     def _probe(self, addr) -> list[Packet]:
@@ -219,6 +255,8 @@ class Server:
                     peers.PEERS.forget(player_id_for(name))
                 if rpc == GET_PLAYER and (name := player_name(request[12:])) and self.save_path:
                     sess.ctx = self.ctx_for_name(name)
+                    sess.name, sess.platform = name, ubi.PLATFORMS.get(addr[0])
+                    self._remember(sess)
                     device = "PC" if ubi.PLATFORMS.get(addr[0]) == "uplay" else "PS4"
                     save = sess.ctx.player.path
                     print(f"[{_ts()}] {name} connected from {addr[0]} ({device})"
