@@ -6,6 +6,7 @@ import time
 import types
 
 from tcreborn.games.v1_21 import relay
+from tcreborn import ubi
 from tcreborn.keys import K0
 from tcreborn.session import Session
 from tcreborn.games.v1_00 import PORT_OFFSET, crypto, handlers
@@ -112,7 +113,7 @@ class V100Server(relay.Server):
         self.resent: dict = {}
 
     def _probe(self, addr):
-        self.sessions[addr] = Session()
+        self._new_session(addr)
         plain = relay._addr_bytes(self.public_ip(addr), self.port) + relay._addr_bytes(*addr) + struct.pack(">II", 1, 1)
         reply = b"\x00" * 6 + crypto.encrypt(self.key, plain)
         self.say(addr, f"01.00 probe -> handshake 1 ({len(reply)}B)")
@@ -120,7 +121,8 @@ class V100Server(relay.Server):
         return [(reply, addr)]
 
     def _key_exchange(self, addr):
-        sess = self.sessions.setdefault(addr, Session())
+
+        sess = self._new_session(addr) if ubi.ACCOUNTS is not None else self.sessions.setdefault(addr, Session())
         sess.key, sess.iv, sess.connected = os.urandom(32), b"", True
         reply = b"\x00\x00\x00\x00\x00\x01" + crypto.encrypt(self.key, sess.key)
         self.say(addr, f"01.00 key request -> handshake 2 ({len(reply)}B)")

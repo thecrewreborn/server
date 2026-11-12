@@ -29,6 +29,12 @@ GET_PLAYER = 0x589F57FB
 _TICKET = re.compile(rb"b2ZmbGluZS10aWNrZXQ6[A-Za-z0-9+/=]*")
 _KEYS = ("session_key", "session_iv")
 
+GUEST_IDLE_S = 120
+NAMED_IDLE_S = 15 * 60
+MAX_GUESTS = 2000
+MAX_UNKNOWN = 1000
+_clock = time.monotonic
+
 
 def hide_tickets(data: bytes) -> bytes:
     return _TICKET.sub(lambda m: b"*" * len(m.group()), data)
@@ -83,6 +89,9 @@ class Server:
         self.store = SessionStore(os.path.join(os.path.dirname(os.path.abspath(save_path)), STORE_NAME)) \
             if save_path else None
         self.unknown: set[tuple[str, int]] = set()
+        self.guests: dict[tuple[str, int], None] = {}
+        self.stored: set[tuple[str, int]] = set()
+        self.swept = 0.0
         self.direct_partial: dict[tuple[str, int], dict] = {}
         self.save_path, self.abilities, self.unlocks, self.dlc = save_path, abilities, unlocks, dlc
 
@@ -93,8 +102,15 @@ class Server:
 
     def _restore(self) -> None:
         restored = self.store.load() if self.store else {}
+        if ubi.ACCOUNTS is not None:
+            restored = {addr: sess for addr, sess in restored.items() if sess.name}
+            self.stored = set(restored)
+            for sess in restored.values():
+                sess.seen = _clock()
         for addr, sess in restored.items():
             self.sessions[addr] = sess
+            if ubi.ACCOUNTS is not None:
+                continue
             if sess.name:
                 ubi.SESSIONS.setdefault(addr[0], sess.name)
             if sess.platform:
@@ -103,10 +119,51 @@ class Server:
             print(f"[{_ts()}] relay port {self.port}: {len(restored)} game session(s) from before the restart kept",
                   flush=True)
 
-    def _remember(self, sess: Session | None) -> None:
-        if self.store and sess is not None:
-            sess.stamp = time.time()
+    def _remember(self, sess: Session | None, addr: tuple[str, int]) -> None:
+        if not (self.store and sess is not None):
+            return
+        sess.stamp = time.time()
+        if ubi.ACCOUNTS is None:
             self.store.save(self.sessions)
+        elif sess.name or addr in self.stored:
+
+            self._store_named()
+
+    def _new_session(self, addr: tuple[str, int]) -> Session:
+        sess = Session()
+        if ubi.ACCOUNTS is None:
+            self.sessions[addr] = sess
+            return sess
+        sess.seen = _clock()
+        self.sessions.pop(addr, None)
+        self.guests.pop(addr, None)
+        self.sessions[addr] = sess
+        self.guests[addr] = None
+        while len(self.guests) > MAX_GUESTS:
+            self._drop(next(iter(self.guests)))
+        return sess
+
+    def _expire(self, now: float) -> None:
+        if now - self.swept < 1:
+            return
+        self.swept = now
+        idle = [a for a, s in self.sessions.items() if now - s.seen > (NAMED_IDLE_S if s.name else GUEST_IDLE_S)]
+        named = any(self.sessions[a].name for a in idle)
+        for addr in idle + [a for a in self.guests if a not in self.sessions]:
+            self._drop(addr)
+        if named:
+            self._store_named()
+
+    def _drop(self, addr: tuple[str, int]) -> None:
+        self.guests.pop(addr, None)
+        self.sessions.pop(addr, None)
+        self.direct_partial.pop(addr, None)
+
+    def _store_named(self) -> None:
+        if self.store:
+            kept = {a: s for a, s in self.sessions.items() if s.name}
+            self.store.save(kept)
+            self.stored = set(kept)
 
     def _new_ctx(self, name: str, path: str | None) -> Ctx:
         new = not (path and os.path.exists(path))
@@ -149,6 +206,8 @@ class Server:
                 sess.ctx = ctx
             return ctx
         ctx = self.ctx_for_name(sess.name if restored else ubi.SESSIONS.get(addr[0]))
+        if public:
+            ctx.verified = True
         ctx.pc = (sess.platform if restored and sess.platform else ubi.PLATFORMS.get(addr[0])) == "uplay"
         if sess is not None:
             sess.ctx = ctx
@@ -162,6 +221,8 @@ class Server:
         return guest
 
     def public_ip(self, peer: tuple[str, int]) -> str:
+        if ubi.ACCOUNTS is not None and (advertised := config.advertised_ip()):
+            return advertised
         return local_ip_for(peer[0]) if self.ip == "0.0.0.0" else self.ip
 
     def log(self, entry: dict) -> None:
@@ -186,13 +247,15 @@ class Server:
             return []
         header, body = data[:6], data[6:]
         peer = f"{addr[0]}:{addr[1]}"
+        if ubi.ACCOUNTS is not None:
+            self._expire(_clock())
         self.log({"dir": "in", "src": peer, "hex": data.hex()})
         if len(data) == 6 and header[4:6] == b"\x00\x00":
             return self._probe(addr)
         if len(data) == 6 and header[4:6] == b"\x00\x01":
             out = self._key_exchange(addr)
             self.unknown.discard(addr)
-            self._remember(self.sessions.get(addr))
+            self._remember(self.sessions.get(addr), addr)
             return out
         if header == DIRECT_HEADER:
             return self._direct(header, body, addr)
@@ -200,10 +263,13 @@ class Server:
         if not (sess and sess.connected and body):
             self.log({"dir": "in", "src": peer, "kind": "unknown"})
             if body and addr not in self.unknown:
+                if ubi.ACCOUNTS is not None and len(self.unknown) >= MAX_UNKNOWN:
+                    self.unknown.clear()
                 self.unknown.add(addr)
                 self.say(addr, "packets of a game session this server does not know (no key): dropped until the "
                                "game connects again")
             return []
+        sess.seen = _clock()
         if sess.restored:
             sess.restored = False
             self.say(addr, f"game session from before the restart goes on"
@@ -211,7 +277,7 @@ class Server:
         return self._tunnel(sess, header, body, addr)
 
     def _probe(self, addr) -> list[Packet]:
-        self.sessions[addr] = Session()
+        self._new_session(addr)
         plain = _addr_bytes(self.public_ip(addr), self.port) + _addr_bytes(*addr) + struct.pack(">II", 1, 1)
         reply = b"\x00" * 6 + encrypt(*self.proxy_key, plain)
         self.say(addr, f"probe -> handshake 1 ({len(reply)}B)")
@@ -219,7 +285,8 @@ class Server:
         return [(reply, addr)]
 
     def _key_exchange(self, addr) -> list[Packet]:
-        sess = self.sessions.setdefault(addr, Session())
+
+        sess = self._new_session(addr) if ubi.ACCOUNTS is not None else self.sessions.setdefault(addr, Session())
         sess.key, sess.iv, sess.connected = os.urandom(32), os.urandom(16), True
         reply = b"\x00\x00\x00\x00\x00\x01" + encrypt(*self.proxy_key, sess.key + sess.iv)
         self.say(addr, f"key request -> handshake 2 ({len(reply)}B)")
@@ -254,6 +321,9 @@ class Server:
             self.log({"dir": "out", "dst": peer, "kind": "direct_ack_confirm", "plain": confirm.hex()})
             return [(header + confirm, addr)]
         if msg.type == T_DATA and msg.flags is not None and msg.flags & 1:
+            if ubi.ACCOUNTS is not None and addr not in self.direct_partial and \
+                    len(self.direct_partial) >= MAX_UNKNOWN:
+                self.direct_partial.clear()
             request, received = assemble(self.direct_partial.setdefault(addr, {}), msg)
             if request is None or len(request) < 12:
                 return []
@@ -316,8 +386,15 @@ class Server:
                     sess.ctx = self.ctx_for_name(name) if self.save_path else self._new_ctx(name, None)
                     if ubi.ACCOUNTS is not None:
                         sess.ctx.pc = platform == "uplay"
+                        sess.ctx.verified = True
                     sess.name, sess.platform = name, platform
-                    self._remember(sess)
+                    self.guests.pop(addr, None)
+                    if ubi.ACCOUNTS is not None:
+                        account = save_name(name).lower()
+                        for other in [a for a, s in self.sessions.items()
+                                      if a != addr and s.name and save_name(s.name).lower() == account]:
+                            self._drop(other)
+                    self._remember(sess, addr)
                     device = "PC" if platform == "uplay" else "PS4"
                     save = sess.ctx.player.path
                     print(f"[{_ts()}] {name} connected from {addr[0]} ({device})"

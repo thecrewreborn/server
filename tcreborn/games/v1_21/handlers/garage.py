@@ -34,7 +34,7 @@ def car_report(ctx: Ctx, body: bytes):
 @register(0x1F86C435, "PEER_REGISTER")
 def peer_register(ctx: Ctx, body: bytes):
     if peers.enabled():
-        peers.register(body)
+        peers.register(body, ctx)
     return 0x56CEFAEE, struct.pack(">BI", 1, peers.SESSION_NUMBER)
 
 

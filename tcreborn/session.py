@@ -23,6 +23,7 @@ class Session:
     restored: bool = False
     refused: bool = False
     stamp: float = 0.0
+    seen: float = 0.0
 
 
 class SessionStore:

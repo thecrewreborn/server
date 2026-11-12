@@ -114,6 +114,7 @@ def main(argv: list[str] | None = None) -> None:
         _public_mode(ubi, versions)
     requests_log = os.path.join(os.path.dirname(args.log), "requests.jsonl")
     _, http_port = _bind(ubi.serve, args.http_port, "http", requests_log)
+    ubi.HTTP_PORT = http_port
     https_port = config.https_port()
     if https_port:
         if tls.ensure(*config.tls_cert(), config.advertised_ip()):

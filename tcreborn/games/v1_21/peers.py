@@ -6,7 +6,7 @@ import threading
 import time
 from dataclasses import dataclass
 
-from tcreborn import config
+from tcreborn import config, ubi
 from tcreborn.ubi import stable_id
 from tcreborn.wire import T_ARRAY, blob, empty_array, frame
 
@@ -70,6 +70,10 @@ class Peers:
 
     def add(self, pid: int, info: bytes, entity: bytes, x: float, y: float) -> None:
         with self.lock:
+            if ubi.ACCOUNTS is not None:
+                now = self.clock()
+                for gone in [k for k, p in self.by_id.items() if now - p.seen > STALE_S]:
+                    del self.by_id[gone]
             old = self.by_id.get(pid)
             if old and self.clock() - old.seen <= STALE_S:
                 order = old.order
@@ -132,6 +136,12 @@ def enabled() -> bool:
     return config.multiplayer()
 
 
+def acting_id(ctx, pid: int) -> int | None:
+    if ubi.ACCOUNTS is None:
+        return pid
+    return ctx.player_id if ctx.verified else None
+
+
 def _u32(b: bytes, p: int) -> int:
     return struct.unpack_from(">I", b, p)[0]
 
@@ -144,13 +154,15 @@ def info_end(body: bytes, p: int) -> int:
     return p + 1 + 4 + 4
 
 
-def session_join_reply(body: bytes) -> bytes:
+def session_join_reply(body: bytes, ctx=None) -> bytes:
     end = info_end(body, 0)
     me_info = body[:end]
     host_id = struct.unpack_from(">Q", body, end)[0]
     me_id = struct.unpack_from(">Q", me_info, 4 + 4 + _u32(me_info, 4))[0]
+    if ctx is not None:
+        me_id = acting_id(ctx, me_id)
     me, host = PEERS.by_id.get(me_id), PEERS.by_id.get(host_id)
-    if not enabled() or host is None:
+    if not enabled() or me_id is None or host is None:
         return b"\x00\x00" + me_info + blob(b"")
     PEERS.moved(me_id, me.x, me.y) if me else None
     return b"\x01\x00" + host.element(me)
@@ -169,8 +181,18 @@ def parse_register(body: bytes) -> tuple[int, bytes, bytes, float, float]:
     return pid, info, body[p + 4:p + 4 + n], x, y
 
 
-def register(body: bytes) -> int:
+def register(body: bytes, ctx=None) -> int | None:
     pid, info, entity, x, y = parse_register(body)
+    if ctx is not None:
+        pid = acting_id(ctx, pid)
+        if pid is None:
+            return None
+        if ubi.ACCOUNTS is not None:
+            at = 4 + 4 + _u32(info, 4)
+            info = info[:at] + struct.pack(">Q", pid) + info[at + 8:]
+            at += 8 + 4 + 4 + 2 + 2 + 1 + 1
+            wide = ctx.player_name.encode("utf-16-le")
+            info = info[:at] + struct.pack(">I", len(wide)) + wide + info[at + 4 + _u32(info, at):]
     PEERS.add(pid, info, entity, x, y)
     return pid
 
@@ -179,16 +201,16 @@ def _array(elements: list[bytes]) -> bytes:
     return blob(frame(T_ARRAY, struct.pack(">I", len(elements)) + b"".join(elements)))
 
 
-def session_reply(pid: int, x: float, y: float) -> bytes:
-    if not enabled():
+def session_reply(pid: int | None, x: float, y: float) -> bytes:
+    if not enabled() or pid is None:
         return empty_array()
     PEERS.moved(pid, x, y)
     me = PEERS.by_id.get(pid)
     return _array([p.element(me) for p in PEERS.hosts(pid)])
 
 
-def nearby_reply(pid: int, x: float, y: float) -> bytes:
-    if not enabled():
+def nearby_reply(pid: int | None, x: float, y: float) -> bytes:
+    if not enabled() or pid is None:
         return empty_array()
     PEERS.moved(pid, x, y)
     me = PEERS.by_id.get(pid)

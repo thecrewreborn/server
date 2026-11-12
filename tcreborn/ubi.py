@@ -91,20 +91,48 @@ def ubi_time(dt: datetime.datetime) -> str:
     return dt.strftime("%Y-%m-%dT%H:%M:%S.%f0Z")
 
 
+_TICKET_PARAM = re.compile(r"(?:^|(?<=[\s,;]))t=", re.IGNORECASE)
+
+
+def auth_ticket(auth: str) -> tuple[str, str, str] | None:
+    m = _TICKET_PARAM.search(auth)
+    if not m:
+        return None
+    before = auth[:m.start()].split()
+    return (before[0] if before else ""), auth[m.start():m.end()], auth[m.end():]
+
+
 def ticket_name(auth: str) -> str:
-    ticket = auth.split("t=", 1)[1] if "t=" in auth else ""
-    return ticket.split("|", 1)[0].strip()
+    t = auth_ticket(auth)
+    return t[2].split("|", 1)[0].strip() if t else ""
 
 
 def redact(auth: str) -> str:
-    head, sep, ticket = auth.partition("t=")
-    if not sep:
+    if not auth.strip():
         return auth
-    if head.strip().lower().startswith("psn2.0"):
-        return f"{head}t=***"
-    if "|" in ticket:
-        return f"{head}t={ticket.split('|', 1)[0]}|***"
-    return auth
+    t = auth_ticket(auth)
+    if t:
+        scheme, key, ticket = t
+        prefix = f"{scheme} {key}" if scheme else key
+        if scheme.lower() != "psn2.0" and "|" in ticket:
+            return f"{prefix}{ticket.split('|', 1)[0]}|***"
+        return f"{prefix}***"
+    parts = auth.split(None, 1)
+    return f"{parts[0]} ***" if len(parts) == 2 else "***"
+
+
+_SECRET_PARAM = re.compile(r"ticket|token|key|pass", re.IGNORECASE)
+
+
+def log_path(path: str) -> str:
+    base, sep, query = path.partition("?")
+    if not sep:
+        return path
+    parts = []
+    for part in query.split("&"):
+        name, eq, _ = part.partition("=")
+        parts.append(f"{name}=***" if _SECRET_PARAM.search(urllib.parse.unquote_plus(name)) else part)
+    return f"{base}?{'&'.join(parts)}"
 
 
 ONLINE: dict[str, tuple[str, float]] = {}
@@ -145,14 +173,18 @@ TICKET_TTL = 3 * 3600
 TICKETS: dict[str, tuple[str, str, float]] = {}
 FAILED: dict[str, list[float]] = {}
 FAIL_LIMIT, FAIL_WINDOW = 5, 600.0
+CLAIMS: dict[str, list[float]] = {}
+CLAIM_LIMIT, CLAIM_WINDOW = 3, 3600.0
+NAME_MAX = 32
 _AUTH_LOCK = threading.Lock()
 
 
 def credential(body: dict, auth: str) -> str:
-    head, sep, ticket = auth.partition("t=")
-    if not sep:
+    t = auth_ticket(auth)
+    if not t:
         return ""
-    if head.strip().lower().startswith("psn2.0"):
+    scheme, _, ticket = t
+    if scheme.lower() == "psn2.0":
         try:
             raw = base64.b64decode(ticket.strip() + "=" * (-len(ticket.strip()) % 4), validate=True).decode()
         except (binascii.Error, ValueError):
@@ -178,27 +210,45 @@ def _issue(ticket: str, name: str, platform: str) -> None:
         TICKETS[ticket] = (name, platform, now)
 
 
-def _begin_attempt(client_ip: str) -> float | None:
+def name_allowed(name: str) -> bool:
+    return 0 < len(name) <= NAME_MAX and all(" " <= c <= "~" for c in name)
+
+
+def _prune(table: dict[str, list[float]], window: float, now: float) -> None:
+    for ip in list(table):
+        recent = [t for t in table[ip] if now - t < window]
+        if recent:
+            table[ip] = recent
+        else:
+            del table[ip]
+
+
+def _take(table: dict[str, list[float]], limit: int, window: float, client_ip: str) -> float | None:
     now = _now()
     with _AUTH_LOCK:
-        recent = [t for t in FAILED.get(client_ip, []) if now - t < FAIL_WINDOW]
-        if len(recent) >= FAIL_LIMIT:
-            FAILED[client_ip] = recent
+        _prune(table, window, now)
+        recent = table.setdefault(client_ip, [])
+        if len(recent) >= limit:
             return None
         recent.append(now)
-        FAILED[client_ip] = recent
         return now
 
 
-def _end_attempt(client_ip: str, stamp: float, failed: bool) -> None:
-    if failed:
-        return
+def _give_back(table: dict[str, list[float]], window: float, client_ip: str, stamp: float) -> None:
     with _AUTH_LOCK:
-        times = FAILED.get(client_ip, [])
+        times = table.get(client_ip, [])
         if stamp in times:
             times.remove(stamp)
-        if not times:
-            FAILED.pop(client_ip, None)
+        _prune(table, window, _now())
+
+
+def _begin_attempt(client_ip: str) -> float | None:
+    return _take(FAILED, FAIL_LIMIT, FAIL_WINDOW, client_ip)
+
+
+def _end_attempt(client_ip: str, stamp: float, failed: bool) -> None:
+    if not failed:
+        _give_back(FAILED, FAIL_WINDOW, client_ip, stamp)
 
 
 def loggable(reply: object) -> object:
@@ -214,7 +264,7 @@ def _login_refused(client_ip: str, name: str, why: str) -> tuple[int, dict]:
 
 def login_name(body: dict, auth: str = "") -> tuple[str, str]:
     name, platform = body.get("nameOnPlatform"), "psn"
-    console = ACCOUNTS is not None and auth.strip().lower().startswith("psn2.0")
+    console = auth.strip().lower().startswith("psn2.0")
     if not name and not console and ticket_name(auth):
         name, platform = ticket_name(auth), "uplay"
     return name or "Player", platform
@@ -254,7 +304,19 @@ def session(body: dict, client_ip: str, auth: str = "") -> dict:
     }
 
 
+def announced_host(host: str) -> str:
+    if ACCOUNTS is not None:
+        from tcreborn import config
+        return config.advertised_ip() or host
+    return host
+
+
+HTTP_PORT = 80
+
+
 def configuration(host: str) -> dict:
+    if HTTP_PORT != 80:
+        host = f"{host}:{HTTP_PORT}"
     base = f"http://{host}"
     switches = [{"name": n, "value": True} for n in RESOURCE_NAMES]
     switches += [{"name": "SendPopulationsInPlayerStart", "value": False}, {"name": "Punch", "value": PUNCH},
@@ -303,6 +365,8 @@ def route(method: str, path: str, body: dict, host: str, client: tuple[str, int]
         return 200, profiles(query)
     m = AVATAR_UPLOAD.fullmatch(path)
     if m and method == "PUT":
+
+
         if SESSIONS.get(client[0]) != m.group(1):
             return 403, {"error": "only the logged-in player may set its picture"}
         return (200, {"saved": True}) if avatar.save_upload(m.group(1), raw) else (400, {"error": "need 256x256 RGBA"})
@@ -320,16 +384,24 @@ def route(method: str, path: str, body: dict, host: str, client: tuple[str, int]
         name, platform = login_name(body, auth)
         if ACCOUNTS is not None:
             from tcreborn.saves import DEFAULT_NAME, save_name
+            if not name_allowed(name):
+                return _login_refused(client[0], "this name", "name not allowed, use at most 32 letters, digits "
+                                      "or signs of plain ASCII")
             if save_name(name).lower() == DEFAULT_NAME.lower():
                 return _login_refused(client[0], "this name", "name not allowed, choose another")
             stamp = _begin_attempt(client[0])
             if stamp is None:
                 return _login_refused(client[0], name, "too many failed logins, try again later")
+            slot = _take(CLAIMS, CLAIM_LIMIT, CLAIM_WINDOW, client[0])
             verdict = "unavailable"
             try:
-                verdict = ACCOUNTS.check(name, platform, credential(body, auth))
+                verdict = ACCOUNTS.check(name, platform, credential(body, auth), slot is not None)
             finally:
                 _end_attempt(client[0], stamp, verdict == "wrong")
+                if slot is not None and verdict != "claimed":
+                    _give_back(CLAIMS, CLAIM_WINDOW, client[0], slot)
+            if verdict == "unclaimed":
+                return _login_refused(client[0], name, "too many new names from this address, try again later")
             if verdict == "wrong":
                 return _login_refused(client[0], name, "wrong password")
             if verdict == "missing":
@@ -344,7 +416,7 @@ def route(method: str, path: str, body: dict, host: str, client: tuple[str, int]
             return 409, {"error": f"{name} is already playing on another device", "errorCode": 409}
         return 200, session(body, client[0], auth)
     if "/applications/" in path and path.endswith("/configuration"):
-        return 200, configuration(host)
+        return 200, configuration(announced_host(host))
     if path.endswith("/native/token"):
         return 200, {"access_token": base64.b64encode(b"offline-shop-token").decode(), "token_type": "bearer",
                      "expires_in": 3600}
@@ -365,16 +437,74 @@ def route(method: str, path: str, body: dict, host: str, client: tuple[str, int]
     return 200, {}
 
 
+MAX_BODY = 300_000
+DRAIN_LIMIT = 2_000_000
+LOG_BODY = 4096
+
+
+def log_body(path: str, raw: bytes) -> str:
+    if not raw:
+        return ""
+    if path.split("?")[0].endswith(".rgba"):
+        return f"<rgba {len(raw)} bytes>"
+    try:
+        text = raw.decode("utf-8")
+    except UnicodeDecodeError:
+        text = None
+    if text is None or any(c < " " and c not in "\t\r\n" for c in text):
+        return f"<binary {len(raw)} bytes>"
+    if len(raw) <= LOG_BODY:
+        return text
+    return raw[:LOG_BODY].decode("utf-8", "ignore") + f"... <{len(raw)} bytes>"
+
+
 class Handler(BaseHTTPRequestHandler):
     protocol_version = "HTTP/1.1"
+
+
+    timeout = 120
     log_path: str | None = None
     lock = threading.Lock()
 
     def version_string(self) -> str:
         return f"TheCrewReborn/{VERSION}"
 
+    def _refuse(self, status: int, why: str) -> None:
+        print(f"[{datetime.datetime.now():%H:%M:%S}] http {self.client_address[0]} {self.command} "
+              f"{self.path.split('?')[0]} -> {status} ({why})", flush=True)
+        payload = json.dumps({"error": why}).encode()
+        self.close_connection = True
+        self.send_response(status)
+        self.send_header("Content-Type", "application/json; charset=utf-8")
+        self.send_header("Content-Length", str(len(payload)))
+        self.send_header("Connection", "close")
+        self.end_headers()
+        self.wfile.write(payload)
+
+    def _drain(self, n: int) -> None:
+        try:
+            self.connection.settimeout(5)
+            while n > 0:
+                chunk = self.rfile.read(min(n, 65536))
+                if not chunk:
+                    break
+                n -= len(chunk)
+        except OSError:
+            pass
+
     def _serve(self) -> None:
-        raw = self.rfile.read(int(self.headers.get("Content-Length") or 0))
+        try:
+            length = int(self.headers.get("Content-Length") or 0)
+        except ValueError:
+            length = -1
+        if length < 0:
+            return self._refuse(400, "bad Content-Length")
+        if length > MAX_BODY:
+            self._refuse(413, f"body larger than {MAX_BODY} bytes")
+            if length <= DRAIN_LIMIT:
+                self._drain(min(length, MAX_BODY + 65536))
+            return None
+        raw = self.rfile.read(length)
         try:
             body = json.loads(raw) if raw else {}
         except ValueError:
@@ -392,9 +522,9 @@ class Handler(BaseHTTPRequestHandler):
         if self.log_path:
             with self.lock, open(self.log_path, "a") as f:
                 f.write(json.dumps({"time": datetime.datetime.now().isoformat(), "client": self.client_address[0],
-                                    "method": self.command, "path": self.path, "auth": redact(auth),
-                                    "body": f"<rgba {len(raw)} bytes>" if self.path.endswith(".rgba") and raw
-                                    else raw.decode("utf-8", "replace"), "status": status, "reply": loggable(reply)}) + "\n")
+                                    "method": self.command, "path": log_path(self.path), "auth": redact(auth),
+                                    "body": log_body(self.path, raw), "status": status,
+                                    "reply": loggable(reply)}) + "\n")
         self.send_response(status)
         kind = "application/octet-stream" if self.path.endswith(".rgba") else "image/png"
         self.send_header("Content-Type", kind if binary else "application/json; charset=utf-8")

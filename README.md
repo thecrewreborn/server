@@ -92,25 +92,33 @@ server address into `/data/TheCrew/server.txt` on the console (PS4).
 
 By default the server is for your own network: anyone who reaches it plays, and names are not protected. To open it
 to other players over the internet, set `public = on` in the `[server]` section of `config.ini` (default: off;
-`config.example.ini` shows the line). Home play without that setting works exactly as before.
+`config.example.ini` shows the line). Home play without that setting works as before, with one rule for every
+server: two games cannot play the same name at the same time. For that check names compare without case, and every
+character other than A-Z, a-z, 0-9, `-` and `_` counts as `_` (`Max.Power`, `max_power` and `MAX POWER` are one
+name).
 
 **What `public = on` does**
 
 - The first login with a name claims it. Later logins need the same credential, so nobody else can play on that
-  save. Names compare without case and like save names: `Max.Power`, `Max_Power` and `max_power` are one name. The
-  default name `Player` cannot be claimed.
+  save. The default name `Player` cannot be claimed.
+- Names compare without case, and every character other than A-Z, a-z, 0-9, `-` and `_` counts as `_`:
+  `Max.Power`, `Max_Power` and `max_power` are one name (at home, `Ünal` and `_nal` share one save the same way). A
+  public server accepts names of at most 32 characters of plain ASCII (letters, digits, spaces and signs, no
+  umlauts or accents) and refuses others.
+- One IP address can claim at most 3 new names per hour. Logins to names it already claimed are not limited.
 - After 5 wrong passwords from one IP address within 10 minutes, that address is refused for the rest of the window.
 - At start the server lists saves nobody has claimed yet ("unclaimed saves"); anyone may claim them at their next
   login. A new player starts with a fresh save: your own single-player save (`save/1.21/player.json`) is not handed
   to the first stranger. To keep it, copy it to `save/1.21/players/<Name>.json` and claim that name first.
-- The relay log in `captures` leaves out tickets and keys, so players may attach it to bug reports.
+- The logs in `captures` leave out tickets, passwords and keys, so players may attach them to bug reports.
 
 **What players do**
 
 - PC: in `reborn.ini` set `Ticket = Name|Password` under `[Player]`. Everything after the first `|` is the password.
-- PS4: the PS4 patch from release 0.0.4 on creates a key for the console in `/data/TheCrew/console_key.txt` on its first
-  start. Players should back this file up. Copying it to a new console keeps the name; a damaged file is kept as
-  `console_key.bad`. An older PS4 patch sends no key and is refused on a public server.
+  Use a password that you use nowhere else (see "Limits").
+- PS4: the PS4 patch from release 0.0.4 on creates a key for the console in `/data/TheCrew/console_key.txt` on its
+  first start. Players should back this file up. Copying it to a new console keeps the name; a damaged file is kept
+  as `console_key.bad`. An older PS4 patch sends no key and is refused on a public server.
 - PS4: put the server's public IPv4 address into `/data/TheCrew/server.txt` (an address like `203.0.113.5`, no
   hostname). If the server uses 8080/8443 (see Ports), write `https://203.0.113.5:8443`.
 - PC: set `Host` in `reborn.ini`; it takes an address or a hostname.
@@ -129,6 +137,46 @@ another accounts file, put `--file PATH` before `list` or `free`:
 `.venv/bin/python tools/accounts.py --file PATH list`. `save/accounts.json` holds salted hashes, never passwords;
 `save/<version>/sessions.json` holds the session keys. Never share the `save` folder. The `captures` folder is the
 one players send.
+
+**Settings for a public server**
+
+In `config.ini`:
+
+```
+[server]
+public = on
+ip = 203.0.113.5
+
+[world]
+multiplayer = off
+```
+
+- `ip` is the address the server announces to the game, and the game connects to it. With `public = on` the server
+  also puts it into the service configuration the game fetches at start. Set it to the server's public IPv4
+  address (not a hostname). Without it the server announces its address in its own network, which players on the
+  internet cannot reach.
+- `multiplayer = off`: multiplayer over the internet does not work yet (see "Limits").
+- Test the first login yourself from another network, PS4 or PC, before you invite players.
+
+**Logs**
+
+The `captures` folder grows while people play: about 40 KB per minute of play and player (measured). The server
+has no switch to turn the logs off; `--log PATH` after `./start-server.sh` (or at the end of `ExecStart=` in the
+unit) only moves them: the 1.21 relay log goes to PATH, `requests.jsonl` and `v100.jsonl` into the same folder. The
+server opens each log for every entry, so you may move or delete the files at any time; it starts new ones. To keep
+the folder small, delete old files now and then, or let logrotate do it with a file
+`/etc/logrotate.d/thecrewreborn` (adjust the path and the user):
+
+```
+/opt/thecrewreborn/captures/*.jsonl {
+    su ubuntu ubuntu
+    weekly
+    rotate 4
+    compress
+    missingok
+    notifempty
+}
+```
 
 **Ports**
 
@@ -157,12 +205,12 @@ total and 10 TB of outbound data per month. The server needs a small fraction of
    Run `sudo iptables -L INPUT -n --line-numbers` first and insert the rules above the final REJECT rule (the
    position 5 is an example).
 4. Install the server: `sudo apt install python3 python3-venv unzip`, unpack the release into `/opt/thecrewreborn`
-   (owned by the user that runs it), run `chmod +x start-server.sh`, set `public = on` in `config.ini`, and start `./start-server.sh` once by hand
-   to check that it comes up.
-5. Install the unit: edit `User=` and the two paths in `thecrewreborn.service` if yours differ, then
-   `sudo cp thecrewreborn.service /etc/systemd/system/` and
-   `sudo systemctl daemon-reload && sudo systemctl enable --now thecrewreborn`. Logs: `journalctl -u thecrewreborn -f`.
-   The unit grants the right to bind ports 80 and 443 without root.
+   (owned by the user that runs it; not under `/home`, which the unit hides), run `chmod +x start-server.sh`, put
+   the settings above into `config.ini`, and start `./start-server.sh` once by hand to check that it comes up.
+5. Install the unit: edit `User=` and the two paths in `thecrewreborn.service` if yours differ (keep the folder out
+   of `/home`), then `sudo cp thecrewreborn.service /etc/systemd/system/` and
+   `sudo systemctl daemon-reload && sudo systemctl enable --now thecrewreborn`.
+   Logs: `journalctl -u thecrewreborn -f`. The unit grants the right to bind ports 80 and 443 without root.
 6. Check from another network: `curl -k https://<public-ip>/version` must answer.
 
 Oracle states that it may reclaim an idle Always Free instance: when for 7 days CPU use (95th percentile), network
@@ -174,13 +222,15 @@ not checked here).
 
 You need a public IPv4 address from your provider (not DS-Lite or CG-NAT). Give the server computer a fixed address,
 then forward the ports above to it on the router. On a FritzBox: Internet, Freigaben, Portfreigaben, add a device,
-one forwarding per port. If your provider changes the address, PS4 players must update `server.txt`; PC players may
-use a dynamic DNS hostname (for example MyFRITZ!) as `Host`.
+one forwarding per port. If your provider changes the address, update `ip` in `config.ini`; PS4 players must update
+`server.txt`, PC players may use a dynamic DNS hostname (for example MyFRITZ!) as `Host`.
 
 **Limits**
 
 - Multiplayer over the internet is not built yet: there is no NAT traversal, one session is shared, and at most 5
-  players can be nearby. Public mode is for the solo game with saves.
+  players can be nearby. Public mode is for the solo game with saves; set `multiplayer = off` (see above).
+- The games accept any server certificate, so someone on the network path between a player and the server can read
+  the PC password or the console key. Players should use a password only for this server.
 - Only one server can run per IP address and port set.
 - Anyone who can read a player's network traffic and knows the public relay key can replay that player's login ticket
   for up to 3 hours. Only an attacker on the network path can do this.
@@ -305,29 +355,37 @@ am PC `Host` in `reborn.ini` ein oder auf der PS4 die Serveradresse in `/data/Th
 Standardmäßig ist der Server für dein eigenes Netzwerk gedacht: Jeder, der ihn erreicht, spielt mit, Namen sind nicht
 geschützt. Damit auch andere Spieler über das Internet mitspielen können, setze in `config.ini` im Abschnitt
 `[server]` die Zeile `public = on` (Standard: aus; `config.example.ini` zeigt die Zeile). Das Spielen zu Hause
-funktioniert ohne diese Einstellung genau wie bisher.
+funktioniert ohne diese Einstellung wie bisher, mit einer Regel für jeden Server: Zwei Spiele können nicht
+gleichzeitig mit demselben Namen spielen. Bei dieser Prüfung zählt Groß- und Kleinschreibung nicht, und jedes
+Zeichen außer A-Z, a-z, 0-9, `-` und `_` zählt als `_` (`Max.Power`, `max_power` und `MAX POWER` sind ein Name).
 
 **Was `public = on` bewirkt**
 
 - Der erste Login mit einem Namen reserviert ihn. Spätere Logins brauchen dieselben Zugangsdaten; niemand sonst kann
-  auf diesem Spielstand spielen. Namen werden ohne Groß- und Kleinschreibung und wie Spielstandnamen verglichen:
-  `Max.Power`, `Max_Power` und `max_power` sind ein Name. Der Standardname `Player` kann nicht reserviert werden.
+  auf diesem Spielstand spielen. Der Standardname `Player` kann nicht reserviert werden.
+- Namen werden ohne Groß- und Kleinschreibung verglichen, und jedes Zeichen außer A-Z, a-z, 0-9, `-` und `_` zählt
+  als `_`: `Max.Power`, `Max_Power` und `max_power` sind ein Name (zu Hause teilen sich `Ünal` und `_nal` auf
+  dieselbe Weise einen Spielstand). Ein öffentlicher Server nimmt Namen mit höchstens 32 Zeichen aus einfachem ASCII
+  an (Buchstaben, Ziffern, Leerzeichen und Satzzeichen, keine Umlaute oder Akzente) und lehnt andere ab.
+- Eine IP-Adresse kann höchstens 3 neue Namen pro Stunde reservieren. Logins mit Namen, die sie schon reserviert
+  hat, sind nicht begrenzt.
 - Nach 5 falschen Passwörtern von einer IP-Adresse innerhalb von 10 Minuten wird diese Adresse für den Rest des
   Zeitfensters abgewiesen.
 - Beim Start listet der Server Spielstände auf, die noch niemand reserviert hat („unclaimed saves“); jeder darf sie
   beim nächsten Login übernehmen. Ein neuer Spieler beginnt mit einem frischen Spielstand: Dein eigener
   Einzelspieler-Spielstand (`save/1.21/player.json`) wird nicht an den ersten Fremden vergeben. Willst du ihn
   behalten, kopiere ihn nach `save/1.21/players/<Name>.json` und reserviere zuerst diesen Namen.
-- Das Relay-Log in `captures` enthält keine Tickets und Schlüssel; Spieler können es deshalb an Fehlermeldungen anhängen.
+- Die Logs in `captures` enthalten keine Tickets, Passwörter und Schlüssel; Spieler können sie deshalb an
+  Fehlermeldungen anhängen.
 
 **Was Spieler tun**
 
 - PC: Trage in `reborn.ini` unter `[Player]` die Zeile `Ticket = Name|Passwort` ein. Alles nach dem ersten `|` ist
-  das Passwort.
+  das Passwort. Nimm ein Passwort, das du nirgends sonst verwendest (siehe „Grenzen“).
 - PS4: Der PS4-Patch ab Version 0.0.4 legt beim ersten Start einen Schlüssel für die Konsole in
-  `/data/TheCrew/console_key.txt` an. Spieler sollten diese Datei sichern (Backup). Wird sie auf eine neue Konsole kopiert,
-  bleibt der Name erhalten; eine beschädigte Datei wird als `console_key.bad` aufbewahrt. Ein älterer PS4-Patch
-  sendet keinen Schlüssel und wird von einem öffentlichen Server abgelehnt.
+  `/data/TheCrew/console_key.txt` an. Spieler sollten diese Datei sichern (Backup). Wird sie auf eine neue Konsole
+  kopiert, bleibt der Name erhalten; eine beschädigte Datei wird als `console_key.bad` aufbewahrt. Ein älterer
+  PS4-Patch sendet keinen Schlüssel und wird von einem öffentlichen Server abgelehnt.
 - PS4: Trage die öffentliche IPv4-Adresse des Servers in `/data/TheCrew/server.txt` ein (eine Adresse wie
   `203.0.113.5`, kein Hostname). Nutzt der Server 8080/8443 (siehe Ports), schreibe `https://203.0.113.5:8443`.
 - PC: Setze `Host` in `reborn.ini`; dort ist eine Adresse oder ein Hostname möglich.
@@ -346,6 +404,46 @@ Passwort oder Schlüssel verloren hat). Für eine andere Accounts-Datei schreibe
 `.venv/bin/python tools/accounts.py --file PATH list`. `save/accounts.json` enthält
 gesalzene Hashes, nie Passwörter; `save/<Version>/sessions.json` enthält die Sitzungsschlüssel. Gib den Ordner `save`
 niemals weiter. Spieler senden den Ordner `captures` ein.
+
+**Einstellungen für einen öffentlichen Server**
+
+In `config.ini`:
+
+```
+[server]
+public = on
+ip = 203.0.113.5
+
+[world]
+multiplayer = off
+```
+
+- `ip` ist die Adresse, die der Server dem Spiel mitteilt; mit ihr verbindet sich das Spiel. Mit `public = on`
+  trägt der Server sie auch in die Dienstkonfiguration ein, die das Spiel beim Start abruft. Trage die öffentliche
+  IPv4-Adresse des Servers ein (keinen Hostnamen). Ohne diese Zeile teilt der Server seine Adresse im eigenen
+  Netzwerk mit, die Spieler im Internet nicht erreichen.
+- `multiplayer = off`: Mehrspieler über das Internet funktioniert noch nicht (siehe „Grenzen“).
+- Teste den ersten Login selbst aus einem anderen Netzwerk, mit PS4 oder PC, bevor du Spieler einlädst.
+
+**Logs**
+
+Der Ordner `captures` wächst, während gespielt wird: etwa 40 KB pro Spielminute und Spieler (gemessen). Der Server
+hat keinen Schalter, der die Logs abschaltet; `--log PFAD` hinter `./start-server.sh` (oder am Ende von
+`ExecStart=` in der Unit) verschiebt sie nur: Das Relay-Log von 1.21 landet in PFAD, `requests.jsonl` und
+`v100.jsonl` im selben Ordner. Der Server öffnet jedes Log für jeden Eintrag neu; du kannst die Dateien also
+jederzeit verschieben oder löschen, er legt neue an. Damit der Ordner klein bleibt, lösche alte Dateien ab und zu
+oder überlasse das logrotate mit einer Datei `/etc/logrotate.d/thecrewreborn` (passe Pfad und Benutzer an):
+
+```
+/opt/thecrewreborn/captures/*.jsonl {
+    su ubuntu ubuntu
+    weekly
+    rotate 4
+    compress
+    missingok
+    notifempty
+}
+```
 
 **Ports**
 
@@ -375,12 +473,13 @@ Arbeitsspeicher sowie 10 TB ausgehenden Datenverkehr pro Monat. Der Server brauc
    Führe vorher `sudo iptables -L INPUT -n --line-numbers` aus und füge die Regeln oberhalb der abschließenden
    REJECT-Regel ein (die Position 5 ist ein Beispiel).
 4. Installiere den Server: `sudo apt install python3 python3-venv unzip`, entpacke die Version nach
-   `/opt/thecrewreborn` (Eigentümer: der Benutzer, der den Server ausführt), führe `chmod +x start-server.sh` aus, setze in `config.ini` `public = on` und
+   `/opt/thecrewreborn` (Eigentümer: der Benutzer, der den Server ausführt; nicht unter `/home`, das die Unit
+   ausblendet), führe `chmod +x start-server.sh` aus, trage die Einstellungen von oben in `config.ini` ein und
    starte einmal von Hand `./start-server.sh`, um zu prüfen, ob er hochfährt.
-5. Installiere die Unit: Passe `User=` und die beiden Pfade in `thecrewreborn.service` an, falls deine abweichen, dann
-   `sudo cp thecrewreborn.service /etc/systemd/system/` und
-   `sudo systemctl daemon-reload && sudo systemctl enable --now thecrewreborn`. Logs: `journalctl -u thecrewreborn -f`.
-   Die Unit erlaubt das Belegen der Ports 80 und 443 ohne root.
+5. Installiere die Unit: Passe `User=` und die beiden Pfade in `thecrewreborn.service` an, falls deine abweichen
+   (lege den Ordner nicht unter `/home`), dann `sudo cp thecrewreborn.service /etc/systemd/system/` und
+   `sudo systemctl daemon-reload && sudo systemctl enable --now thecrewreborn`.
+   Logs: `journalctl -u thecrewreborn -f`. Die Unit erlaubt das Belegen der Ports 80 und 443 ohne root.
 6. Prüfe aus einem anderen Netzwerk: `curl -k https://<öffentliche-IP>/version` muss antworten.
 
 Oracle gibt an, dass eine ungenutzte Always-Free-Instanz zurückgefordert werden kann: wenn 7 Tage lang CPU-Auslastung
@@ -392,13 +491,18 @@ vermeiden; die Always-Free-Ressourcen bleiben kostenlos (berichtet, hier nicht g
 
 Du brauchst eine öffentliche IPv4-Adresse von deinem Anbieter (kein DS-Lite oder CG-NAT). Gib dem Server-Rechner eine
 feste Adresse und leite dann am Router die obigen Ports auf ihn weiter. Bei einer FritzBox: Internet, Freigaben,
-Portfreigaben, Gerät hinzufügen, je Port eine Freigabe. Ändert dein Anbieter die Adresse, müssen PS4-Spieler
-`server.txt` anpassen; PC-Spieler können einen DynDNS-Hostnamen (zum Beispiel MyFRITZ!) als `Host` nutzen.
+Portfreigaben, Gerät hinzufügen, je Port eine Freigabe. Ändert dein Anbieter die Adresse, passe `ip` in `config.ini`
+an; PS4-Spieler müssen `server.txt` anpassen, PC-Spieler können einen DynDNS-Hostnamen (zum Beispiel MyFRITZ!) als
+`Host` nutzen.
 
 **Grenzen**
 
 - Mehrspieler über das Internet gibt es noch nicht: Es fehlt NAT-Traversal, es gibt eine gemeinsame Sitzung, und
-  höchstens 5 Spieler können in der Nähe sein. Der öffentliche Modus ist für das Solospiel mit Spielständen gedacht.
+  höchstens 5 Spieler können in der Nähe sein. Der öffentliche Modus ist für das Solospiel mit Spielständen gedacht;
+  setze `multiplayer = off` (siehe oben).
+- Die Spiele akzeptieren jedes Serverzertifikat. Wer auf dem Netzwerkpfad zwischen einem Spieler und dem Server
+  mitliest, kann deshalb das PC-Passwort oder den Konsolenschlüssel lesen. Spieler sollten ein Passwort nur für
+  diesen Server verwenden.
 - Pro IP-Adresse und Portsatz kann nur ein Server laufen.
 - Wer den Netzwerkverkehr eines Spielers mitlesen kann und den öffentlichen Relay-Schlüssel kennt, kann das
   Login-Ticket dieses Spielers bis zu 3 Stunden lang wiederverwenden. Das kann nur ein Angreifer auf dem

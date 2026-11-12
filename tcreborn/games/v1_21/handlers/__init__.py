@@ -24,6 +24,7 @@ class Ctx:
     now_us: Callable[[], int] = field(default=lambda: int(time.time() * 1_000_000))
     pc: bool = False
     crew_group: int = 0
+    verified: bool = False
 
     def client_now_us(self) -> int:
         from tcreborn import config
