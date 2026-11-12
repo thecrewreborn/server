@@ -94,6 +94,17 @@ def ticket_name(auth: str) -> str:
     return ticket.split("|", 1)[0].strip()
 
 
+def redact(auth: str) -> str:
+    head, sep, ticket = auth.partition("t=")
+    if not sep:
+        return auth
+    if head.strip().lower().startswith("psn2.0"):
+        return f"{head}t=***"
+    if "|" in ticket:
+        return f"{head}t={ticket.split('|', 1)[0]}|***"
+    return auth
+
+
 ONLINE: dict[str, tuple[str, float]] = {}
 ONLINE_TIMEOUT = 90.0
 _ONLINE_LOCK = threading.Lock()
@@ -281,7 +292,7 @@ class Handler(BaseHTTPRequestHandler):
         if self.log_path:
             with self.lock, open(self.log_path, "a") as f:
                 f.write(json.dumps({"time": datetime.datetime.now().isoformat(), "client": self.client_address[0],
-                                    "method": self.command, "path": self.path, "auth": auth,
+                                    "method": self.command, "path": self.path, "auth": redact(auth),
                                     "body": f"<rgba {len(raw)} bytes>" if self.path.endswith(".rgba") and raw
                                     else raw.decode("utf-8", "replace"), "status": status, "reply": reply}) + "\n")
         self.send_response(status)
