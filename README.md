@@ -88,6 +88,108 @@ port 80 or 443 (another program uses it, or Linux without root) the server takes
 game; it says so when it starts. If the game doesn't find the server, set `Host` in `reborn.ini` (PC) or put the
 server address into `/data/TheCrew/server.txt` on the console (PS4).
 
+## Running a public server
+
+By default the server is for your own network: anyone who reaches it plays, and names are not protected. To open it
+to other players over the internet, set `public = on` in the `[server]` section of `config.ini` (default: off;
+`config.example.ini` shows the line). Home play without that setting works exactly as before.
+
+**What `public = on` does**
+
+- The first login with a name claims it. Later logins need the same credential, so nobody else can play on that
+  save. Names compare without case and like save names: `Max.Power`, `Max_Power` and `max_power` are one name. The
+  default name `Player` cannot be claimed.
+- After 5 wrong passwords from one IP address within 10 minutes, that address is refused for the rest of the window.
+- At start the server lists saves nobody has claimed yet ("unclaimed saves"); anyone may claim them at their next
+  login. A new player starts with a fresh save: your own single-player save (`save/1.21/player.json`) is not handed
+  to the first stranger. To keep it, copy it to `save/1.21/players/<Name>.json` and claim that name first.
+- The relay log in `captures` leaves out tickets and keys, so players may attach it to bug reports.
+
+**What players do**
+
+- PC: in `reborn.ini` set `Ticket = Name|Password` under `[Player]`. Everything after the first `|` is the password.
+- PS4: the PS4 patch from release 0.0.4 on creates a key for the console in `/data/TheCrew/console_key.txt` on its first
+  start. Players should back this file up. Copying it to a new console keeps the name; a damaged file is kept as
+  `console_key.bad`. An older PS4 patch sends no key and is refused on a public server.
+- PS4: put the server's public IPv4 address into `/data/TheCrew/server.txt` (an address like `203.0.113.5`, no
+  hostname). If the server uses 8080/8443 (see Ports), write `https://203.0.113.5:8443`.
+- PC: set `Host` in `reborn.ini`; it takes an address or a hostname.
+
+**Looking after names**
+
+In the server folder (the release start script creates `.venv` there):
+
+```
+.venv/bin/python tools/accounts.py list
+.venv/bin/python tools/accounts.py free NAME
+```
+
+`free` lets the next login with that name claim it again (for a player who lost the password or the key). To use
+another accounts file, put `--file PATH` before `list` or `free`:
+`.venv/bin/python tools/accounts.py --file PATH list`. `save/accounts.json` holds salted hashes, never passwords;
+`save/<version>/sessions.json` holds the session keys. Never share the `save` folder. The `captures` folder is the
+one players send.
+
+**Ports**
+
+See "Ports" above: open exactly those between the internet and the server. If the server uses 8080 and 8443
+instead of 80 and 443, open those two.
+
+**Option 1: Oracle Cloud Always Free**
+
+Oracle's documentation lists, for Always Free, Arm A1 Flex instances with up to 2 OCPUs and 12 GB of memory in
+total and 10 TB of outbound data per month. The server needs a small fraction of that (see "Load" below).
+
+1. Create an Always Free account, then an instance: shape VM.Standard.A1.Flex (1 OCPU and 6 GB are plenty), image
+   Ubuntu, a public IPv4 address, and your SSH key.
+2. In the instance's subnet, open its security list and add ingress rules (source `0.0.0.0/0`): TCP 80 and 443, UDP
+   4000, 4001 and 4100.
+3. Open the same ports in the VM itself. Oracle's Ubuntu images are widely reported to ship iptables rules that
+   reject everything except SSH (reported, not checked here). If that is so on your VM:
+
+   ```
+   sudo iptables -I INPUT 5 -p tcp --dport 80 -j ACCEPT
+   sudo iptables -I INPUT 5 -p tcp --dport 443 -j ACCEPT
+   sudo iptables -I INPUT 5 -p udp -m multiport --dports 4000,4001,4100 -j ACCEPT
+   sudo netfilter-persistent save
+   ```
+
+   Run `sudo iptables -L INPUT -n --line-numbers` first and insert the rules above the final REJECT rule (the
+   position 5 is an example).
+4. Install the server: `sudo apt install python3 python3-venv unzip`, unpack the release into `/opt/thecrewreborn`
+   (owned by the user that runs it), run `chmod +x start-server.sh`, set `public = on` in `config.ini`, and start `./start-server.sh` once by hand
+   to check that it comes up.
+5. Install the unit: edit `User=` and the two paths in `thecrewreborn.service` if yours differ, then
+   `sudo cp thecrewreborn.service /etc/systemd/system/` and
+   `sudo systemctl daemon-reload && sudo systemctl enable --now thecrewreborn`. Logs: `journalctl -u thecrewreborn -f`.
+   The unit grants the right to bind ports 80 and 443 without root.
+6. Check from another network: `curl -k https://<public-ip>/version` must answer.
+
+Oracle states that it may reclaim an idle Always Free instance: when for 7 days CPU use (95th percentile), network
+use and memory use are all below 20 %. A game server with few players can fall below that. Upgrading the account to
+Pay As You Go is the commonly reported way to avoid the reclaim, while the Always Free resources stay free (reported,
+not checked here).
+
+**Option 2: at home**
+
+You need a public IPv4 address from your provider (not DS-Lite or CG-NAT). Give the server computer a fixed address,
+then forward the ports above to it on the router. On a FritzBox: Internet, Freigaben, Portfreigaben, add a device,
+one forwarding per port. If your provider changes the address, PS4 players must update `server.txt`; PC players may
+use a dynamic DNS hostname (for example MyFRITZ!) as `Host`.
+
+**Limits**
+
+- Multiplayer over the internet is not built yet: there is no NAT traversal, one session is shared, and at most 5
+  players can be nearby. Public mode is for the solo game with saves.
+- Only one server can run per IP address and port set.
+- Anyone who can read a player's network traffic and knows the public relay key can replay that player's login ticket
+  for up to 3 hours. Only an attacker on the network path can do this.
+
+**Load**
+
+Measured on 2026-11-12: about 0.02 % of one CPU core per player (Apple M2 Max), 1 to 2 kbit/s on average with
+peaks up to 16 kbit/s, and about 22 KB of save per player. The server process uses about 50 MB of memory.
+
 ## Bugs and ideas
 
 Report them at https://github.com/thecrewreborn/server/issues (a GitHub account is needed). The `captures` folder
@@ -197,6 +299,115 @@ TCP 80 und 443, UDP 4000, 4001 und 4100 (4100: das Basisspiel 1.00). Für das Sp
 System Port 80 oder 443 verweigert (ein anderes Programm nutzt ihn, oder Linux ohne root), nimmt der Server 8080 und
 8443 und teilt das dem Spiel mit; beim Start steht der Hinweis im Fenster. Findet das Spiel den Server nicht, trage
 am PC `Host` in `reborn.ini` ein oder auf der PS4 die Serveradresse in `/data/TheCrew/server.txt`.
+
+## Einen öffentlichen Server betreiben
+
+Standardmäßig ist der Server für dein eigenes Netzwerk gedacht: Jeder, der ihn erreicht, spielt mit, Namen sind nicht
+geschützt. Damit auch andere Spieler über das Internet mitspielen können, setze in `config.ini` im Abschnitt
+`[server]` die Zeile `public = on` (Standard: aus; `config.example.ini` zeigt die Zeile). Das Spielen zu Hause
+funktioniert ohne diese Einstellung genau wie bisher.
+
+**Was `public = on` bewirkt**
+
+- Der erste Login mit einem Namen reserviert ihn. Spätere Logins brauchen dieselben Zugangsdaten; niemand sonst kann
+  auf diesem Spielstand spielen. Namen werden ohne Groß- und Kleinschreibung und wie Spielstandnamen verglichen:
+  `Max.Power`, `Max_Power` und `max_power` sind ein Name. Der Standardname `Player` kann nicht reserviert werden.
+- Nach 5 falschen Passwörtern von einer IP-Adresse innerhalb von 10 Minuten wird diese Adresse für den Rest des
+  Zeitfensters abgewiesen.
+- Beim Start listet der Server Spielstände auf, die noch niemand reserviert hat („unclaimed saves“); jeder darf sie
+  beim nächsten Login übernehmen. Ein neuer Spieler beginnt mit einem frischen Spielstand: Dein eigener
+  Einzelspieler-Spielstand (`save/1.21/player.json`) wird nicht an den ersten Fremden vergeben. Willst du ihn
+  behalten, kopiere ihn nach `save/1.21/players/<Name>.json` und reserviere zuerst diesen Namen.
+- Das Relay-Log in `captures` enthält keine Tickets und Schlüssel; Spieler können es deshalb an Fehlermeldungen anhängen.
+
+**Was Spieler tun**
+
+- PC: Trage in `reborn.ini` unter `[Player]` die Zeile `Ticket = Name|Passwort` ein. Alles nach dem ersten `|` ist
+  das Passwort.
+- PS4: Der PS4-Patch ab Version 0.0.4 legt beim ersten Start einen Schlüssel für die Konsole in
+  `/data/TheCrew/console_key.txt` an. Spieler sollten diese Datei sichern (Backup). Wird sie auf eine neue Konsole kopiert,
+  bleibt der Name erhalten; eine beschädigte Datei wird als `console_key.bad` aufbewahrt. Ein älterer PS4-Patch
+  sendet keinen Schlüssel und wird von einem öffentlichen Server abgelehnt.
+- PS4: Trage die öffentliche IPv4-Adresse des Servers in `/data/TheCrew/server.txt` ein (eine Adresse wie
+  `203.0.113.5`, kein Hostname). Nutzt der Server 8080/8443 (siehe Ports), schreibe `https://203.0.113.5:8443`.
+- PC: Setze `Host` in `reborn.ini`; dort ist eine Adresse oder ein Hostname möglich.
+
+**Namen verwalten**
+
+Im Serverordner (das Startskript der Version legt dort `.venv` an):
+
+```
+.venv/bin/python tools/accounts.py list
+.venv/bin/python tools/accounts.py free NAME
+```
+
+`free` gibt den Namen frei. Der nächste Login mit diesem Namen reserviert ihn dann neu (nützlich, wenn ein Spieler
+Passwort oder Schlüssel verloren hat). Für eine andere Accounts-Datei schreibe `--file PATH` vor `list` oder `free`:
+`.venv/bin/python tools/accounts.py --file PATH list`. `save/accounts.json` enthält
+gesalzene Hashes, nie Passwörter; `save/<Version>/sessions.json` enthält die Sitzungsschlüssel. Gib den Ordner `save`
+niemals weiter. Spieler senden den Ordner `captures` ein.
+
+**Ports**
+
+Siehe „Ports“ weiter oben: Öffne genau diese zwischen dem Internet und dem Server. Nutzt der Server statt 80 und 443
+die Ports 8080 und 8443, öffne diese beiden.
+
+**Variante 1: Oracle Cloud Always Free**
+
+Laut Oracles Dokumentation umfasst Always Free Arm-A1-Flex-Instanzen mit insgesamt bis zu 2 OCPUs und 12 GB
+Arbeitsspeicher sowie 10 TB ausgehenden Datenverkehr pro Monat. Der Server braucht davon nur einen kleinen Bruchteil
+(siehe „Last“ unten).
+
+1. Lege ein Always-Free-Konto an und darin eine Instanz: Shape VM.Standard.A1.Flex (1 OCPU und 6 GB genügen), Image
+   Ubuntu, öffentliche IPv4-Adresse und dein SSH-Schlüssel.
+2. Öffne im Subnetz der Instanz die Security List und füge Ingress-Regeln hinzu (Quelle `0.0.0.0/0`): TCP 80 und 443,
+   UDP 4000, 4001 und 4100.
+3. Öffne dieselben Ports in der VM selbst. Oracles Ubuntu-Images liefern laut verbreiteten Berichten iptables-Regeln
+   mit, die alles außer SSH ablehnen (berichtet, hier nicht geprüft). Ist das bei deiner VM so:
+
+   ```
+   sudo iptables -I INPUT 5 -p tcp --dport 80 -j ACCEPT
+   sudo iptables -I INPUT 5 -p tcp --dport 443 -j ACCEPT
+   sudo iptables -I INPUT 5 -p udp -m multiport --dports 4000,4001,4100 -j ACCEPT
+   sudo netfilter-persistent save
+   ```
+
+   Führe vorher `sudo iptables -L INPUT -n --line-numbers` aus und füge die Regeln oberhalb der abschließenden
+   REJECT-Regel ein (die Position 5 ist ein Beispiel).
+4. Installiere den Server: `sudo apt install python3 python3-venv unzip`, entpacke die Version nach
+   `/opt/thecrewreborn` (Eigentümer: der Benutzer, der den Server ausführt), führe `chmod +x start-server.sh` aus, setze in `config.ini` `public = on` und
+   starte einmal von Hand `./start-server.sh`, um zu prüfen, ob er hochfährt.
+5. Installiere die Unit: Passe `User=` und die beiden Pfade in `thecrewreborn.service` an, falls deine abweichen, dann
+   `sudo cp thecrewreborn.service /etc/systemd/system/` und
+   `sudo systemctl daemon-reload && sudo systemctl enable --now thecrewreborn`. Logs: `journalctl -u thecrewreborn -f`.
+   Die Unit erlaubt das Belegen der Ports 80 und 443 ohne root.
+6. Prüfe aus einem anderen Netzwerk: `curl -k https://<öffentliche-IP>/version` muss antworten.
+
+Oracle gibt an, dass eine ungenutzte Always-Free-Instanz zurückgefordert werden kann: wenn 7 Tage lang CPU-Auslastung
+(95. Perzentil), Netzwerk- und Speicherauslastung alle unter 20 % liegen. Ein Spieleserver mit wenigen Spielern kann
+darunter fallen. Häufig wird empfohlen, das Konto auf Pay As You Go umzustellen, um die Rückforderung zu
+vermeiden; die Always-Free-Ressourcen bleiben kostenlos (berichtet, hier nicht geprüft).
+
+**Variante 2: zu Hause**
+
+Du brauchst eine öffentliche IPv4-Adresse von deinem Anbieter (kein DS-Lite oder CG-NAT). Gib dem Server-Rechner eine
+feste Adresse und leite dann am Router die obigen Ports auf ihn weiter. Bei einer FritzBox: Internet, Freigaben,
+Portfreigaben, Gerät hinzufügen, je Port eine Freigabe. Ändert dein Anbieter die Adresse, müssen PS4-Spieler
+`server.txt` anpassen; PC-Spieler können einen DynDNS-Hostnamen (zum Beispiel MyFRITZ!) als `Host` nutzen.
+
+**Grenzen**
+
+- Mehrspieler über das Internet gibt es noch nicht: Es fehlt NAT-Traversal, es gibt eine gemeinsame Sitzung, und
+  höchstens 5 Spieler können in der Nähe sein. Der öffentliche Modus ist für das Solospiel mit Spielständen gedacht.
+- Pro IP-Adresse und Portsatz kann nur ein Server laufen.
+- Wer den Netzwerkverkehr eines Spielers mitlesen kann und den öffentlichen Relay-Schlüssel kennt, kann das
+  Login-Ticket dieses Spielers bis zu 3 Stunden lang wiederverwenden. Das kann nur ein Angreifer auf dem
+  Netzwerkpfad.
+
+**Last**
+
+Gemessen am 12.11.2026: etwa 0,02 % eines CPU-Kerns pro Spieler (Apple M2 Max), 1 bis 2 kbit/s im Durchschnitt mit
+Spitzen bis 16 kbit/s und etwa 22 KB Spielstand pro Spieler. Der Serverprozess belegt etwa 50 MB Arbeitsspeicher.
 
 ## Fehler und Ideen
 

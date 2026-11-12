@@ -1,0 +1,28 @@
+# systemd unit for a public The Crew Reborn server (see "Running a public server" in the README).
+# Adjust User= and the two paths to your setup, then:
+#   sudo cp thecrewreborn.service /etc/systemd/system/
+#   sudo systemctl daemon-reload && sudo systemctl enable --now thecrewreborn
+[Unit]
+Description=The Crew Reborn server
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+# A normal user that owns the server folder, e.g. "ubuntu" on Oracle's Ubuntu images.
+User=ubuntu
+# Example path: the folder with start-server.sh.
+WorkingDirectory=/opt/thecrewreborn
+ExecStart=/bin/sh /opt/thecrewreborn/start-server.sh
+Restart=on-failure
+RestartSec=5
+# Lets the server bind ports 80 and 443 without root.
+AmbientCapabilities=CAP_NET_BIND_SERVICE
+# Hardening. ProtectSystem=full makes /usr, /boot and /etc read-only; /opt stays writable, so the server folder
+# (saves, captures, .venv) is unaffected. ProtectHome=true hides /home: do not put the server folder there.
+NoNewPrivileges=true
+ProtectSystem=full
+ProtectHome=true
+PrivateTmp=true
+
+[Install]
+WantedBy=multi-user.target
