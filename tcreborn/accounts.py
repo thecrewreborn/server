@@ -66,7 +66,7 @@ class AccountStore:
             entry = data.get(key)
             if entry is None:
                 salt = os.urandom(16)
-                data[key] = {"name": save_name(name), "platform": platform, "salt": salt.hex(), "hash": _hash(secret, salt),
+                data[key] = {"name": name, "platform": platform, "salt": salt.hex(), "hash": _hash(secret, salt),
                              "created": int(time.time())}
                 return "claimed" if self._save(data) else "unavailable"
             try:
@@ -86,6 +86,16 @@ class AccountStore:
                 return False
             del data[key]
             return self._save(data)
+
+    def display_name(self, name: str) -> str | None:
+        with self._lock:
+            try:
+                data = self._load()
+            except OSError:
+                return None
+        entry = data.get(save_name(name).lower())
+        stored = entry.get("name") if isinstance(entry, dict) else None
+        return stored if isinstance(stored, str) and stored else None
 
     def names(self) -> list[str]:
         return sorted(v["name"] for v in self.entries().values())

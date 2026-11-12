@@ -233,7 +233,7 @@ def session(body: dict, client_ip: str, auth: str = "") -> dict:
     if ACCOUNTS is not None:
         ticket = base64.b64encode(f"offline-ticket:{uuid.uuid4()}".encode()).decode()
         token = base64.b64encode(f"offline-token:{uuid.uuid4()}".encode()).decode()
-        _issue(ticket, name, platform)
+        _issue(ticket, ACCOUNTS.display_name(name) or name, platform)
     return {
         "platformType": platform,
         "ticket": ticket,

@@ -21,6 +21,7 @@ class Session:
     name: str | None = None
     platform: str | None = None
     restored: bool = False
+    refused: bool = False
     stamp: float = 0.0
 
 
