@@ -20,7 +20,8 @@ def main(argv=None) -> int:
     args = ap.parse_args(argv)
     store = AccountStore(args.file)
     if args.cmd == "list":
-        for name, e in store.entries().items():
+        for e in store.entries().values():
+            name = e['name']
             day = dt.datetime.fromtimestamp(e["created"]).strftime("%Y-%m-%d") if e["created"] else "?"
             print(f"{name}  {e['platform']}  {day}")
     elif store.free(args.name):

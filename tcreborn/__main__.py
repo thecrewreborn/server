@@ -50,6 +50,22 @@ def _bind(serve, port: int, name: str, *args):
         return serve(alt, *args), alt
 
 
+def _public_mode(ubi, versions) -> None:
+    from tcreborn.accounts import STORE_NAME, AccountStore
+    from tcreborn.saves import save_name
+    ubi.ACCOUNTS = AccountStore(paths.home("save", STORE_NAME))
+    print("public mode: names are claimed with a password (PC) or console key (PS4)", flush=True)
+    claimed = {save_name(n).lower() for n in ubi.ACCOUNTS.names()}
+    unclaimed = set()
+    for game in versions:
+        folder = paths.home("save", game.NAME, "players")
+        if os.path.isdir(folder):
+            unclaimed |= {f[:-5] for f in os.listdir(folder) if f.endswith(".json")}
+    unclaimed = {n for n in unclaimed if n.lower() not in claimed}
+    if unclaimed:
+        print(f"unclaimed saves (anyone may claim them at the next login): {', '.join(sorted(unclaimed))}", flush=True)
+
+
 def main(argv: list[str] | None = None) -> None:
     for stream in (sys.stdout, sys.stderr):
         if hasattr(stream, "reconfigure"):
@@ -94,6 +110,8 @@ def main(argv: list[str] | None = None) -> None:
     detail(f"player save: {args.save}")
     detail(f"abilities: {config.abilities()}, unlocks: {config.unlocks()}, dlc: {config.dlc()}")
     print(f"DLC: {'on' if config.dlc() == 'all' else 'off'} (config.ini [player] dlc)", flush=True)
+    if config.public():
+        _public_mode(ubi, versions)
     requests_log = os.path.join(os.path.dirname(args.log), "requests.jsonl")
     _, http_port = _bind(ubi.serve, args.http_port, "http", requests_log)
     https_port = config.https_port()

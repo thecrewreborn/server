@@ -57,7 +57,7 @@ class AccountStore:
     def check(self, name: str, platform: str, secret: str) -> str:
         if not secret:
             return "missing"
-        key = save_name(name)
+        key = save_name(name).lower()
         with self._lock:
             try:
                 data = self._load()
@@ -66,7 +66,7 @@ class AccountStore:
             entry = data.get(key)
             if entry is None:
                 salt = os.urandom(16)
-                data[key] = {"platform": platform, "salt": salt.hex(), "hash": _hash(secret, salt),
+                data[key] = {"name": save_name(name), "platform": platform, "salt": salt.hex(), "hash": _hash(secret, salt),
                              "created": int(time.time())}
                 return "claimed" if self._save(data) else "unavailable"
             try:
@@ -76,7 +76,7 @@ class AccountStore:
             return "ok" if good else "wrong"
 
     def free(self, name: str) -> bool:
-        key = save_name(name)
+        key = save_name(name).lower()
         with self._lock:
             try:
                 data = self._load()
@@ -88,7 +88,7 @@ class AccountStore:
             return self._save(data)
 
     def names(self) -> list[str]:
-        return sorted(self.entries())
+        return sorted(v["name"] for v in self.entries().values())
 
     def entries(self) -> dict:
         with self._lock:
@@ -96,5 +96,5 @@ class AccountStore:
                 data = self._load()
             except OSError:
                 return {}
-            return {k: {"platform": v.get("platform", "?"), "created": v.get("created", 0)}
+            return {k: {"name": v.get("name", k), "platform": v.get("platform", "?"), "created": v.get("created", 0)}
                     for k, v in sorted(data.items()) if isinstance(v, dict)}

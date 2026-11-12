@@ -1,6 +1,7 @@
 # The Crew Reborn - Knutwurst
 # https://thecrewreborn.github.io - https://ko-fi.com/knutwurst
 import base64
+import binascii
 import datetime
 import json
 import re
@@ -13,6 +14,7 @@ import uuid
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
 from tcreborn import avatar
+from tcreborn.accounts import AccountStore
 from tcreborn.version import VERSION
 
 APP_ID = "103649f4-9ca6-49a7-a122-522f3099854b"
@@ -116,7 +118,7 @@ def _now() -> float:
 
 def _save_key(name: str) -> str:
     from tcreborn.saves import save_name
-    return save_name(name)
+    return save_name(name).lower()
 
 
 def touch(name: str, client_ip: str) -> None:
@@ -138,9 +140,82 @@ def logout(client_ip: str) -> None:
             del ONLINE[key]
 
 
+ACCOUNTS: AccountStore | None = None
+TICKET_TTL = 3 * 3600
+TICKETS: dict[str, tuple[str, str, float]] = {}
+FAILED: dict[str, list[float]] = {}
+FAIL_LIMIT, FAIL_WINDOW = 5, 600.0
+_AUTH_LOCK = threading.Lock()
+
+
+def credential(body: dict, auth: str) -> str:
+    head, sep, ticket = auth.partition("t=")
+    if not sep:
+        return ""
+    if head.strip().lower().startswith("psn2.0"):
+        try:
+            raw = base64.b64decode(ticket.strip() + "=" * (-len(ticket.strip()) % 4), validate=True).decode()
+        except (binascii.Error, ValueError):
+            return ""
+        code = (urllib.parse.parse_qs(raw).get("code") or [""])[0]
+        return "" if code.upper() == "OFFLINE" else code
+    return ticket.partition("|")[2]
+
+
+def ticket_owner(ticket: str) -> tuple[str, str] | None:
+    with _AUTH_LOCK:
+        entry = TICKETS.get(ticket)
+    if entry is None or _now() - entry[2] >= TICKET_TTL:
+        return None
+    return entry[0], entry[1]
+
+
+def _issue(ticket: str, name: str, platform: str) -> None:
+    now = _now()
+    with _AUTH_LOCK:
+        for old in [t for t, (_, _, issued) in TICKETS.items() if now - issued >= TICKET_TTL]:
+            del TICKETS[old]
+        TICKETS[ticket] = (name, platform, now)
+
+
+def _begin_attempt(client_ip: str) -> float | None:
+    now = _now()
+    with _AUTH_LOCK:
+        recent = [t for t in FAILED.get(client_ip, []) if now - t < FAIL_WINDOW]
+        if len(recent) >= FAIL_LIMIT:
+            FAILED[client_ip] = recent
+            return None
+        recent.append(now)
+        FAILED[client_ip] = recent
+        return now
+
+
+def _end_attempt(client_ip: str, stamp: float, failed: bool) -> None:
+    if failed:
+        return
+    with _AUTH_LOCK:
+        times = FAILED.get(client_ip, [])
+        if stamp in times:
+            times.remove(stamp)
+        if not times:
+            FAILED.pop(client_ip, None)
+
+
+def loggable(reply: object) -> object:
+    if ACCOUNTS is not None and isinstance(reply, dict) and ("ticket" in reply or "token" in reply):
+        return {k: "***" if k in ("ticket", "token") else v for k, v in reply.items()}
+    return reply
+
+
+def _login_refused(client_ip: str, name: str, why: str) -> tuple[int, dict]:
+    print(f"[{datetime.datetime.now():%H:%M:%S}] login {client_ip} refused: {name}: {why}", flush=True)
+    return 409, {"error": f"{name}: {why}", "errorCode": 409}
+
+
 def login_name(body: dict, auth: str = "") -> tuple[str, str]:
     name, platform = body.get("nameOnPlatform"), "psn"
-    if not name and ticket_name(auth):
+    console = ACCOUNTS is not None and auth.strip().lower().startswith("psn2.0")
+    if not name and not console and ticket_name(auth):
         name, platform = ticket_name(auth), "uplay"
     return name or "Player", platform
 
@@ -153,10 +228,16 @@ def session(body: dict, client_ip: str, auth: str = "") -> dict:
     profile = stable_id("profile", name)
     PROFILES[profile] = (name, platform)
     utc = datetime.datetime.now(datetime.timezone.utc)
+    ticket = base64.b64encode(f"offline-ticket:{profile}".encode()).decode()
+    token = base64.b64encode(f"offline-token:{profile}".encode()).decode()
+    if ACCOUNTS is not None:
+        ticket = base64.b64encode(f"offline-ticket:{uuid.uuid4()}".encode()).decode()
+        token = base64.b64encode(f"offline-token:{uuid.uuid4()}".encode()).decode()
+        _issue(ticket, name, platform)
     return {
         "platformType": platform,
-        "ticket": base64.b64encode(f"offline-ticket:{profile}".encode()).decode(),
-        "token": base64.b64encode(f"offline-token:{profile}".encode()).decode(),
+        "ticket": ticket,
+        "token": token,
         "profileId": profile,
         "userId": stable_id("user", name),
         "nameOnPlatform": name,
@@ -236,7 +317,26 @@ def route(method: str, path: str, body: dict, host: str, client: tuple[str, int]
             return 200, {}
         if method != "POST":
             return 200, {}
-        name, _ = login_name(body, auth)
+        name, platform = login_name(body, auth)
+        if ACCOUNTS is not None:
+            from tcreborn.saves import DEFAULT_NAME, save_name
+            if save_name(name).lower() == DEFAULT_NAME.lower():
+                return _login_refused(client[0], "this name", "name not allowed, choose another")
+            stamp = _begin_attempt(client[0])
+            if stamp is None:
+                return _login_refused(client[0], name, "too many failed logins, try again later")
+            verdict = "unavailable"
+            try:
+                verdict = ACCOUNTS.check(name, platform, credential(body, auth))
+            finally:
+                _end_attempt(client[0], stamp, verdict == "wrong")
+            if verdict == "wrong":
+                return _login_refused(client[0], name, "wrong password")
+            if verdict == "missing":
+                return _login_refused(client[0], name, "no password set in reborn.ini" if platform == "uplay"
+                                      else "PS4 patch too old, it sends no console key")
+            if verdict == "unavailable":
+                return _login_refused(client[0], name, "account store unavailable")
         other = online_elsewhere(name, client[0]) if name != "Player" else None
         if other:
             print(f"[{datetime.datetime.now():%H:%M:%S}] login {client[0]} refused: {name} is playing on {other}",
@@ -294,7 +394,7 @@ class Handler(BaseHTTPRequestHandler):
                 f.write(json.dumps({"time": datetime.datetime.now().isoformat(), "client": self.client_address[0],
                                     "method": self.command, "path": self.path, "auth": redact(auth),
                                     "body": f"<rgba {len(raw)} bytes>" if self.path.endswith(".rgba") and raw
-                                    else raw.decode("utf-8", "replace"), "status": status, "reply": reply}) + "\n")
+                                    else raw.decode("utf-8", "replace"), "status": status, "reply": loggable(reply)}) + "\n")
         self.send_response(status)
         kind = "application/octet-stream" if self.path.endswith(".rgba") else "image/png"
         self.send_header("Content-Type", kind if binary else "application/json; charset=utf-8")
