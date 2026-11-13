@@ -17,7 +17,7 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
 from tcreborn import avatar, server_id
 from tcreborn.accounts import AccountStore
-from tcreborn.limits import LineLimit
+from tcreborn.limits import LineLimit, RateLimit
 from tcreborn.saves import account_key
 from tcreborn.version import VERSION
 
@@ -29,6 +29,9 @@ PLATFORMS: dict[str, str] = {}
 PROFILES: dict[str, tuple[str, str]] = {}
 AVATAR_UPLOAD = re.compile(r"/avatars/name/([A-Za-z0-9_-]{3,16})\.rgba")
 AVATAR_RGBA = re.compile(r"/avatars/profile/([0-9a-f-]{36})/(64|128|256)\.rgba")
+AVATAR_CONSOLE = re.compile(r"/avatars/console/([A-Za-z0-9_-]{3,16})\.png")
+CONSOLE_AUTH = "tcr-console"
+CONSOLE_UPLOADS_PER_MIN = 2
 
 GATEWAY_RESOURCES = [
     ("all_connections", "/{env}/{version}/profiles/connections"),
@@ -405,6 +408,30 @@ def _public_login(name: str, platform: str, body: dict, auth: str, client_ip: st
     return None
 
 
+_CONSOLE_UPLOADS = RateLimit(CONSOLE_UPLOADS_PER_MIN, 60.0)
+
+
+def console_picture(name: str, auth: str, raw: bytes, client_ip: str) -> tuple[int, dict]:
+    if ACCOUNTS is not None and not _CONSOLE_UPLOADS.allow(client_ip, _now()):
+        return 429, {"error": "too many picture uploads, try again later"}
+    why = avatar.check_console_picture(raw, decode=False)
+    if why:
+        return (413 if len(raw) > avatar.MAX_UPLOAD else 400), {"error": why}
+    if ACCOUNTS is not None:
+        scheme, _, code = auth.strip().partition(" ")
+        if scheme.lower() != CONSOLE_AUTH or not code.strip():
+            return 401, {"error": "the console's login code is missing"}
+        verdict = ACCOUNTS.check(name, "psn", code.strip(), claim=False)
+        if verdict == "unavailable":
+            return 503, {"error": "account store unavailable"}
+        if verdict != "ok":
+            return 403, {"error": "only the console that claimed this name may set its picture"}
+    why = avatar.save_console_upload(name, raw)
+    if why:
+        return 400, {"error": why}
+    return 200, {"saved": True}
+
+
 def login_name(body: dict, auth: str = "") -> tuple[str, str]:
     name, platform = body.get("nameOnPlatform"), "psn"
     if not isinstance(name, str):
@@ -517,6 +544,9 @@ def route(method: str, path: str, body: dict, host: str, client: tuple[str, int]
         return 200, _version()
     if method == "GET" and path.endswith("/v2/profiles"):
         return 200, profiles(query)
+    m = AVATAR_CONSOLE.fullmatch(path)
+    if m and method == "PUT":
+        return console_picture(m.group(1), auth, raw, client[0])
     m = AVATAR_UPLOAD.fullmatch(path)
     if m and method == "PUT":
 
@@ -529,7 +559,7 @@ def route(method: str, path: str, body: dict, host: str, client: tuple[str, int]
         rgba = avatar.rgba_for(PROFILES.get(m.group(1), (None,))[0], int(m.group(2)), client[0])
         return (200, rgba) if rgba is not None else (503, b"")
     if path.startswith("/avatars/") and path.endswith(".png"):
-        return 200, avatar.for_request(SESSIONS.get(client[0]), path, client[0])
+        return 200, avatar.for_request(SESSIONS.get(client[0]), path)
     if path.endswith("/profiles/sessions"):
         if method == "DELETE":
             logout(client[0])

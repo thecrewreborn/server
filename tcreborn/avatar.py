@@ -1,10 +1,8 @@
 # The Crew Reborn - Knutwurst
 # https://thecrewreborn.github.io - https://ko-fi.com/knutwurst
 import collections
-import ftplib
 import functools
 import hashlib
-import io
 import os
 import re
 import struct
@@ -20,16 +18,11 @@ LOGO = paths.bundled("avatar_logo.png")
 FIT = 256
 USER_PATH = re.compile(r"/avatars/(0x[0-9A-F]{8})\.png")
 NAME_PATH = re.compile(r"/avatars/name/([A-Za-z0-9_-]{3,16})\.png")
-FTP_PORT = 2121
-CACHE = "/system_data/priv/cache/profile"
-MAX_DOWNLOAD = 2 * 2 ** 20
+CONSOLE_FOLDER = "ps4"
+MAX_UPLOAD = 300_000
 MAX_SIDE = 1024
 RGBA_CACHE_BYTES = 32 * 2 ** 20
 DECODES_PER_S = 10
-
-
-class TooLarge(ftplib.Error):
-    pass
 
 
 def _chunk(kind: bytes, data: bytes) -> bytes:
@@ -174,7 +167,7 @@ def save_upload(name: str, rgba: bytes) -> bool:
 
 def rgba_for(name: str | None, size: int, client_ip: str) -> bytes | None:
     path = f"/avatars/name/{name}.png" if name else ""
-    return _rgba(for_request(name, path, client_ip), size, client_ip)
+    return _rgba(for_request(name, path), size, client_ip)
 
 
 @functools.lru_cache(maxsize=16)
@@ -183,57 +176,54 @@ def _fitted(path: str, mtime: float) -> bytes:
         return fit(f.read())
 
 
-def fetch_from_console(ip: str, user: str) -> bytes:
-    ftp = ftplib.FTP()
-    ftp.connect(ip, FTP_PORT, timeout=3)
+def check_console_picture(data: bytes, decode: bool = True) -> str | None:
+    if len(data) > MAX_UPLOAD:
+        return f"picture larger than {MAX_UPLOAD} bytes"
+    if data[:8] != b"\x89PNG\r\n\x1a\n" or data[12:16] != b"IHDR" or len(data) < 33:
+        return "not a PNG"
+    width, height = struct.unpack(">II", data[16:24])
+    if width > MAX_SIDE or height > MAX_SIDE:
+        return f"picture larger than {MAX_SIDE}x{MAX_SIDE}"
+    if not decode:
+        return None
     try:
-        ftp.login()
-        buf = io.BytesIO()
-
-        def take(block: bytes) -> None:
-            if buf.tell() + len(block) > MAX_DOWNLOAD:
-                raise TooLarge(f"picture larger than {MAX_DOWNLOAD} bytes")
-            buf.write(block)
-        ftp.retrbinary(f"RETR {CACHE}/{user}/avatar.png", take)
-        return buf.getvalue()
-    finally:
-        ftp.close()
+        _decode(data)
+    except (ValueError, KeyError, IndexError, TypeError, struct.error, zlib.error):
+        return "unsupported PNG"
+    return None
 
 
-def _console_picture(ip: str, user: str) -> str | None:
-    kept = os.path.join(FOLDER, "ps4", user + ".png")
-    try:
-        data = fetch_from_console(ip, user)
-        if data[:8] == b"\x89PNG\r\n\x1a\n":
-            write_atomic(kept, data)
-    except (OSError, EOFError, ftplib.Error):
-        pass
-    return kept if os.path.exists(kept) else None
+def _valid_name(name: str | None) -> bool:
+    return bool(name) and os.path.basename(name) == name
 
 
-CONSOLE_BY_NAME: dict[str, str] = {}
+def console_path(name: str) -> str:
+    return os.path.join(FOLDER, CONSOLE_FOLDER, name + ".png")
 
 
-def for_request(name: str | None, path: str, client_ip: str) -> bytes:
+def save_console_upload(name: str, data: bytes) -> str | None:
+    if not _valid_name(name):
+        return "bad name"
+    why = check_console_picture(data)
+    if why:
+        return why
+    os.makedirs(os.path.join(FOLDER, CONSOLE_FOLDER), exist_ok=True)
+    write_atomic(console_path(name), data)
+    return None
+
+
+def for_request(name: str | None, path: str) -> bytes:
+    own_profile = USER_PATH.fullmatch(path) is not None
     if path.startswith("/avatars/name/"):
         other = NAME_PATH.fullmatch(path)
-        name, path = (other.group(1) if other else None), ""
-    from tcreborn import ubi
-    own = os.path.join(FOLDER, name + ".png") if name and os.path.basename(name) == name else None
-    own = own if own and os.path.exists(own) else None
-    m = USER_PATH.fullmatch(path)
-    file = None
-    if m and ubi.ACCOUNTS is None:
-
-
-        file = _console_picture(client_ip, m.group(1))
-        if file and name:
-            CONSOLE_BY_NAME[name] = file
-    if file is None:
-        file = own or (None if m else CONSOLE_BY_NAME.get(name or ""))
-    if file:
-        try:
-            return _fitted(file, os.path.getmtime(file))
-        except (OSError, ValueError, KeyError, IndexError, TypeError, struct.error, zlib.error):
-            pass
+        name = other.group(1) if other else None
+    if _valid_name(name):
+        pc, console = os.path.join(FOLDER, name + ".png"), console_path(name)
+        for file in (console, pc) if own_profile else (pc, console):
+            if not os.path.exists(file):
+                continue
+            try:
+                return _fitted(file, os.path.getmtime(file))
+            except (OSError, ValueError, KeyError, IndexError, TypeError, struct.error, zlib.error):
+                pass
     return logo()

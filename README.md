@@ -116,8 +116,11 @@ These changes apply to every server, also without `public = on`:
 - `[server] ip` must be an IPv4 address; the server ignores any other value and says so at start.
 - `[world] multiplayer`: without the line multiplayer is on at home. An empty value (`multiplayer =`) means off, as
   before. `config.example.ini` now leaves the line commented out.
-- Avatars: a console picture over 2 MB or larger than 1024 x 1024 pixels gets the default picture. The server keeps
-  up to 32 MB of decoded PC pictures in memory.
+- Player pictures: the PS4 uploads its user's own profile picture once per game start, right after the login code
+  (PS4 patch of this release). The server no longer fetches pictures from the console. Your own PS4 profile shows
+  your console picture first; other players and the PC see a picture uploaded from the PC first. The server refuses
+  a picture over 300 000 bytes or larger than 1024 x 1024 pixels and keeps up to 32 MB of decoded PC pictures in
+  memory.
 - Discovery answers one address at most once a second and prints at most 20 lines a minute.
 - The server drops game requests over 64 KB (the largest the games send has about 20 KB). Requests that arrive in
   parts may hold at most 64 MB in all while they wait for their last part; the oldest go first.
@@ -157,6 +160,8 @@ These changes apply to every server, also without `public = on`:
 - The logs in `captures` leave out tickets, passwords and keys, so players may attach them to bug reports.
 - A login ticket stays valid while its game plays and for 3 hours after the game's last packet, so a long session
   that reconnects to the relay is not refused.
+- A PS4's picture upload must carry the console key's code of the name's claim. An upload never claims a name: until
+  the first login claimed it, the server refuses the picture. One IP address can upload at most 2 pictures a minute.
 
 **What players do**
 
@@ -503,8 +508,11 @@ Diese Änderungen gelten für jeden Server, auch ohne `public = on`:
 - `[server] ip` muss eine IPv4-Adresse sein; jeden anderen Wert ignoriert der Server und meldet das beim Start.
 - `[world] multiplayer`: Ohne die Zeile ist Mehrspieler zu Hause an. Ein leerer Wert (`multiplayer =`) bedeutet aus,
   wie bisher. `config.example.ini` enthält die Zeile jetzt nur als Kommentar.
-- Avatare: Ein Konsolenbild über 2 MB oder größer als 1024 x 1024 Pixel erhält das Standardbild. Der Server hält
-  bis zu 32 MB entpackter PC-Bilder im Arbeitsspeicher.
+- Spielerbilder: Die PS4 lädt das Profilbild ihres Benutzers einmal pro Spielstart hoch, direkt nach dem Login-Code
+  (PS4-Patch dieses Releases). Der Server holt keine Bilder mehr von der Konsole. Dein eigenes PS4-Profil zeigt zuerst
+  dein Konsolenbild; andere Spieler und der PC sehen zuerst ein vom PC hochgeladenes Bild. Der Server lehnt ein Bild
+  über 300 000 Bytes oder größer als 1024 x 1024 Pixel ab und hält bis zu 32 MB entpackter PC-Bilder im
+  Arbeitsspeicher.
 - Die Serversuche (Discovery) antwortet einer Adresse höchstens einmal pro Sekunde und schreibt höchstens 20 Zeilen
   pro Minute.
 - Der Server verwirft Spielanfragen über 64 KB (die größte, die die Spiele senden, hat etwa 20 KB). Anfragen, die in
@@ -551,6 +559,9 @@ Diese Änderungen gelten für jeden Server, auch ohne `public = on`:
   Fehlermeldungen anhängen.
 - Ein Login-Ticket bleibt gültig, solange sein Spiel spielt, und noch 3 Stunden nach dem letzten Paket des Spiels;
   eine lange Sitzung, die sich neu mit dem Relay verbindet, wird also nicht abgewiesen.
+- Der Bild-Upload einer PS4 muss den Code des Konsolenschlüssels tragen, mit dem der Name reserviert wurde. Ein Upload
+  reserviert nie einen Namen: Bis der erste Login den Namen reserviert hat, lehnt der Server das Bild ab. Eine
+  IP-Adresse kann höchstens 2 Bilder pro Minute hochladen.
 
 **Was Spieler tun**
 
