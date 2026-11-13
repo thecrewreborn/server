@@ -218,21 +218,19 @@ def for_request(name: str | None, path: str, client_ip: str) -> bytes:
     if path.startswith("/avatars/name/"):
         other = NAME_PATH.fullmatch(path)
         name, path = (other.group(1) if other else None), ""
-    files = []
-    if name and os.path.basename(name) == name:
-        files.append(os.path.join(FOLDER, name + ".png"))
+    from tcreborn import ubi
+    own = os.path.join(FOLDER, name + ".png") if name and os.path.basename(name) == name else None
+    own = own if own and os.path.exists(own) else None
     m = USER_PATH.fullmatch(path)
-    for file in files:
-        if os.path.exists(file):
-            break
-    else:
-        from tcreborn import ubi
-        if m and ubi.ACCOUNTS is not None:
-            file = None
-        else:
-            file = _console_picture(client_ip, m.group(1)) if m else CONSOLE_BY_NAME.get(name or "")
-        if m and file and name:
+    file = None
+    if m and ubi.ACCOUNTS is None:
+
+
+        file = _console_picture(client_ip, m.group(1))
+        if file and name:
             CONSOLE_BY_NAME[name] = file
+    if file is None:
+        file = own or (None if m else CONSOLE_BY_NAME.get(name or ""))
     if file:
         try:
             return _fitted(file, os.path.getmtime(file))
