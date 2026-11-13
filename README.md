@@ -231,7 +231,7 @@ crew_credits_refill = off
 
 - `ip` is the address the server announces to the game, in the discovery answer, the configuration the game fetches
   at start and the relay; the game connects to it. Set it to the server's public IPv4 address (not a hostname).
-  Behind NAT (an Oracle VM, a home router) this is the public address, not the one the machine sees. The server
+  Behind NAT (a cloud VM, a home router) this is the public address, not the one the machine sees. The server
   ignores any other value and says so at start. Without it the server announces its address in its own
   network, which players on the internet cannot reach.
 - `multiplayer`: `lan` or `off` (see "Multiplayer").
@@ -278,29 +278,21 @@ logrotate do it with a file `/etc/logrotate.d/thecrewreborn` (adjust the path an
 Open exactly the ports of "Ports" between the internet and the server. If the server uses 8080 and 8443 instead of
 80 and 443, open those two.
 
-**Option 1: Oracle Cloud Always Free**
+**Option 1: a Linux server**
 
-Oracle's documentation lists, for Always Free, Arm A1 Flex instances with up to 2 OCPUs and 12 GB of memory in
-total and 10 TB of outbound data per month. The server needs a small fraction of that (see "Load" below).
+Any Linux machine with a public IPv4 address works, rented or your own. The steps below are for Ubuntu or Debian;
+the server needs little (see "Load" below).
 
-1. Create an Always Free account, then an instance: shape VM.Standard.A1.Flex (1 OCPU and 6 GB are plenty), image
-   Ubuntu, a public IPv4 address, and your SSH key.
-2. In the instance's subnet, open its security list and add ingress rules (source `0.0.0.0/0`): TCP 80 and 443, UDP
-   4000, 4001 and 4100.
-3. Open the same ports in the VM itself. Oracle's Ubuntu images are widely reported to ship iptables rules that
-   reject everything except SSH (reported, not checked here). If that is so on your VM:
+1. Open the ports above to the server: in the firewall of your hosting provider, if it has one, and on the machine
+   itself. With ufw:
 
    ```
-   sudo iptables -I INPUT 5 -p tcp --dport 80 -j ACCEPT
-   sudo iptables -I INPUT 5 -p tcp --dport 443 -j ACCEPT
-   sudo iptables -I INPUT 5 -p udp -m multiport --dports 4000,4001,4100 -j ACCEPT
-   sudo netfilter-persistent save
+   sudo ufw allow 80,443/tcp
+   sudo ufw allow 4000,4001,4100/udp
    ```
 
-   Run `sudo iptables -L INPUT -n --line-numbers` first and insert the rules above the final REJECT rule (the
-   position 5 is an example).
-4. Install the server. Set `VERSION` to the newest version on the download page (0.0.4 or later) and replace
-   `ubuntu` with the user the unit runs as (`User=` in `thecrewreborn.service`, see step 5):
+2. Install the server. Set `VERSION` to the newest version on the download page (0.0.4 or later) and replace
+   `ubuntu` with the user the unit runs as (`User=` in `thecrewreborn.service`, see step 3):
 
    ```
    sudo apt install python3 python3-venv unzip
@@ -319,19 +311,14 @@ total and 10 TB of outbound data per month. The server needs a small fraction of
    existing lines. Then, as that user, start `./start-server.sh` once by hand to check that it comes up (it prints
    `Server address:` with your public address), and stop it with Ctrl+C. Started by hand, it may not bind ports 80
    and 443: it says so, suggests a `setcap` command and takes 8080 and 8443. That is expected without the unit. The
-   unit in step 5 grants that right (`AmbientCapabilities`), so do not run the `setcap` command: it would apply to
+   unit in step 3 grants that right (`AmbientCapabilities`), so do not run the `setcap` command: it would apply to
    the system's Python and every program that runs it.
-5. Install the unit: edit `User=` and the two paths in `thecrewreborn.service` if yours differ (keep the folder out
+3. Install the unit: edit `User=` and the two paths in `thecrewreborn.service` if yours differ (keep the folder out
    of `/home`), then `sudo cp thecrewreborn.service /etc/systemd/system/` and
    `sudo systemctl daemon-reload && sudo systemctl enable --now thecrewreborn`.
    Logs: `journalctl -u thecrewreborn -f`. The unit grants the right to bind ports 80 and 443 without root and
    raises the limit of open files to 65536 (`LimitNOFILE`): every connection and log file takes one.
-6. Check from another network: `curl -k https://<public-ip>/version` must answer.
-
-Oracle states that it may reclaim an idle Always Free instance: when for 7 days CPU use (95th percentile), network
-use and memory use are all below 20 %. A game server with few players can fall below that. Upgrading the account to
-Pay As You Go is the commonly reported way to avoid the reclaim, while the Always Free resources stay free (reported,
-not checked here).
+4. Check from another network: `curl -k https://<public-ip>/version` must answer.
 
 **Option 2: at home**
 
@@ -663,7 +650,7 @@ crew_credits_refill = off
 
 - `ip` ist die Adresse, die der Server dem Spiel mitteilt: in der Antwort der Serversuche, in der
   Dienstkonfiguration, die das Spiel beim Start abruft, und im Relay; mit ihr verbindet sich das Spiel. Trage die
-  öffentliche IPv4-Adresse des Servers ein (keinen Hostnamen). Hinter NAT (eine Oracle-VM, ein Router zu Hause) ist
+  öffentliche IPv4-Adresse des Servers ein (keinen Hostnamen). Hinter NAT (eine Cloud-VM, ein Router zu Hause) ist
   das die öffentliche Adresse, nicht die, die der Rechner selbst sieht. Jeden anderen Wert ignoriert der Server und meldet das
   beim Start. Ohne diese Zeile teilt der Server seine Adresse im eigenen Netzwerk mit, die Spieler im Internet nicht
   erreichen.
@@ -715,31 +702,22 @@ Benutzer an):
 Öffne genau die Ports aus „Ports“ zwischen dem Internet und dem Server. Nutzt der Server statt 80 und 443 die Ports
 8080 und 8443, öffne diese beiden.
 
-**Variante 1: Oracle Cloud Always Free**
+**Variante 1: ein Linux-Server**
 
-Laut Oracles Dokumentation umfasst Always Free Arm-A1-Flex-Instanzen mit insgesamt bis zu 2 OCPUs und 12 GB
-Arbeitsspeicher sowie 10 TB ausgehenden Datenverkehr pro Monat. Der Server braucht davon nur einen kleinen Bruchteil
-(siehe „Last“ unten).
+Jeder Linux-Rechner mit öffentlicher IPv4-Adresse eignet sich, gemietet oder dein eigener. Die Schritte unten gelten
+für Ubuntu oder Debian; der Server braucht wenig (siehe „Last“ unten).
 
-1. Lege ein Always-Free-Konto an und darin eine Instanz: Shape VM.Standard.A1.Flex (1 OCPU und 6 GB genügen), Image
-   Ubuntu, öffentliche IPv4-Adresse und dein SSH-Schlüssel.
-2. Öffne im Subnetz der Instanz die Security List und füge Ingress-Regeln hinzu (Quelle `0.0.0.0/0`): TCP 80 und 443,
-   UDP 4000, 4001 und 4100.
-3. Öffne dieselben Ports in der VM selbst. Oracles Ubuntu-Images liefern laut verbreiteten Berichten iptables-Regeln
-   mit, die alles außer SSH ablehnen (berichtet, hier nicht geprüft). Ist das bei deiner VM so:
+1. Öffne die obigen Ports zum Server: in der Firewall deines Hosting-Anbieters, falls es eine gibt, und auf dem
+   Rechner selbst. Mit ufw:
 
    ```
-   sudo iptables -I INPUT 5 -p tcp --dport 80 -j ACCEPT
-   sudo iptables -I INPUT 5 -p tcp --dport 443 -j ACCEPT
-   sudo iptables -I INPUT 5 -p udp -m multiport --dports 4000,4001,4100 -j ACCEPT
-   sudo netfilter-persistent save
+   sudo ufw allow 80,443/tcp
+   sudo ufw allow 4000,4001,4100/udp
    ```
 
-   Führe vorher `sudo iptables -L INPUT -n --line-numbers` aus und füge die Regeln oberhalb der abschließenden
-   REJECT-Regel ein (die Position 5 ist ein Beispiel).
-4. Installiere den Server. Setze `VERSION` auf die neueste Version der Download-Seite (0.0.4 oder neuer) und
+2. Installiere den Server. Setze `VERSION` auf die neueste Version der Download-Seite (0.0.4 oder neuer) und
    ersetze `ubuntu` durch den Benutzer, unter dem die Unit läuft (`User=` in `thecrewreborn.service`, siehe
-   Schritt 5):
+   Schritt 3):
 
    ```
    sudo apt install python3 python3-venv unzip
@@ -759,19 +737,14 @@ Arbeitsspeicher sowie 10 TB ausgehenden Datenverkehr pro Monat. Der Server brauc
    `./start-server.sh`, um zu prüfen, ob er hochfährt (er schreibt `Server address:` mit deiner öffentlichen
    Adresse), und beende ihn mit Strg+C. Von Hand gestartet darf er die Ports 80 und 443 unter Umständen nicht
    belegen: Er meldet das, schlägt einen `setcap`-Befehl vor und nimmt 8080 und 8443. Ohne die Unit ist das zu
-   erwarten. Die Unit aus Schritt 5 erteilt dieses Recht (`AmbientCapabilities`); führe den `setcap`-Befehl deshalb
+   erwarten. Die Unit aus Schritt 3 erteilt dieses Recht (`AmbientCapabilities`); führe den `setcap`-Befehl deshalb
    nicht aus: Er gälte für das Python des Systems und jedes Programm, das es nutzt.
-5. Installiere die Unit: Passe `User=` und die beiden Pfade in `thecrewreborn.service` an, falls deine abweichen
+3. Installiere die Unit: Passe `User=` und die beiden Pfade in `thecrewreborn.service` an, falls deine abweichen
    (lege den Ordner nicht unter `/home`), dann `sudo cp thecrewreborn.service /etc/systemd/system/` und
    `sudo systemctl daemon-reload && sudo systemctl enable --now thecrewreborn`.
    Logs: `journalctl -u thecrewreborn -f`. Die Unit erlaubt das Belegen der Ports 80 und 443 ohne root und hebt
    die Grenze für offene Dateien auf 65536 an (`LimitNOFILE`): Jede Verbindung und jede Log-Datei belegt eine.
-6. Prüfe aus einem anderen Netzwerk: `curl -k https://<öffentliche-IP>/version` muss antworten.
-
-Oracle gibt an, dass eine ungenutzte Always-Free-Instanz zurückgefordert werden kann: wenn 7 Tage lang CPU-Auslastung
-(95. Perzentil), Netzwerk- und Speicherauslastung alle unter 20 % liegen. Ein Spieleserver mit wenigen Spielern kann
-darunter fallen. Häufig wird empfohlen, das Konto auf Pay As You Go umzustellen, um die Rückforderung zu
-vermeiden; die Always-Free-Ressourcen bleiben kostenlos (berichtet, hier nicht geprüft).
+4. Prüfe aus einem anderen Netzwerk: `curl -k https://<öffentliche-IP>/version` muss antworten.
 
 **Variante 2: zu Hause**
 

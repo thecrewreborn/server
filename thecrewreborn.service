@@ -8,7 +8,7 @@ After=network-online.target
 Wants=network-online.target
 
 [Service]
-# A normal user that owns the server folder, e.g. "ubuntu" on Oracle's Ubuntu images.
+# A normal user that owns the server folder; "ubuntu" is an example.
 User=ubuntu
 # Example path: the folder with start-server.sh.
 WorkingDirectory=/opt/thecrewreborn
