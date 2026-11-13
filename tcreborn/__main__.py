@@ -83,6 +83,14 @@ def _warn_link_home() -> None:
               "tunnel or container port forward sits in front of this server, set link_home = off", flush=True)
 
 
+def _warn_multiplayer_public() -> None:
+    from tcreborn import ubi
+    ip = config.advertised_ip()
+    if config.multiplayer() == "on" and ip is not None and not ubi.trusted(ip):
+        print("WARNING: multiplayer = on on a server with a public address: every player gets the addresses of the "
+              "other players; use multiplayer = lan on a server on the internet", flush=True)
+
+
 def _accounts(ubi, versions) -> None:
     from tcreborn.accounts import STORE_NAME, AccountStore
     from tcreborn.saves import DEFAULT_NAME, account_key, save_name
@@ -168,6 +176,7 @@ def main(argv: list[str] | None = None) -> None:
     _check_server_ip()
     _accounts(ubi, versions)
     _warn_link_home()
+    _warn_multiplayer_public()
     _old_single_player_saves(versions)
     requests_log = os.path.join(os.path.dirname(args.log), "requests.jsonl")
     _, http_port = _bind(ubi.serve, args.http_port, "http", requests_log)

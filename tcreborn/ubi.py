@@ -402,6 +402,10 @@ def _check_login(name: str, platform: str, body: dict, auth: str, client_ip: str
         return _login_refused(client_ip, name, "too many new names right now, try again later" if crowded
                               else "too many new names from this address, try again later")
     if verdict == "wrong":
+        if platform == "uplay" and account_key(name) == account_key("TheCrewReborn"):
+            return _login_refused(client_ip, name, "wrong password",
+                                  "wrong password (this PC plays as the fallback name TheCrewReborn: set your own "
+                                  "Name in reborn.ini)")
         return _login_refused(client_ip, name, "wrong password")
     if verdict == "missing":
         if platform == "uplay":
@@ -419,8 +423,10 @@ def _check_login(name: str, platform: str, body: dict, auth: str, client_ip: str
         return _login_refused(client_ip, name, "account store unavailable")
     if verdict == "full":
         limit = accounts.DEVICES_MAX
-        status, reply = _login_refused(client_ip, name, f"has {limit} devices; free one with tools/accounts.py")
-        return status, dict(reply, error=f"{name} has {limit} devices; free one with tools/accounts.py")
+        hint = (f"has {limit} devices; the owner frees the name with tools/accounts.py free NAME, "
+                "then its devices join again")
+        status, reply = _login_refused(client_ip, name, hint)
+        return status, dict(reply, error=f"{name} {hint}")
     if verdict == "linked":
         say(client_ip, f"login {client_ip}: {name}: new device linked "
                        f"({'home network' if home else 'link window'})", True)

@@ -16,7 +16,7 @@ From the [download page](https://thecrewreborn.github.io/#download) you need:
 3. **Playing on PC:** `TheCrewReborn-PC-<version>.zip`. Copy `dinput8.dll` and `reborn.ini` into the game folder,
    next to `TheCrew.exe`.
 
-Take all three from the same release. A server from 0.0.4 on refuses the login of older PS4 and PC patches.
+Take all three from the same release. A server from 0.0.4 on refuses the login of older patches without a password.
 
 Start the server first, then the game. Console and PC find the server on your network by themselves. The PS4
 remembers the server it found last: if you start the game before the server, start the server and try to log in
@@ -58,7 +58,7 @@ server address into `/data/TheCrew/server.txt` on the console (PS4).
 
 Each player name has its own save. The first login with a name claims it for the device that logs in; from then on
 only that name's devices can play it. Nobody types a password: each device makes its own key and sends each server
-only a code made from it. The key never leaves the device, and a code works only on the server it was made for.
+only a code made from it. The key never leaves the device, and a code is bound to the server's id, address and HTTPS port, so it works only on the server it was made for. A server that copies another server's id and sits at the same address and port in another network (for example a friend's home network with the same 192.168.x address) could learn a code that is valid on the original server.
 
 - **PS4 / PS5:** the patch creates `/data/TheCrew/console_key.txt` on its first start. The name is the PS4 user name.
 - **PC:** the DLL creates `TheCrewReborn.key` next to `reborn.ini`, or in `%LOCALAPPDATA%\TheCrewReborn` when the game
@@ -70,10 +70,10 @@ A key file copied to another console, or next to another PC's `reborn.ini`, play
 
 Names compare without case, and every character other than A-Z, a-z, 0-9, `-` and `_` counts as `_`: `Max.Power`,
 `max_power` and `MAX POWER` are one name and one save. A name has at most 32 characters of plain ASCII (letters,
-digits, spaces and signs, no umlauts or accents). The server refuses the name `Player`, and a PC cannot use
-`TheCrewReborn`: the DLL takes that name when `Name` (or the Windows user name) has fewer than 3 usable characters
-(letters A-Z, digits, `.`, `_` and `-`; umlauts are spelled out, other letters such as Cyrillic or Chinese are
-dropped). PC names are cut at 15 characters, so a PS4 name of 16 characters cannot be played on the PC.
+digits, spaces and signs, no umlauts or accents). The server refuses the name `Player`. A PC whose `Name` and Windows user name give
+fewer than 3 usable characters (letters A-Z, digits, `.`, `_` and `-`; umlauts are spelled out, other letters such as
+Cyrillic or Chinese are dropped) plays as `TheCrewReborn`, an ordinary name like any other. At home, two PCs that fall
+back to it join the same name and share one save, so set your own `Name` in `reborn.ini`. PC names are cut at 15 characters, so a PS4 name of 16 characters cannot be played on the PC.
 
 **One name on several devices (cross-save)**
 
@@ -84,7 +84,7 @@ to your PS4 user name, spelled exactly the same; it works the other way round to
   192.168.x, 127.x) becomes one of the name's devices at its first login.
 - **Over the internet** the server's owner opens a link window with `tools/accounts.py link NAME` (see "Looking
   after names"). For the next 10 minutes the first new device that logs in with that name joins it, and the window
-  closes.
+  closes. After several failed tries, wait 10 minutes before you open a link window.
 
 A name holds up to 16 devices. With `link_home = off` under `[server]` in `config.ini`, devices at home need a link
 window too. Switch it off when a proxy, a tunnel or a container port forward sits in front of the server: then every
@@ -376,6 +376,10 @@ These rules apply to every server, at home and on the internet:
   a device's code for this server (not its key) or a PC password, and log in with it on this server. Use a
   `Password` only for this server.
 - At home with `link_home = on`, every device on your home network can join any name.
+- A link window admits the first new device that logs in with the name, from anywhere. Open it only when the player is
+  ready to log in.
+- A device code is bound to the server's id, address and HTTPS port, not to its certificate. Play on servers of people
+  you trust, and back up your key files.
 - Only one server can run per IP address and port set.
 - Two devices of one name behind one IP address (for example a PS4 and a PC at home) knock each other out: each login
   ends the session of the other device.
@@ -422,7 +426,7 @@ Von der [Download-Seite](https://thecrewreborn.github.io/#download) brauchst du:
 3. **Spielen am PC:** `TheCrewReborn-PC-<Version>.zip`. Kopiere `dinput8.dll` und `reborn.ini` in den Spielordner,
    neben `TheCrew.exe`.
 
-Nimm alle drei aus demselben Release. Ein Server ab 0.0.4 lehnt die Anmeldung älterer PS4- und PC-Patches ab.
+Nimm alle drei aus demselben Release. Ein Server ab 0.0.4 lehnt die Anmeldung älterer Patches ohne Passwort ab.
 
 Starte zuerst den Server, dann das Spiel. Konsole und PC finden den Server im Heimnetz von selbst. Die PS4
 merkt sich den zuletzt gefundenen Server: Startest du das Spiel vor dem Server, starte den Server und melde dich
@@ -467,7 +471,7 @@ am PC `Host` in `reborn.ini` ein oder auf der PS4 die Serveradresse in `/data/Th
 Jeder Spielername hat seinen eigenen Spielstand. Der erste Login mit einem Namen reserviert ihn für das Gerät, das
 sich anmeldet; danach können nur noch die Geräte dieses Namens mit ihm spielen. Niemand tippt ein Passwort ein: Jedes
 Gerät erzeugt seinen eigenen Schlüssel und sendet jedem Server nur einen daraus erzeugten Code. Der Schlüssel verlässt
-das Gerät nie, und ein Code gilt nur für den Server, für den er erzeugt wurde.
+das Gerät nie, und ein Code ist an die ID, die Adresse und den HTTPS-Port des Servers gebunden, gilt also nur für den Server, für den er erzeugt wurde. Ein Server, der die ID eines anderen Servers übernimmt und in einem anderen Netz unter derselben Adresse und demselben Port steht (zum Beispiel im Heimnetz eines Freundes mit derselben 192.168.x-Adresse), könnte einen Code erfahren, der auf dem ursprünglichen Server gültig ist.
 
 - **PS4 / PS5:** Der Patch legt beim ersten Start `/data/TheCrew/console_key.txt` an. Der Name ist der
   PS4-Benutzername.
@@ -483,9 +487,11 @@ dort dieselben Namen.
 Namen werden ohne Groß- und Kleinschreibung verglichen, und jedes Zeichen außer A-Z, a-z, 0-9, `-` und `_` zählt als
 `_`: `Max.Power`, `max_power` und `MAX POWER` sind ein Name und ein Spielstand. Ein Name hat höchstens 32 Zeichen aus
 einfachem ASCII (Buchstaben, Ziffern, Leerzeichen und Satzzeichen, keine Umlaute oder Akzente). Den Namen `Player`
-lehnt der Server ab, und ein PC kann `TheCrewReborn` nicht verwenden: Diesen Namen nimmt die DLL, wenn `Name` (oder
-der Windows-Benutzername) weniger als 3 verwendbare Zeichen hat (Buchstaben A-Z, Ziffern, `.`, `_` und `-`; Umlaute
-werden ausgeschrieben, andere Buchstaben wie kyrillische oder chinesische fallen weg). PC-Namen werden nach 15 Zeichen
+lehnt der Server ab. Ein PC, dessen `Name` und dessen Windows-Benutzername weniger als 3 verwendbare Zeichen ergeben
+(Buchstaben A-Z, Ziffern, `.`, `_` und `-`; Umlaute werden ausgeschrieben, andere Buchstaben wie kyrillische oder
+chinesische fallen weg), spielt als `TheCrewReborn`, ein gewöhnlicher Name wie jeder andere. Zu Hause treten zwei PCs,
+die auf ihn zurückfallen, demselben Namen bei und teilen sich einen Spielstand. Trage deshalb einen eigenen `Name` in
+`reborn.ini` ein. PC-Namen werden nach 15 Zeichen
 abgeschnitten; einen PS4-Namen mit 16 Zeichen kannst du am PC also nicht spielen.
 
 **Ein Name auf mehreren Geräten (Cross-Save)**
@@ -498,7 +504,7 @@ ebenso. Ein neues Gerät tritt dem Namen einmal bei:
   172.16-31.x, 192.168.x, 127.x), wird bei seinem ersten Login zu einem Gerät des Namens.
 - **Über das Internet** öffnet der Betreiber des Servers mit `tools/accounts.py link NAME` ein Zeitfenster (siehe
   „Namen verwalten“). In den nächsten 10 Minuten tritt das erste neue Gerät, das sich mit diesem Namen anmeldet, dem
-  Namen bei, und das Zeitfenster schließt sich.
+  Namen bei, und das Zeitfenster schließt sich. Warte nach mehreren fehlgeschlagenen Versuchen 10 Minuten, bevor du ein Zeitfenster öffnest.
 
 Ein Name fasst bis zu 16 Geräte. Mit `link_home = off` unter `[server]` in `config.ini` brauchen auch Geräte zu Hause
 ein Zeitfenster. Schalte es aus, wenn ein Proxy, ein Tunnel oder eine Portweiterleitung eines Containers vor dem
@@ -811,6 +817,10 @@ Diese Regeln gelten für jeden Server, zu Hause und im Internet:
   mitliest, kann deshalb den Code eines Geräts für diesen Server (nicht seinen Schlüssel) oder ein PC-Passwort lesen
   und sich damit auf diesem Server anmelden. Verwende ein `Password` nur für diesen Server.
 - Zu Hause kann mit `link_home = on` jedes Gerät in deinem Heimnetz jedem Namen beitreten.
+- Ein Zeitfenster nimmt das erste neue Gerät auf, das sich mit dem Namen anmeldet, von überall her. Öffne es erst,
+  wenn der Spieler bereit ist, sich anzumelden.
+- Ein Gerätecode ist an die ID, die Adresse und den HTTPS-Port des Servers gebunden, nicht an sein Zertifikat. Spiele
+  nur auf Servern von Personen, denen du vertraust, und sichere deine Schlüsseldateien.
 - Pro IP-Adresse und Portsatz kann nur ein Server laufen.
 - Zwei Geräte eines Namens hinter einer IP-Adresse (zum Beispiel eine PS4 und ein PC zu Hause) werfen sich
   gegenseitig hinaus: Jeder Login beendet die Sitzung des anderen Geräts.
