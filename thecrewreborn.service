@@ -19,6 +19,8 @@ RestartSec=5
 Environment=PIP_NO_CACHE_DIR=1
 # Lets the server bind ports 80 and 443 without root.
 AmbientCapabilities=CAP_NET_BIND_SERVICE
+# Room for many players: every HTTP connection and capture file needs a file handle (the default limit is 1024).
+LimitNOFILE=65536
 # Hardening. ProtectSystem=full makes /usr, /boot and /etc read-only; /opt stays writable, so the server folder
 # (saves, captures, .venv) is unaffected. ProtectHome=true hides /home: do not put the server folder there.
 NoNewPrivileges=true

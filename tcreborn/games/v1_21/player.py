@@ -7,8 +7,14 @@ from dataclasses import dataclass, field
 from tcreborn.games.v1_21 import tables
 
 PERKS = 30
+
+
+PERK_MAX = 10
 STAT_COUNT = 438
 RECORD_FIELDS = 15
+
+MAX_RECORDS = 512
+U8, U16, U32 = 0xFF, 0xFFFF, 0xFFFFFFFF
 NO_ID = 0xFFFFFFFFFFFFFFFF
 
 PROLOGUE_DONE = 0x20000000078439C6
@@ -87,7 +93,25 @@ class Player:
 
     @property
     def cc(self) -> int:
-        return self.cc_fixed or self.crew_credits
+        return _fit(self.cc_fixed or self.crew_credits, U32)
+
+    def clamp(self) -> None:
+        from tcreborn.games.v1_21 import rewards
+        t = rewards.TABLES
+        self.bucks = _fit(self.bucks, min(t.max_bucks, U32) if t is not None else U32)
+        self.crew_credits = _fit(self.crew_credits, U32)
+        self.xp = _fit(self.xp, U32)
+        self.level = _fit(self.level, U8)
+        self.perk_points = _fit(self.perk_points, U16)
+        self.field12 = _fit(self.field12, U32)
+        if any(not 0 <= x <= PERK_MAX for x in self.perks):
+            self.perks = [_fit(x, PERK_MAX) for x in self.perks]
+        s = self.summit
+        if "tokens" in s and any(not 0 <= x <= U8 for x in s["tokens"]):
+            s["tokens"] = [_fit(x, U8) for x in s["tokens"]]
+        for k in ("threshold", "meter", "last_kind", "next_kind"):
+            if k in s:
+                s[k] = _fit(s[k], U8)
 
     def spend_cc(self, amount: int) -> bool:
         if self.cc < amount:
@@ -103,13 +127,15 @@ class Player:
 
     map_state: list[int] = field(default_factory=list)
 
+    earned: list = field(default_factory=list, repr=False, compare=False)
+
     @classmethod
     def load(cls, path: str | None) -> "Player":
         p = cls(path=path)
         if path and os.path.exists(path):
             with open(path) as f:
                 data = json.load(f)
-            p.stats = data["stats"] + [0] * max(0, STAT_COUNT - len(data["stats"]))
+            p.stats = data["stats"][:STAT_COUNT] + [0] * max(0, STAT_COUNT - len(data["stats"]))
             p.records = {(r["a"], r["b"]): r["fields"] for r in data["records"]}
             for k in STATE_KEYS:
                 if k in data:
@@ -122,31 +148,44 @@ class Player:
                     for f, x in v.items():
                         p.extra_fields.setdefault(f, x)
             p.extra_fields = {int(k): v for k, v in p.extra_fields.items()}
+            p.clamp()
         return p
 
     def save(self) -> None:
         if not self.path:
             return
+        self.clamp()
         os.makedirs(os.path.dirname(os.path.abspath(self.path)), exist_ok=True)
         tmp = self.path + ".tmp"
         with open(tmp, "w") as f:
             json.dump({"stats": self.stats,
                        "records": [{"a": a, "b": b, "fields": v} for (a, b), v in self.records.items()],
                        **{k: getattr(self, k) for k in STATE_KEYS}, "save_blob": self.save_blob.hex()}, f)
+            f.flush()
+            os.fsync(f.fileno())
         os.replace(tmp, self.path)
 
     def set_progress_bit(self, id_: int) -> None:
         set_bit(self.progress, id_)
 
     def set_stat(self, stat_id: int, value: int) -> None:
+
+        if stat_id >= STAT_COUNT:
+            return
         if stat_id >= len(self.stats):
             self.stats.extend([0] * (stat_id + 1 - len(self.stats)))
         self.stats[stat_id] = value
 
     def set_record_field(self, a: int, b: int, index: int, value: int) -> None:
+        if (a, b) not in self.records and len(self.records) >= MAX_RECORDS:
+            return
         rec = self.records.setdefault((a, b), [0] * RECORD_FIELDS)
         if index < RECORD_FIELDS:
             rec[index] = value
+
+
+def _fit(x: int, hi: int) -> int:
+    return min(max(int(x), 0), hi)
 
 
 def set_bit(words: list[int], n: int) -> bool:

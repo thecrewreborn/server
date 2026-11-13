@@ -61,6 +61,8 @@ class AccountStore:
             os.makedirs(os.path.dirname(os.path.abspath(self.path)), exist_ok=True)
             with open(tmp, "w") as f:
                 json.dump(data, f, indent=1)
+                f.flush()
+                os.fsync(f.fileno())
             st = os.stat(tmp)
             os.replace(tmp, self.path)
         except OSError as e:
@@ -128,6 +130,16 @@ class AccountStore:
         entry = data.get(save_name(name).lower())
         stored = entry.get("name") if isinstance(entry, dict) else None
         return stored if isinstance(stored, str) and stored else None
+
+    def claim_id(self, name: str) -> str | None:
+        with self._lock:
+            try:
+                data = self._load()
+            except OSError:
+                return None
+        entry = data.get(save_name(name).lower())
+        salt = entry.get("salt") if isinstance(entry, dict) else None
+        return salt if isinstance(salt, str) and salt else None
 
     def names(self) -> list[str]:
         return sorted(v["name"] for v in self.entries().values())

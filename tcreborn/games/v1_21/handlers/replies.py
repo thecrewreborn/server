@@ -41,7 +41,8 @@ def _activity_end(ctx: Ctx, request: bytes, template: bytes) -> bytes:
     p = ctx.player
     p.complete_activity(activity)
     if rewards.TABLES is not None:
-        rewards.apply(rewards.TABLES, p, *rewards.activity_reward(rewards.TABLES, activity, value, p.level))
+        xp, bucks = rewards.activity_reward(rewards.TABLES, activity, value, p.level)
+        rewards.apply(rewards.TABLES, p, *rewards.allow(p, ctx.now_us(), xp, bucks))
     p.save()
     return struct.pack(">BQ4I", 1, activity, p.level, p.xp, p.bucks, p.perk_points) + template[25:]
 
@@ -58,10 +59,11 @@ def _mission_result(ctx: Ctx, request: bytes, template: bytes) -> bytes:
     if t is not None:
         bucks = int(rewards._f32(t.f(rewards.BUCKS_BASE + p.level - 1) * BUILDER_FACTOR))
         xp = int(rewards._f32(t.f(rewards.XP_BASE + p.level - 1) * BUILDER_FACTOR))
+        xp, bucks = rewards.allow(p, ctx.now_us(), xp, bucks)
         rewards.add_bucks(t, p, bucks)
         rewards.add_xp(t, p, xp)
     if mission:
-        finish_mission(p, mission, 0, paid=False)
+        finish_mission(p, mission, 0, ctx.now_us(), paid=False)
     p.save()
     from tcreborn.wire import u64_array
 

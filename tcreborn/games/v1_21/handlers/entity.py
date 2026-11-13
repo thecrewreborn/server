@@ -5,12 +5,16 @@ import struct
 from tcreborn.games.v1_21.handlers import Ctx, register
 from tcreborn.wire import blob
 
+MAX_SAVE_BLOB = 4096
+
 
 @register(0x7C40F0EC, "SAVE_UPLOAD")
 def save_upload(ctx: Ctx, body: bytes):
     (length,) = struct.unpack_from(">I", body, 8)
-    ctx.player.save_blob = body[12:12 + length]
-    ctx.player.save()
+    data = body[12:12 + length]
+    if len(data) <= MAX_SAVE_BLOB:
+        ctx.player.save_blob = data
+        ctx.player.save()
     return 0x7FA0C5DE, bytes.fromhex("000001")
 
 

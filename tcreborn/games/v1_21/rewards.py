@@ -4,6 +4,7 @@ import json
 import os
 import random
 import struct
+import threading
 from dataclasses import dataclass, field
 
 from tcreborn.games.v1_21 import tables
@@ -160,3 +161,31 @@ def add_xp(t: RewardTables, player, d: int) -> None:
 def apply(t: RewardTables, player, xp: int, bucks: int) -> None:
     add_bucks(t, player, bucks)
     add_xp(t, player, xp)
+
+
+EARN_WINDOW_US = 60_000_000
+EARN_WINDOW_BUCKS, EARN_WINDOW_XP = 200_000, 50_000
+_earned: dict[str, list[tuple[int, int, int]]] = {}
+_earned_lock = threading.Lock()
+
+
+def allow(player, now_us: int, xp: int, bucks: int) -> tuple[int, int]:
+    with _earned_lock:
+        start = now_us - EARN_WINDOW_US
+        for k in [k for k, v in _earned.items() if not v or v[-1][0] <= start]:
+            del _earned[k]
+        book = _earned.get(player.path, []) if player.path else player.earned
+        recent = [e for e in book if e[0] > start]
+        got_bucks, got_xp = sum(e[1] for e in recent), sum(e[2] for e in recent)
+        if bucks > 0:
+            bucks = max(0, min(bucks, EARN_WINDOW_BUCKS - got_bucks))
+        if xp > 0:
+            xp = max(0, min(xp, EARN_WINDOW_XP - got_xp))
+        if bucks > 0 or xp > 0:
+            recent.append((now_us, max(bucks, 0), max(xp, 0)))
+        if player.path:
+            if recent:
+                _earned[player.path] = recent
+        else:
+            player.earned[:] = recent
+    return xp, bucks

@@ -28,21 +28,42 @@ def answer(probe: bytes, peer: str, relay_port: int, http_port: int, advertise: 
             + (https_port.to_bytes(2, "big") if https_port else b""))
 
 
+def no_connreset(sock) -> None:
+    if hasattr(socket, "SIO_UDP_CONNRESET"):
+        try:
+            sock.ioctl(socket.SIO_UDP_CONNRESET, False)
+        except (OSError, ValueError):
+            pass
+
+
+def run(sock, relay_port: int, http_port: int, advertise: str | None = None, bots: bool = False,
+        afk: bool = False, https_port: int = 0, dlc: bool = False) -> None:
+    no_connreset(sock)
+    while True:
+        try:
+            data, addr = sock.recvfrom(512)
+        except OSError:
+            if sock.fileno() == -1:
+                return
+            continue
+        try:
+            reply = answer(data, addr[0], relay_port, http_port, advertise, bots, afk, https_port, dlc)
+            if reply:
+                sock.sendto(reply, addr)
+                client = data[len(PROBE):].decode("ascii", "replace").strip() or "no version"
+                client = "".join(c if c.isprintable() else "?" for c in client[:64])
+                print(f"[{datetime.datetime.now():%H:%M:%S}] discovery {addr[0]} ({client}) -> "
+                      f"{socket.inet_ntoa(reply[6:10])}", flush=True)
+        except Exception:
+            continue
+
+
 def serve(relay_port: int, http_port: int, advertise: str | None = None, port: int = DISCOVERY_PORT,
           bots: bool = False, afk: bool = False, https_port: int = 0, dlc: bool = False):
     sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
     sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
     sock.setsockopt(socket.SOL_SOCKET, socket.SO_BROADCAST, 1)
     sock.bind(("0.0.0.0", port))
-
-    def run() -> None:
-        while True:
-            data, addr = sock.recvfrom(512)
-            reply = answer(data, addr[0], relay_port, http_port, advertise, bots, afk, https_port, dlc)
-            if reply:
-                sock.sendto(reply, addr)
-                client = data[len(PROBE):].decode("ascii", "replace").strip() or "no version"
-                print(f"[{datetime.datetime.now():%H:%M:%S}] discovery {addr[0]} ({client}) -> "
-                      f"{socket.inet_ntoa(reply[6:10])}", flush=True)
-    threading.Thread(target=run, daemon=True).start()
+    threading.Thread(target=run, args=(sock, relay_port, http_port, advertise, bots, afk, https_port, dlc),
+                     daemon=True).start()
     return sock

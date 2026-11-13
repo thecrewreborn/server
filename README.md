@@ -92,10 +92,29 @@ server address into `/data/TheCrew/server.txt` on the console (PS4).
 
 By default the server is for your own network: anyone who reaches it plays, and names are not protected. To open it
 to other players over the internet, set `public = on` in the `[server]` section of `config.ini` (default: off;
-`config.example.ini` shows the line). Home play without that setting works as before, with one rule for every
-server: two games cannot play the same name at the same time. For that check names compare without case, and every
-character other than A-Z, a-z, 0-9, `-` and `_` counts as `_` (`Max.Power`, `max_power` and `MAX POWER` are one
-name).
+`config.example.ini` shows the line). Home play without that setting works as before, apart from the changes in the
+next list.
+
+**What changes at home (`public = off`)**
+
+These changes apply to every server, also without `public = on`:
+
+- Two games cannot play the same name at the same time. For that check names compare without case, and every
+  character other than A-Z, a-z, 0-9, `-` and `_` counts as `_` (`Max.Power`, `max_power` and `MAX POWER` are one
+  name). A PS4 login without a name plays as `Player`.
+- `requests.jsonl` hides secrets: tickets, passwords and keys in the `Authorization` header, and the values of query
+  parameters whose name contains ticket, token, key or pass (`?ticket=***`). Bodies over 4096 bytes are cut. A log
+  file that passes 256 MB moves to `<name>.1`. A failing log write no longer stops the server.
+- When the server takes port 8080 instead of 80, the service configuration names that port.
+- HTTP: at most 16 open connections per address and 512 in all. A new connection has 15 seconds for its first
+  request line; an idle connection is closed after 120 seconds. A body over 300 000 bytes gets error 413.
+- `[server] ip` must be an IPv4 address; the server ignores any other value and says so at start.
+- `[world] multiplayer`: without the line multiplayer is on at home. An empty value (`multiplayer =`) means off, as
+  before. `config.example.ini` now leaves the line commented out.
+- Avatars: a console picture over 2 MB or larger than 1024 x 1024 pixels gets the default picture.
+- The server drops game requests over 64 KB (the largest the games send has about 20 KB).
+- When a save loads, values too large for the game's fields (money, levels, perk levels and the like) are cut to
+  the largest value that fits.
 
 **What `public = on` does**
 
@@ -153,18 +172,22 @@ multiplayer = off
 
 - `ip` is the address the server announces to the game, and the game connects to it. With `public = on` the server
   also puts it into the service configuration the game fetches at start. Set it to the server's public IPv4
-  address (not a hostname). Without it the server announces its address in its own network, which players on the
-  internet cannot reach.
-- `multiplayer = off`: multiplayer over the internet does not work yet (see "Limits").
+  address (not a hostname). The server ignores any other value and says so at start. Without it the server announces
+  its address in its own network, which players on the internet cannot reach.
+- `multiplayer`: with `public = on` multiplayer is off unless `config.ini` sets it, because multiplayer over the
+  internet does not work yet (see "Limits"). An empty value (`multiplayer =`) is off too. A `config.ini` made from
+  an older `config.example.ini` contains `multiplayer = on`: change it to `off` or leave the value empty.
 - Test the first login yourself from another network, PS4 or PC, before you invite players.
 
 **Logs**
 
-The `captures` folder grows while people play: about 40 KB per minute of play and player (measured). The server
-has no switch to turn the logs off; `--log PATH` after `./start-server.sh` (or at the end of `ExecStart=` in the
+The `captures` folder grows while people play: about 50 to 100 KB per minute of play and player. A log file that
+passes 256 MB moves to `<name>.1` (replacing an older `.1`), so each log takes at most about 512 MB. With
+`public = on` the logs hold only the traffic of connected games, and long entries are cut. The server has no switch
+to turn the logs off; `--log PATH` after `./start-server.sh` (or at the end of `ExecStart=` in the
 unit) only moves them: the 1.21 relay log goes to PATH, `requests.jsonl` and `v100.jsonl` into the same folder. The
 server opens each log for every entry, so you may move or delete the files at any time; it starts new ones. To keep
-the folder small, delete old files now and then, or let logrotate do it with a file
+the folder smaller, delete old files now and then, or let logrotate do it with a file
 `/etc/logrotate.d/thecrewreborn` (adjust the path and the user):
 
 ```
@@ -210,7 +233,8 @@ total and 10 TB of outbound data per month. The server needs a small fraction of
 5. Install the unit: edit `User=` and the two paths in `thecrewreborn.service` if yours differ (keep the folder out
    of `/home`), then `sudo cp thecrewreborn.service /etc/systemd/system/` and
    `sudo systemctl daemon-reload && sudo systemctl enable --now thecrewreborn`.
-   Logs: `journalctl -u thecrewreborn -f`. The unit grants the right to bind ports 80 and 443 without root.
+   Logs: `journalctl -u thecrewreborn -f`. The unit grants the right to bind ports 80 and 443 without root and
+   raises the limit of open files to 65536 (`LimitNOFILE`): every connection and log file takes one.
 6. Check from another network: `curl -k https://<public-ip>/version` must answer.
 
 Oracle states that it may reclaim an idle Always Free instance: when for 7 days CPU use (95th percentile), network
@@ -232,6 +256,11 @@ one forwarding per port. If your provider changes the address, update `ip` in `c
 - The games accept any server certificate, so someone on the network path between a player and the server can read
   the PC password or the console key. Players should use a password only for this server.
 - Only one server can run per IP address and port set.
+- One account plays on one device at a time. A login from a second IP address is refused while the first device
+  plays. Two devices behind one IP address (for example a PS4 and a PC at home) knock each other out: each login
+  ends the session of the other device.
+- Players behind one IP address share limits: at most 16 open HTTP connections and 32 games that have not finished
+  their login at the same time.
 - Anyone who can read a player's network traffic and knows the public relay key can replay that player's login ticket
   for up to 3 hours. Only an attacker on the network path can do this.
 
@@ -355,9 +384,30 @@ am PC `Host` in `reborn.ini` ein oder auf der PS4 die Serveradresse in `/data/Th
 Standardmäßig ist der Server für dein eigenes Netzwerk gedacht: Jeder, der ihn erreicht, spielt mit, Namen sind nicht
 geschützt. Damit auch andere Spieler über das Internet mitspielen können, setze in `config.ini` im Abschnitt
 `[server]` die Zeile `public = on` (Standard: aus; `config.example.ini` zeigt die Zeile). Das Spielen zu Hause
-funktioniert ohne diese Einstellung wie bisher, mit einer Regel für jeden Server: Zwei Spiele können nicht
-gleichzeitig mit demselben Namen spielen. Bei dieser Prüfung zählt Groß- und Kleinschreibung nicht, und jedes
-Zeichen außer A-Z, a-z, 0-9, `-` und `_` zählt als `_` (`Max.Power`, `max_power` und `MAX POWER` sind ein Name).
+funktioniert ohne diese Einstellung wie bisher, bis auf die Änderungen in der folgenden Liste.
+
+**Was sich zu Hause ändert (`public = off`)**
+
+Diese Änderungen gelten für jeden Server, auch ohne `public = on`:
+
+- Zwei Spiele können nicht gleichzeitig mit demselben Namen spielen. Bei dieser Prüfung zählt Groß- und
+  Kleinschreibung nicht, und jedes Zeichen außer A-Z, a-z, 0-9, `-` und `_` zählt als `_` (`Max.Power`, `max_power`
+  und `MAX POWER` sind ein Name). Ein PS4-Login ohne Namen spielt als `Player`.
+- `requests.jsonl` verbirgt Geheimnisse: Tickets, Passwörter und Schlüssel im `Authorization`-Header sowie die Werte
+  von Abfrageparametern, deren Name ticket, token, key oder pass enthält (`?ticket=***`). Inhalte über 4096 Bytes
+  werden gekürzt. Eine Logdatei über 256 MB wird zu `<Name>.1`. Ein fehlgeschlagener Logeintrag hält den Server
+  nicht mehr an.
+- Nimmt der Server Port 8080 statt 80, nennt die Dienstkonfiguration diesen Port.
+- HTTP: höchstens 16 offene Verbindungen pro Adresse und 512 insgesamt. Eine neue Verbindung hat 15 Sekunden für
+  ihre erste Anfragezeile; eine untätige Verbindung wird nach 120 Sekunden geschlossen. Ein Inhalt über 300 000 Bytes
+  erhält den Fehler 413.
+- `[server] ip` muss eine IPv4-Adresse sein; jeden anderen Wert ignoriert der Server und meldet das beim Start.
+- `[world] multiplayer`: Ohne die Zeile ist Mehrspieler zu Hause an. Ein leerer Wert (`multiplayer =`) bedeutet aus,
+  wie bisher. `config.example.ini` enthält die Zeile jetzt nur als Kommentar.
+- Avatare: Ein Konsolenbild über 2 MB oder größer als 1024 x 1024 Pixel erhält das Standardbild.
+- Der Server verwirft Spielanfragen über 64 KB (die größte, die die Spiele senden, hat etwa 20 KB).
+- Beim Laden eines Spielstands werden Werte, die zu groß für die Felder des Spiels sind (Geld, Stufen,
+  Perk-Stufen und Ähnliches), auf den größten passenden Wert gekürzt.
 
 **Was `public = on` bewirkt**
 
@@ -420,18 +470,24 @@ multiplayer = off
 
 - `ip` ist die Adresse, die der Server dem Spiel mitteilt; mit ihr verbindet sich das Spiel. Mit `public = on`
   trägt der Server sie auch in die Dienstkonfiguration ein, die das Spiel beim Start abruft. Trage die öffentliche
-  IPv4-Adresse des Servers ein (keinen Hostnamen). Ohne diese Zeile teilt der Server seine Adresse im eigenen
-  Netzwerk mit, die Spieler im Internet nicht erreichen.
-- `multiplayer = off`: Mehrspieler über das Internet funktioniert noch nicht (siehe „Grenzen“).
+  IPv4-Adresse des Servers ein (keinen Hostnamen). Jeden anderen Wert ignoriert der Server und meldet das beim
+  Start. Ohne diese Zeile teilt der Server seine Adresse im eigenen Netzwerk mit, die Spieler im Internet nicht
+  erreichen.
+- `multiplayer`: Mit `public = on` ist Mehrspieler aus, solange `config.ini` den Wert nicht setzt, denn Mehrspieler
+  über das Internet funktioniert noch nicht (siehe „Grenzen“). Ein leerer Wert (`multiplayer =`) bedeutet ebenfalls
+  aus. Eine aus einer älteren `config.example.ini` erstellte `config.ini` enthält `multiplayer = on`: Ändere den Wert
+  auf `off` oder lass ihn leer.
 - Teste den ersten Login selbst aus einem anderen Netzwerk, mit PS4 oder PC, bevor du Spieler einlädst.
 
 **Logs**
 
-Der Ordner `captures` wächst, während gespielt wird: etwa 40 KB pro Spielminute und Spieler (gemessen). Der Server
-hat keinen Schalter, der die Logs abschaltet; `--log PFAD` hinter `./start-server.sh` (oder am Ende von
+Der Ordner `captures` wächst, während gespielt wird: etwa 50 bis 100 KB pro Spielminute und Spieler. Überschreitet
+eine Log-Datei 256 MB, benennt der Server sie in `<Name>.1` um (eine ältere `.1` wird ersetzt); jedes Log belegt
+also höchstens etwa 512 MB. Mit `public = on` enthalten die Logs nur den Verkehr verbundener Spiele, und lange
+Einträge werden gekürzt. Der Server hat keinen Schalter, der die Logs abschaltet; `--log PFAD` hinter `./start-server.sh` (oder am Ende von
 `ExecStart=` in der Unit) verschiebt sie nur: Das Relay-Log von 1.21 landet in PFAD, `requests.jsonl` und
 `v100.jsonl` im selben Ordner. Der Server öffnet jedes Log für jeden Eintrag neu; du kannst die Dateien also
-jederzeit verschieben oder löschen, er legt neue an. Damit der Ordner klein bleibt, lösche alte Dateien ab und zu
+jederzeit verschieben oder löschen, er legt neue an. Damit der Ordner kleiner bleibt, lösche alte Dateien ab und zu
 oder überlasse das logrotate mit einer Datei `/etc/logrotate.d/thecrewreborn` (passe Pfad und Benutzer an):
 
 ```
@@ -479,7 +535,8 @@ Arbeitsspeicher sowie 10 TB ausgehenden Datenverkehr pro Monat. Der Server brauc
 5. Installiere die Unit: Passe `User=` und die beiden Pfade in `thecrewreborn.service` an, falls deine abweichen
    (lege den Ordner nicht unter `/home`), dann `sudo cp thecrewreborn.service /etc/systemd/system/` und
    `sudo systemctl daemon-reload && sudo systemctl enable --now thecrewreborn`.
-   Logs: `journalctl -u thecrewreborn -f`. Die Unit erlaubt das Belegen der Ports 80 und 443 ohne root.
+   Logs: `journalctl -u thecrewreborn -f`. Die Unit erlaubt das Belegen der Ports 80 und 443 ohne root und hebt
+   die Grenze für offene Dateien auf 65536 an (`LimitNOFILE`): Jede Verbindung und jede Log-Datei belegt eine.
 6. Prüfe aus einem anderen Netzwerk: `curl -k https://<öffentliche-IP>/version` muss antworten.
 
 Oracle gibt an, dass eine ungenutzte Always-Free-Instanz zurückgefordert werden kann: wenn 7 Tage lang CPU-Auslastung
@@ -504,6 +561,11 @@ an; PS4-Spieler müssen `server.txt` anpassen, PC-Spieler können einen DynDNS-H
   mitliest, kann deshalb das PC-Passwort oder den Konsolenschlüssel lesen. Spieler sollten ein Passwort nur für
   diesen Server verwenden.
 - Pro IP-Adresse und Portsatz kann nur ein Server laufen.
+- Ein Account spielt immer nur auf einem Gerät. Ein Login von einer zweiten IP-Adresse wird abgelehnt, solange das
+  erste Gerät spielt. Zwei Geräte hinter einer IP-Adresse (zum Beispiel eine PS4 und ein PC zu Hause) werfen sich
+  gegenseitig hinaus: Jeder Login beendet die Sitzung des anderen Geräts.
+- Spieler hinter einer IP-Adresse teilen sich Grenzen: höchstens 16 offene HTTP-Verbindungen und 32 Spiele, die ihren
+  Login noch nicht abgeschlossen haben, gleichzeitig.
 - Wer den Netzwerkverkehr eines Spielers mitlesen kann und den öffentlichen Relay-Schlüssel kennt, kann das
   Login-Ticket dieses Spielers bis zu 3 Stunden lang wiederverwenden. Das kann nur ein Angreifer auf dem
   Netzwerkpfad.

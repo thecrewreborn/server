@@ -17,6 +17,12 @@ USER_PATH = re.compile(r"/avatars/(0x[0-9A-F]{8})\.png")
 NAME_PATH = re.compile(r"/avatars/name/([A-Za-z0-9_-]{3,16})\.png")
 FTP_PORT = 2121
 CACHE = "/system_data/priv/cache/profile"
+MAX_DOWNLOAD = 2 * 2 ** 20
+MAX_SIDE = 1024
+
+
+class TooLarge(ftplib.Error):
+    pass
 
 
 def _chunk(kind: bytes, data: bytes) -> bytes:
@@ -57,7 +63,10 @@ def _decode(data: bytes) -> tuple[int, int, bytes]:
     channels = {0: 1, 2: 3, 4: 2, 6: 4}.get(color)
     if depth != 8 or interlace or not channels:
         raise ValueError(f"unsupported PNG (depth {depth}, color {color}, interlace {interlace})")
-    raw, stride = zlib.decompress(idat), channels * width
+    if width > MAX_SIDE or height > MAX_SIDE:
+        raise ValueError(f"picture too large ({width}x{height})")
+    stride = channels * width
+    raw = zlib.decompressobj().decompress(idat, height * (stride + 1))
     out, prev = bytearray(), bytearray(stride)
     for y in range(height):
         kind, line = raw[y * (stride + 1)], bytearray(raw[y * (stride + 1) + 1:(y + 1) * (stride + 1)])
@@ -94,6 +103,8 @@ def _box(width: int, height: int, rgba: bytes, size: int) -> bytes:
 
 def fit(data: bytes) -> bytes:
     width, height, depth, color, _, _, interlace = struct.unpack(">IIBBBBB", data[16:29])
+    if width > MAX_SIDE or height > MAX_SIDE:
+        raise ValueError(f"picture too large ({width}x{height})")
     square = width == height and width & (width - 1) == 0 and width <= FIT
     if data[:8] == b"\x89PNG\r\n\x1a\n" and square and (depth, color, interlace) == (8, 6, 0):
         return data
@@ -137,7 +148,12 @@ def fetch_from_console(ip: str, user: str) -> bytes:
     try:
         ftp.login()
         buf = io.BytesIO()
-        ftp.retrbinary(f"RETR {CACHE}/{user}/avatar.png", buf.write)
+
+        def take(block: bytes) -> None:
+            if buf.tell() + len(block) > MAX_DOWNLOAD:
+                raise TooLarge(f"picture larger than {MAX_DOWNLOAD} bytes")
+            buf.write(block)
+        ftp.retrbinary(f"RETR {CACHE}/{user}/avatar.png", take)
         return buf.getvalue()
     finally:
         ftp.close()
@@ -171,7 +187,11 @@ def for_request(name: str | None, path: str, client_ip: str) -> bytes:
         if os.path.exists(file):
             break
     else:
-        file = _console_picture(client_ip, m.group(1)) if m else CONSOLE_BY_NAME.get(name or "")
+        from tcreborn import ubi
+        if m and ubi.ACCOUNTS is not None:
+            file = None
+        else:
+            file = _console_picture(client_ip, m.group(1)) if m else CONSOLE_BY_NAME.get(name or "")
         if m and file and name:
             CONSOLE_BY_NAME[name] = file
     if file:

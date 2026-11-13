@@ -59,6 +59,8 @@ class SessionStore:
             os.makedirs(os.path.dirname(os.path.abspath(self.path)), exist_ok=True)
             with open(tmp, "w") as f:
                 json.dump(entries, f, indent=1)
+                f.flush()
+                os.fsync(f.fileno())
             os.replace(tmp, self.path)
         except OSError as e:
             print(f"could not write {self.path}: {e}", flush=True)

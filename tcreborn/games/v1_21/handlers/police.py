@@ -9,11 +9,15 @@ from tcreborn.wire import T_ARRAY, blob, empty_array, frame
 
 NO_ID = 0xFFFFFFFFFFFFFFFF
 HEAT_CAP = 100000.0
+
+
+WANTED_CAP = 100000
 CHASE_CAR = (0x2522F39, 0x794C74A)
 
 
 def chase(p, escaped: bool, wanted: int, start: int, now: int) -> int:
     h = min(p.heat, HEAT_CAP)
+    wanted = min(wanted, WANTED_CAP)
     xp = int(wanted * 0.4) + 100 + int(0.05 * h)
     if escaped:
         bonus, fine = int(0.2 * h), 0
@@ -25,6 +29,7 @@ def chase(p, escaped: bool, wanted: int, start: int, now: int) -> int:
         fine = max(-500 - int(0.2 * h) - int(wanted * 0.5), -50000)
         bucks = fine
         p.heat = 1.0
+    xp, bucks = rewards.allow(p, now * 1_000_000, xp, bucks)
     if rewards.TABLES is not None:
         rewards.add_bucks(rewards.TABLES, p, bucks)
         rewards.add_xp(rewards.TABLES, p, xp)

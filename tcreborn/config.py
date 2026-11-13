@@ -1,6 +1,7 @@
 # The Crew Reborn - Knutwurst
 # https://thecrewreborn.github.io - https://ko-fi.com/knutwurst
 import configparser
+import ipaddress
 import os
 import socket
 
@@ -11,9 +12,23 @@ GAME_RELAY = ("185.38.20.88", 4000)
 RELAY = ("0.0.0.0", 4000)
 
 
+_cached: tuple[str, object, configparser.ConfigParser] | None = None
+
+
 def _load() -> configparser.ConfigParser:
+    global _cached
+    path = os.environ.get("TCREBORN_CONFIG", os.path.join(ROOT, "config.ini"))
+    try:
+        st = os.stat(path)
+        sig: object = (st.st_mtime_ns, st.st_size, st.st_ino)
+    except OSError:
+        sig = None
+    cached = _cached
+    if cached is not None and cached[0] == path and cached[1] == sig:
+        return cached[2]
     cfg = configparser.ConfigParser()
-    cfg.read(os.environ.get("TCREBORN_CONFIG", os.path.join(ROOT, "config.ini")))
+    cfg.read(path)
+    _cached = (path, sig, cfg)
     return cfg
 
 
@@ -30,8 +45,29 @@ def server_ip() -> str:
     return advertised_ip() or lan_ip()
 
 
+def _server_ip_setting() -> str:
+    return _load().get("server", "ip", fallback="").strip()
+
+
+def _is_ipv4(value: str) -> bool:
+    try:
+        ipaddress.IPv4Address(value)
+    except ValueError:
+        return False
+    return True
+
+
 def advertised_ip() -> str | None:
-    return _load().get("server", "ip", fallback="") or None
+    value = _server_ip_setting()
+    return value if value and _is_ipv4(value) else None
+
+
+def server_ip_problem() -> str | None:
+    value = _server_ip_setting()
+    if not value or _is_ipv4(value):
+        return None
+    return (f"config.ini [server] ip = {value} is not an IPv4 address (like 203.0.113.5); it is ignored and the "
+            f"server announces the address the game reaches it at")
 
 
 def http_port() -> int:
@@ -105,7 +141,11 @@ def bots() -> bool:
 
 
 def multiplayer() -> bool:
-    return _load().get("world", "multiplayer", fallback="on").strip().lower() in ("on", "1", "true", "yes")
+    cfg = _load()
+    if not cfg.has_option("world", "multiplayer"):
+        from tcreborn import ubi
+        return ubi.ACCOUNTS is None
+    return cfg.get("world", "multiplayer").strip().lower() in ("on", "1", "true", "yes")
 
 
 def afk_kick() -> bool:

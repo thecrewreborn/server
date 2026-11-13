@@ -61,6 +61,7 @@ NO_REPLY = b""
 
 def handle(ctx: Ctx, req_id: int, body: bytes) -> bytes | None:
     if req_id in HANDLERS:
+        ctx.player.clamp()
         result = HANDLERS[req_id](ctx, body)
         return NO_REPLY if result is None else frame(*result)
     if req_id in AUTO:

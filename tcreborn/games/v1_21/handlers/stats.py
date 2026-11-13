@@ -11,6 +11,7 @@ def read_array(body: bytes, pos: int, item_size: int) -> tuple[list[bytes], int]
     (size,) = struct.unpack_from(">I", body, pos)
     (count,) = struct.unpack_from(">I", body, pos + 4 + 12)
     start = pos + 4 + 16
+    count = min(count, max(0, (len(body) - start) // item_size))
     return [body[start + i * item_size:start + (i + 1) * item_size] for i in range(count)], pos + 4 + size
 
 

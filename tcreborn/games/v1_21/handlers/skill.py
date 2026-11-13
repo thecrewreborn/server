@@ -18,6 +18,7 @@ def skill_result(ctx: Ctx, body: bytes):
     delta = value - (p.skill_last if p.skill_last <= value else 0)
     ok = delta <= SKILL_CAP
     if ok:
+        _xp, delta = rewards.allow(p, ctx.now_us(), 0, delta)
         if rewards.TABLES is not None:
             rewards.add_bucks(rewards.TABLES, p, delta)
         else:

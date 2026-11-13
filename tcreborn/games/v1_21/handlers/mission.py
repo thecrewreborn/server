@@ -8,13 +8,22 @@ from tcreborn.games.v1_21.player import ALL_ABILITIES
 from tcreborn.wire import T_ARRAY, blob, empty_array, frame, u64_array
 
 
-def finish_mission(p, mission: int, score: int, paid: bool = True) -> None:
+def finish_mission(p, mission: int, score: int, now_us: int, paid: bool = True) -> None:
     p.complete_mission(mission)
     if rewards.TABLES is not None:
         if paid:
-            rewards.apply(rewards.TABLES, p, *rewards.mission_reward(rewards.TABLES, mission, score, p.level))
+            xp, bucks = rewards.mission_reward(rewards.TABLES, mission, score, p.level)
+            rewards.apply(rewards.TABLES, p, *rewards.allow(p, now_us, xp, bucks))
         earned = rewards.abilities(rewards.TABLES, p.missions_done)
         p.abilities = list(ALL_ABILITIES) if p.free_roam else earned
+
+
+def is_dealer(mission: int) -> bool:
+    return cars.CATALOG is not None and mission == cars.CATALOG.dealer
+
+
+def pays_dealer(p, mission: int) -> bool:
+    return is_dealer(mission) and mission not in p.missions_done
 
 
 def dealer_car(p, body: bytes) -> bytes | None:
@@ -45,6 +54,23 @@ def dealer_car(p, body: bytes) -> bytes | None:
             + struct.pack(">H", 0))
 
 
+def owned_dealer_car(p, body: bytes) -> bytes | None:
+    c = cars.CATALOG
+    variant = struct.unpack_from(">Q", body, 0x3A)[0]
+    v = c.variants.get(variant) if c is not None else None
+    if v is None:
+        return None
+    model = int(v["model"], 16)
+    configs = next((cs for m, cs in cars.entries(p) if m == model), None)
+    if not configs:
+        return None
+    k = next((i for i, cfg in enumerate(configs) if cars.variant_of(cfg) == variant), len(configs) - 1)
+    shown = [cars.with_state(cfg, cars.NEW) if i == k else cfg for i, cfg in enumerate(configs)]
+    s = list(struct.unpack_from(">38H", configs[k], 0x23))
+    return (struct.pack(">Q", model) + cars.array(len(shown), b"".join(shown)) + cars.part_list(s)
+            + struct.pack(">H", 0))
+
+
 def reward_part(p, mission: int, score: int, body: bytes) -> int | None:
     t = rewards.TABLES
     m = t.missions.get(mission) if t is not None else None
@@ -59,9 +85,10 @@ def reward_part(p, mission: int, score: int, body: bytes) -> int | None:
 def mission_end(ctx: Ctx, body: bytes):
     mission, score = struct.unpack_from(">QI", body, 0x1C)
     p = ctx.player
-    finish_mission(p, mission, score)
+    dealer = pays_dealer(p, mission)
+    finish_mission(p, mission, score, ctx.now_us())
     part = reward_part(p, mission, score, body)
-    car = dealer_car(p, body) if cars.CATALOG is not None and mission == cars.CATALOG.dealer else None
+    car = dealer_car(p, body) if dealer else owned_dealer_car(p, body) if is_dealer(mission) else None
     p.save()
     if car is None:
         car = struct.pack(">q", -1) + 2 * empty_array() + struct.pack(">H", 0x20)

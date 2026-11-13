@@ -3,7 +3,9 @@
 import base64
 import binascii
 import datetime
+import io
 import json
+import os
 import re
 import ssl
 import sys
@@ -144,6 +146,41 @@ def _now() -> float:
     return time.monotonic()
 
 
+LOG_ROTATE_BYTES = 256 * 2 ** 20
+LOG_HEX = 2048
+LOG_PATH = 2048
+_LOG_WARNED = [-1e9]
+_LOG_WARN_LOCK = threading.Lock()
+
+
+def append_log(path: str, line: str) -> None:
+    with open(path, "a") as f:
+        full = f.tell() >= LOG_ROTATE_BYTES
+        if not full:
+            f.write(line)
+    if full:
+        os.replace(path, path + ".1")
+        with open(path, "a") as f:
+            f.write(line)
+
+
+def log_failed(path: str, err: BaseException) -> None:
+    with _LOG_WARN_LOCK:
+        now = _now()
+        if now - _LOG_WARNED[0] < 60:
+            return
+        _LOG_WARNED[0] = now
+    try:
+        print(f"[{datetime.datetime.now():%H:%M:%S}] cannot write {path}: {err} (the server goes on without "
+              f"this log; this message repeats at most once a minute)", flush=True)
+    except (OSError, ValueError):
+        pass
+
+
+def printable(text: str, limit: int = LOG_PATH) -> str:
+    return "".join(c if c.isprintable() else "?" for c in text[:limit])
+
+
 def _save_key(name: str) -> str:
     from tcreborn.saves import save_name
     return save_name(name).lower()
@@ -170,7 +207,8 @@ def logout(client_ip: str) -> None:
 
 ACCOUNTS: AccountStore | None = None
 TICKET_TTL = 3 * 3600
-TICKETS: dict[str, tuple[str, str, float]] = {}
+
+TICKETS: dict[str, tuple[str, str, float, str | None]] = {}
 FAILED: dict[str, list[float]] = {}
 FAIL_LIMIT, FAIL_WINDOW = 5, 600.0
 CLAIMS: dict[str, list[float]] = {}
@@ -194,20 +232,28 @@ def credential(body: dict, auth: str) -> str:
     return ticket.partition("|")[2]
 
 
+def _claim_id(name: str) -> str | None:
+    return ACCOUNTS.claim_id(name) if ACCOUNTS is not None else None
+
+
 def ticket_owner(ticket: str) -> tuple[str, str] | None:
     with _AUTH_LOCK:
         entry = TICKETS.get(ticket)
     if entry is None or _now() - entry[2] >= TICKET_TTL:
         return None
+    claim = _claim_id(entry[0])
+    if claim is None or claim != entry[3]:
+        return None
     return entry[0], entry[1]
 
 
 def _issue(ticket: str, name: str, platform: str) -> None:
-    now = _now()
+    now, account, claim = _now(), _save_key(name), _claim_id(name)
     with _AUTH_LOCK:
-        for old in [t for t, (_, _, issued) in TICKETS.items() if now - issued >= TICKET_TTL]:
+        for old in [t for t, (owner, _, issued, _) in TICKETS.items()
+                    if now - issued >= TICKET_TTL or _save_key(owner) == account]:
             del TICKETS[old]
-        TICKETS[ticket] = (name, platform, now)
+        TICKETS[ticket] = (name, platform, now, claim)
 
 
 def name_allowed(name: str) -> bool:
@@ -264,6 +310,8 @@ def _login_refused(client_ip: str, name: str, why: str) -> tuple[int, dict]:
 
 def login_name(body: dict, auth: str = "") -> tuple[str, str]:
     name, platform = body.get("nameOnPlatform"), "psn"
+    if not isinstance(name, str):
+        name = None
     console = auth.strip().lower().startswith("psn2.0")
     if not name and not console and ticket_name(auth):
         name, platform = ticket_name(auth), "uplay"
@@ -358,8 +406,8 @@ def route(method: str, path: str, body: dict, host: str, client: tuple[str, int]
     if path == "/version":
         client_version = dict(urllib.parse.parse_qsl(query)).get("client")
         if client_version:
-            print(f"[{datetime.datetime.now():%H:%M:%S}] version {client[0]}: {client_version}, server {VERSION}",
-                  flush=True)
+            print(f"[{datetime.datetime.now():%H:%M:%S}] version {client[0]}: {printable(client_version, 200)}, "
+                  f"server {VERSION}", flush=True)
         return 200, {"server": VERSION}
     if method == "GET" and path.endswith("/v2/profiles"):
         return 200, profiles(query)
@@ -458,6 +506,34 @@ def log_body(path: str, raw: bytes) -> str:
     return raw[:LOG_BODY].decode("utf-8", "ignore") + f"... <{len(raw)} bytes>"
 
 
+MAX_CONN_PER_IP = 16
+MAX_CONN = 512
+FIRST_LINE_TIMEOUT = 15
+
+
+class _Deadline(io.RawIOBase):
+
+    def __init__(self, raw, sock, deadline: float):
+        super().__init__()
+        self.raw, self.sock, self.deadline = raw, sock, deadline
+
+    def readable(self) -> bool:
+        return True
+
+    def readinto(self, b) -> int | None:
+        if self.deadline is not None:
+            left = self.deadline - time.monotonic()
+            if left <= 0:
+                raise TimeoutError("first request line too slow")
+            self.sock.settimeout(left)
+        return self.raw.readinto(b)
+
+    def close(self) -> None:
+        if not self.closed:
+            self.raw.close()
+        super().close()
+
+
 class Handler(BaseHTTPRequestHandler):
     protocol_version = "HTTP/1.1"
 
@@ -466,12 +542,23 @@ class Handler(BaseHTTPRequestHandler):
     log_path: str | None = None
     lock = threading.Lock()
 
+    def setup(self) -> None:
+        super().setup()
+
+        self._first = _Deadline(self.rfile.detach(), self.connection, time.monotonic() + FIRST_LINE_TIMEOUT)
+        self.rfile = io.BufferedReader(self._first)
+
+    def parse_request(self) -> bool:
+        self._first.deadline = None
+        self.connection.settimeout(self.timeout)
+        return super().parse_request()
+
     def version_string(self) -> str:
         return f"TheCrewReborn/{VERSION}"
 
     def _refuse(self, status: int, why: str) -> None:
         print(f"[{datetime.datetime.now():%H:%M:%S}] http {self.client_address[0]} {self.command} "
-              f"{self.path.split('?')[0]} -> {status} ({why})", flush=True)
+              f"{printable(self.path.split('?')[0])} -> {status} ({why})", flush=True)
         payload = json.dumps({"error": why}).encode()
         self.close_connection = True
         self.send_response(status)
@@ -518,13 +605,16 @@ class Handler(BaseHTTPRequestHandler):
         if binary:
             reply = f"<png {len(payload)} bytes>"
         print(f"[{datetime.datetime.now():%H:%M:%S}] http {self.client_address[0]} {self.command} "
-              f"{self.path.split('?')[0]} -> {status}", flush=True)
+              f"{printable(self.path.split('?')[0])} -> {status}", flush=True)
         if self.log_path:
-            with self.lock, open(self.log_path, "a") as f:
-                f.write(json.dumps({"time": datetime.datetime.now().isoformat(), "client": self.client_address[0],
-                                    "method": self.command, "path": log_path(self.path), "auth": redact(auth),
-                                    "body": log_body(self.path, raw), "status": status,
-                                    "reply": loggable(reply)}) + "\n")
+            line = json.dumps({"time": datetime.datetime.now().isoformat(), "client": self.client_address[0],
+                               "method": self.command, "path": log_path(self.path)[:LOG_PATH], "auth": redact(auth),
+                               "body": log_body(self.path, raw), "status": status, "reply": loggable(reply)}) + "\n"
+            try:
+                with self.lock:
+                    append_log(self.log_path, line)
+            except OSError as e:
+                log_failed(self.log_path, e)
         self.send_response(status)
         kind = "application/octet-stream" if self.path.endswith(".rgba") else "image/png"
         self.send_header("Content-Type", kind if binary else "application/json; charset=utf-8")
@@ -540,6 +630,39 @@ class Handler(BaseHTTPRequestHandler):
 
 class _Server(ThreadingHTTPServer):
     allow_reuse_address = True
+
+    def __init__(self, *args, **kwargs):
+        self._conn_lock = threading.Lock()
+        self._open: dict[object, str] = {}
+        self._per_ip: dict[str, int] = {}
+        super().__init__(*args, **kwargs)
+
+    def open_connections(self) -> int:
+        with self._conn_lock:
+            return len(self._open)
+
+    def process_request(self, request, client_address):
+        ip = client_address[0]
+        with self._conn_lock:
+            refuse = len(self._open) >= MAX_CONN or self._per_ip.get(ip, 0) >= MAX_CONN_PER_IP
+            if not refuse:
+                self._open[request] = ip
+                self._per_ip[ip] = self._per_ip.get(ip, 0) + 1
+        if refuse:
+            super().shutdown_request(request)
+            return
+        super().process_request(request, client_address)
+
+    def shutdown_request(self, request):
+        with self._conn_lock:
+            ip = self._open.pop(request, None)
+            if ip is not None:
+                left = self._per_ip.get(ip, 1) - 1
+                if left > 0:
+                    self._per_ip[ip] = left
+                else:
+                    self._per_ip.pop(ip, None)
+        super().shutdown_request(request)
 
     def handle_error(self, request, client_address):
         err = sys.exc_info()[1]

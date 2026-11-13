@@ -10,7 +10,8 @@ from tcreborn.games.v1_00 import translate
 from tcreborn.games.v1_00 import cars
 from tcreborn.games.v1_21 import cars as cars121
 from tcreborn.games.v1_21 import physparts
-from tcreborn.games.v1_21.handlers.mission import dealer_car, finish_mission, reward_part
+from tcreborn.games.v1_21.handlers.mission import (dealer_car, finish_mission, is_dealer, owned_dealer_car,
+                                                   pays_dealer, reward_part)
 from tcreborn.wire import blob, empty_array, frame, serializer_list, u64_array
 
 HANDLERS = {}
@@ -117,6 +118,7 @@ def translated(ctx, req_id: int, req121: int, body: bytes):
 
 def handle(ctx, req_id: int, body: bytes):
     if req_id in HANDLERS:
+        ctx.player.clamp()
         result = HANDLERS[req_id](ctx, body)
         return base.NO_REPLY if result is None else frame(*result)
     req121 = answered_by_121(req_id)
@@ -242,11 +244,10 @@ def get_pvp_score(ctx, body: bytes):
 def validate_mission(ctx, body: bytes):
     mission, score = struct.unpack_from(">QI", body, 0x1C)
     p = ctx.player
-    finish_mission(p, mission, score)
+    dealer = pays_dealer(p, mission)
+    finish_mission(p, mission, score, ctx.now_us())
     part = reward_part(p, mission, score, body)
-    car = None
-    if cars121.CATALOG is not None and mission == cars121.CATALOG.dealer:
-        car = dealer_car(p, body)
+    car = dealer_car(p, body) if dealer else owned_dealer_car(p, body) if is_dealer(mission) else None
     p.save()
     granted = u64_array([physparts.TABLE["ids"][part]]) if part is not None and physparts.ANNOUNCE_PART \
         and part < cars.PERF_PARTS else empty_array()
@@ -334,6 +335,9 @@ def save_crew_comforts(ctx, body: bytes):
     return reply_id, translate.transcode(inner[12:], ["u8", "u32*2", "u16*2"], layout)
 
 
+DELETE_BACKUPS = 5
+
+
 @register(0x19B432B3, "DELETE_PLAYER")
 def delete_player(ctx, body: bytes):
     import shutil
@@ -344,6 +348,12 @@ def delete_player(ctx, body: bytes):
         os.makedirs(backup, exist_ok=True)
         stem = os.path.splitext(os.path.basename(p.path))[0]
         shutil.copyfile(p.path, os.path.join(backup, f"{stem}-deleted-{time.strftime('%Y%m%d-%H%M%S')}.json"))
+        own = sorted(f for f in os.listdir(backup) if f.startswith(f"{stem}-deleted-") and f.endswith(".json"))
+        for old in own[:-DELETE_BACKUPS]:
+            try:
+                os.remove(os.path.join(backup, old))
+            except OSError:
+                pass
     keep = {k: getattr(p, k) for k in ("unlocks", "dlc", "free_roam")}
     fresh = type(p)(path=p.path)
     p.__dict__.update(fresh.__dict__)

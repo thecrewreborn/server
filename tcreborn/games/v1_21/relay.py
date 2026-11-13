@@ -1,5 +1,6 @@
 # The Crew Reborn - Knutwurst
 # https://thecrewreborn.github.io - https://ko-fi.com/knutwurst
+import collections
 import datetime
 import json
 import os
@@ -11,7 +12,7 @@ import time
 import traceback
 
 from tcreborn.games.v1_21.crypto import IV0, K0, decrypt, encrypt
-from tcreborn.discovery import local_ip_for
+from tcreborn.discovery import local_ip_for, no_connreset
 from tcreborn import config, paths, ubi
 from tcreborn.saves import DEFAULT_NAME, save_name
 from tcreborn.games.v1_21 import peers
@@ -20,7 +21,7 @@ from tcreborn.games.v1_21.player import ALL_ABILITIES, Player, dlc_fields, unloc
 from tcreborn.games.v1_21.handlers.replies import SERVICE_BY_ADDR
 from tcreborn.session import STORE_NAME, Session, SessionStore
 from tcreborn.wire import (DIRECT_HEADER, REPLY_FLAGS, T_ACK, T_ACK_CONFIRM, T_DATA, T_RESOLVE, ack, ack_confirm,
-                        assemble, data_chunks, parse_message, resolve_reply)
+                        assemble, data_chunks, parse_message, release_all, resolve_reply)
 
 Packet = tuple[bytes, tuple[str, int]]
 NO_ACK_CHANNELS = {0x49466F25, 0x5ABA06B7}
@@ -32,7 +33,16 @@ _KEYS = ("session_key", "session_iv")
 GUEST_IDLE_S = 120
 NAMED_IDLE_S = 15 * 60
 MAX_GUESTS = 2000
+MAX_GUESTS_PER_IP = 32
+REPLY_CACHE = 256
+
+
+PLAINTEXT_REQUESTS = {0x997BED03, 0xEA3A66D7, 0x9101DE70, 0x368D58C9}
 MAX_UNKNOWN = 1000
+
+
+SAY_WINDOW_S = 60
+SAY_UNVERIFIED_PER_MIN = 20
 _clock = time.monotonic
 
 
@@ -58,6 +68,12 @@ def player_ticket(get_player_body: bytes) -> str | None:
     size = struct.unpack_from(">I", get_player_body, at + 1)[0]
     raw = get_player_body[at + 5:at + 5 + size]
     return raw.decode("ascii") if 0 < size <= 128 and len(raw) == size and raw.isascii() else None
+
+
+def _keep_newest(table: dict, key, value) -> None:
+    table[key] = value
+    while len(table) > REPLY_CACHE:
+        del table[next(iter(table))]
 
 
 def _ts() -> str:
@@ -89,10 +105,18 @@ class Server:
         self.store = SessionStore(os.path.join(os.path.dirname(os.path.abspath(save_path)), STORE_NAME)) \
             if save_path else None
         self.unknown: set[tuple[str, int]] = set()
-        self.guests: dict[tuple[str, int], None] = {}
+
+        self.guests: collections.OrderedDict[tuple[str, int], None] = collections.OrderedDict()
+        self.guests_by_ip: dict[str, collections.OrderedDict[tuple[str, int], None]] = {}
+        self.proven: dict[tuple[str, int], Session] = {}
         self.stored: set[tuple[str, int]] = set()
         self.swept = 0.0
         self.direct_partial: dict[tuple[str, int], dict] = {}
+        self.muted = False
+
+
+        self.said: collections.OrderedDict[tuple[str, int], float] = collections.OrderedDict()
+        self.say_window, self.say_count, self.say_left_out = _clock(), 0, 0
         self.save_path, self.abilities, self.unlocks, self.dlc = save_path, abilities, unlocks, dlc
 
         self.players: dict[str, Ctx] = {}
@@ -132,16 +156,35 @@ class Server:
     def _new_session(self, addr: tuple[str, int]) -> Session:
         sess = Session()
         if ubi.ACCOUNTS is None:
+            self._forget_session(addr)
             self.sessions[addr] = sess
             return sess
         sess.seen = _clock()
-        self.sessions.pop(addr, None)
-        self.guests.pop(addr, None)
+        self._forget_session(addr)
+        self.proven.pop(addr, None)
         self.sessions[addr] = sess
-        self.guests[addr] = None
+        self._guest_active(addr)
+        mine = self.guests_by_ip[addr[0]]
+        while len(mine) > MAX_GUESTS_PER_IP:
+            self._drop(next(iter(mine)))
         while len(self.guests) > MAX_GUESTS:
             self._drop(next(iter(self.guests)))
         return sess
+
+    def _guest_active(self, addr: tuple[str, int]) -> None:
+        self.guests[addr] = None
+        self.guests.move_to_end(addr)
+        mine = self.guests_by_ip.setdefault(addr[0], collections.OrderedDict())
+        mine[addr] = None
+        mine.move_to_end(addr)
+
+    def _unguest(self, addr: tuple[str, int]) -> None:
+        self.guests.pop(addr, None)
+        mine = self.guests_by_ip.get(addr[0])
+        if mine is not None:
+            mine.pop(addr, None)
+            if not mine:
+                del self.guests_by_ip[addr[0]]
 
     def _expire(self, now: float) -> None:
         if now - self.swept < 1:
@@ -155,9 +198,17 @@ class Server:
             self._store_named()
 
     def _drop(self, addr: tuple[str, int]) -> None:
-        self.guests.pop(addr, None)
-        self.sessions.pop(addr, None)
-        self.direct_partial.pop(addr, None)
+        self._unguest(addr)
+        self._forget_session(addr)
+        pending = self.direct_partial.pop(addr, None)
+        if pending:
+            release_all(pending)
+        self.proven.pop(addr, None)
+
+    def _forget_session(self, addr: tuple[str, int]) -> None:
+        old = self.sessions.pop(addr, None)
+        if old is not None and old.partial:
+            release_all(old.partial)
 
     def _store_named(self) -> None:
         if self.store:
@@ -179,15 +230,16 @@ class Server:
     def ctx_for_name(self, name: str | None) -> Ctx:
         if not name or name == DEFAULT_NAME or not self.save_path:
             return self.ctx
-        if name not in self.players:
+        key = save_name(name).lower()
+        if key not in self.players:
             folder = os.path.join(os.path.dirname(os.path.abspath(self.save_path)), "players")
             path = os.path.join(folder, save_name(name) + ".json")
             if ubi.ACCOUNTS is None and not os.path.exists(path) and os.path.exists(self.save_path) and not (
                     os.path.isdir(folder) and os.listdir(folder)):
                 os.makedirs(folder, exist_ok=True)
                 shutil.copyfile(self.save_path, path)
-            self.players[name] = self._new_ctx(name, path)
-        return self.players[name]
+            self.players[key] = self._new_ctx(name, path)
+        return self.players[key]
 
     def ctx_for(self, addr: tuple[str, int], sess: Session | None = None) -> Ctx:
         public = ubi.ACCOUNTS is not None
@@ -226,7 +278,7 @@ class Server:
         return local_ip_for(peer[0]) if self.ip == "0.0.0.0" else self.ip
 
     def log(self, entry: dict) -> None:
-        if not self.log_path:
+        if not self.log_path or self.muted:
             return
         if ubi.ACCOUNTS is not None:
 
@@ -234,21 +286,52 @@ class Server:
             entry = {k: v for k, v in entry.items() if k not in _KEYS and not (k == "hex" and entry.get("step") == 2)}
             for k in ("hex", "plain", "payload"):
                 if isinstance(entry.get(k), str):
-                    entry[k] = hide_tickets(bytes.fromhex(entry[k])).hex()
+                    full = hide_tickets(bytes.fromhex(entry[k])).hex()
+                    entry[k] = full[:ubi.LOG_HEX]
+                    if len(full) > ubi.LOG_HEX:
+                        entry[k + "_bytes"] = len(full) // 2
         entry["time"] = datetime.datetime.now().isoformat()
-        with open(self.log_path, "a") as f:
-            f.write(json.dumps(entry) + "\n")
+        try:
+            ubi.append_log(self.log_path, json.dumps(entry) + "\n")
+        except OSError as e:
+            ubi.log_failed(self.log_path, e)
 
     def say(self, addr: tuple[str, int], text: str) -> None:
+        if ubi.ACCOUNTS is not None and not self._may_say(addr):
+            return
         print(f"[{_ts()}] {addr[0]}:{addr[1]} {text}", flush=True)
+
+    def _may_say(self, addr: tuple[str, int]) -> bool:
+        now = _clock()
+        if now - self.say_window >= SAY_WINDOW_S:
+            if self.say_left_out:
+                print(f"[{_ts()}] relay port {self.port}: {self.say_left_out} line(s) about senders without a "
+                      f"verified player suppressed", flush=True)
+            self.say_window, self.say_count, self.say_left_out = now, 0, 0
+        sess = self.sessions.get(addr)
+        if sess is not None and (sess.name or self.proven.get(addr) is sess):
+            return True
+        while self.said and now - next(iter(self.said.values())) >= SAY_WINDOW_S:
+            self.said.popitem(last=False)
+        if addr in self.said or self.say_count >= SAY_UNVERIFIED_PER_MIN:
+            self.say_left_out += 1
+            return False
+        self.said[addr] = now
+        self.say_count += 1
+        return True
 
     def handle_datagram(self, data: bytes, addr: tuple[str, int]) -> list[Packet]:
         if addr == (self.ip, self.port):
             return []
         header, body = data[:6], data[6:]
         peer = f"{addr[0]}:{addr[1]}"
+        known = self.sessions.get(addr)
+
+        self.muted = ubi.ACCOUNTS is not None and not (known and known.connected)
         if ubi.ACCOUNTS is not None:
             self._expire(_clock())
+            if addr in self.guests:
+                self._guest_active(addr)
         self.log({"dir": "in", "src": peer, "hex": data.hex()})
         if len(data) == 6 and header[4:6] == b"\x00\x00":
             return self._probe(addr)
@@ -288,6 +371,7 @@ class Server:
 
         sess = self._new_session(addr) if ubi.ACCOUNTS is not None else self.sessions.setdefault(addr, Session())
         sess.key, sess.iv, sess.connected = os.urandom(32), os.urandom(16), True
+        self.muted = False
         reply = b"\x00\x00\x00\x00\x00\x01" + encrypt(*self.proxy_key, sess.key + sess.iv)
         self.say(addr, f"key request -> handshake 2 ({len(reply)}B)")
         self.log({"dir": "out", "dst": f"{addr[0]}:{addr[1]}", "step": 2, "hex": reply.hex(),
@@ -312,22 +396,30 @@ class Server:
 
     def _direct(self, header, body, addr) -> list[Packet]:
         peer = f"{addr[0]}:{addr[1]}"
+        public = ubi.ACCOUNTS is not None
+        sess = self.sessions.get(addr)
+        if public and (sess is None or self.proven.get(addr) is not sess):
+            return []
         self.log({"dir": "in", "src": peer, "kind": "direct", "payload": body.hex()})
         msg = parse_message(body)
         if not (msg and msg.crc_ok):
             return []
-        if msg.type == T_ACK and msg.received is not None:
+        if msg.type == T_ACK and msg.received is not None and not public:
             confirm = ack_confirm(msg)
             self.log({"dir": "out", "dst": peer, "kind": "direct_ack_confirm", "plain": confirm.hex()})
             return [(header + confirm, addr)]
         if msg.type == T_DATA and msg.flags is not None and msg.flags & 1:
             if ubi.ACCOUNTS is not None and addr not in self.direct_partial and \
                     len(self.direct_partial) >= MAX_UNKNOWN:
+                for pending in self.direct_partial.values():
+                    release_all(pending)
                 self.direct_partial.clear()
             request, received = assemble(self.direct_partial.setdefault(addr, {}), msg)
             if request is None or len(request) < 12:
                 return []
             rpc = struct.unpack_from(">I", request, 4)[0]
+            if public and rpc not in PLAINTEXT_REQUESTS:
+                return []
 
 
             guest = self._direct_guest(addr) if ubi.ACCOUNTS is not None else None
@@ -358,13 +450,17 @@ class Server:
             ubi.touch(sess.ctx.player_name, addr[0])
         if not (msg and msg.crc_ok):
             return []
+        if ubi.ACCOUNTS is not None and self.proven.get(addr) is not sess:
+            self.proven[addr] = sess
         if msg.type == T_DATA and msg.flags is not None and msg.flags & 1:
             request, received = assemble(sess.partial, msg)
             if request is None or len(request) < 12:
                 return []
             rpc = struct.unpack_from(">I", request, 4)[0]
+            if not isinstance(sess.answered, dict):
+                sess.answered = dict.fromkeys(sess.answered)
             first = (rpc, msg.transfer) not in sess.answered
-            sess.answered.add((rpc, msg.transfer))
+            _keep_newest(sess.answered, (rpc, msg.transfer), None)
             if not first and (rpc, msg.transfer) in sess.replies:
 
                 chunks = list(sess.replies[(rpc, msg.transfer)])
@@ -388,7 +484,7 @@ class Server:
                         sess.ctx.pc = platform == "uplay"
                         sess.ctx.verified = True
                     sess.name, sess.platform = name, platform
-                    self.guests.pop(addr, None)
+                    self._unguest(addr)
                     if ubi.ACCOUNTS is not None:
                         account = save_name(name).lower()
                         for other in [a for a, s in self.sessions.items()
@@ -401,7 +497,7 @@ class Server:
                           + (f", save: {os.path.relpath(save, paths.HOME)}" if save else ""), flush=True)
                 chunks = self._reply_chunks(msg, rpc, request, self.ctx_for(addr, sess))
                 if chunks is not None:
-                    sess.replies[(rpc, msg.transfer)] = list(chunks)
+                    _keep_newest(sess.replies, (rpc, msg.transfer), list(chunks))
             if chunks is None:
                 if first:
                     self.say(addr, f"UNHANDLED RPC {name_of(rpc)} to {target} transfer {msg.transfer} "
@@ -445,13 +541,33 @@ class Server:
         sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
         sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
         sock.bind((self.ip, self.port))
+        self.serve_socket(sock)
+
+    def serve_socket(self, sock: socket.socket) -> None:
+        no_connreset(sock)
         self.sender = self.sender or sock.sendto
         while True:
-            data, addr = sock.recvfrom(65535)
             try:
+                data, addr = sock.recvfrom(65535)
+            except OSError:
+                if sock.fileno() == -1:
+                    return
+                continue
+            try:
+                failed = False
                 for pkt, dst in self.handle_datagram(data, addr):
-                    sock.sendto(pkt, dst)
+                    try:
+                        sock.sendto(pkt, dst)
+                    except OSError as e:
+                        if not failed:
+                            failed = True
+                            self.say(dst, f"cannot send a reply: {e}")
             except Exception:
-                self.say(addr, f"handler error on {data[:32].hex()}\n{traceback.format_exc()}")
-                self.log({"dir": "in", "src": f"{addr[0]}:{addr[1]}", "kind": "error", "hex": data.hex(),
-                          "error": traceback.format_exc()})
+                try:
+                    self.say(addr, f"handler error on {data[:32].hex()}\n{traceback.format_exc()}")
+                    self.log({"dir": "in", "src": f"{addr[0]}:{addr[1]}", "kind": "error", "hex": data.hex(),
+                              "error": traceback.format_exc()})
+                except Exception:
+                    pass
+            finally:
+                self.muted = False

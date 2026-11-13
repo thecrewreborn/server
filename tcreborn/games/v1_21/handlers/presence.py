@@ -23,7 +23,9 @@ def player_update(ctx: Ctx, body: bytes):
         p.direction = direction
     (p.zone,) = struct.unpack_from(">I", body, 0x78 + n)
     (spent,) = struct.unpack_from(">I", body, 0x60 + n)
-    if spent and spent != p.update_charge and p.bucks >= spent - p.update_charge:
+    if spent and spent < p.update_charge:
+        p.update_charge = spent
+    elif spent and spent != p.update_charge and p.bucks >= spent - p.update_charge:
         p.bucks -= spent - p.update_charge
         p.update_charge = spent
     p.save()

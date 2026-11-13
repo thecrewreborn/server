@@ -50,6 +50,12 @@ def _bind(serve, port: int, name: str, *args):
         return serve(alt, *args), alt
 
 
+def _check_server_ip() -> None:
+    problem = config.server_ip_problem()
+    if problem:
+        print(f"ERROR: {problem}", flush=True)
+
+
 def _public_mode(ubi, versions) -> None:
     from tcreborn.accounts import STORE_NAME, AccountStore
     from tcreborn.saves import save_name
@@ -110,6 +116,7 @@ def main(argv: list[str] | None = None) -> None:
     detail(f"player save: {args.save}")
     detail(f"abilities: {config.abilities()}, unlocks: {config.unlocks()}, dlc: {config.dlc()}")
     print(f"DLC: {'on' if config.dlc() == 'all' else 'off'} (config.ini [player] dlc)", flush=True)
+    _check_server_ip()
     if config.public():
         _public_mode(ubi, versions)
     requests_log = os.path.join(os.path.dirname(args.log), "requests.jsonl")

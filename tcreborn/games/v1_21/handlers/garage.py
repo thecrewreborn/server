@@ -39,6 +39,17 @@ def peer_register(ctx: Ctx, body: bytes):
 
 
 TOKENS = {(8, 0x7938316): 0, (0x10, 0x7938315): 1, (0x20, 0x7938317): 2}
+
+
+MAX_MODEL_CONFIGS = 254
+MAX_GARAGE_CONFIGS = 1100
+
+
+def garage_full(garage: list[tuple[int, list[bytes]]], configs: list[bytes] | None) -> bool:
+    return (configs is not None and len(configs) >= MAX_MODEL_CONFIGS
+            or sum(len(cs) for _m, cs in garage) >= MAX_GARAGE_CONFIGS)
+
+
 SPEC_REPLY_TAIL = bytes([1]) + struct.pack(">H", 0) + bytes([0, 0, 0, 3])
 
 
@@ -58,9 +69,14 @@ def _spec_purchase(p, body: bytes) -> bytes:
     configs = next((cs for m, cs in garage if m == model), None)
     if not configs or variant not in c.variants:
         return fail
+    v = c.variants[variant]
+    if dlc_only(c, v, p):
+        return fail
     price = cars.spec_price(c, garage, variant)
     owned = next((cfg for cfg in configs if cars.variant_of(cfg) == variant), None)
     if owned is not None and price is None:
+        return fail
+    if owned is None and garage_full(garage, configs):
         return fail
     if price is not None:
         token = TOKENS.get((currency, int(c.variants[variant]["spec"], 16)))
@@ -156,6 +172,16 @@ def mount_parts(ctx: Ctx, body: bytes):
 
 
 CAR_DISCOUNT_PERK, CAR_DISCOUNT_STEP = 14, 3
+CAR_DISCOUNT_LEVELS = 10
+
+
+def car_price(price: int, perk_level: int) -> int:
+    level = min(max(perk_level, 0), CAR_DISCOUNT_LEVELS)
+    return max(0, price * (100 - CAR_DISCOUNT_STEP * level) // 100)
+
+
+def dlc_only(c, variant: dict, p) -> bool:
+    return not p.dlc and int(variant["spec"], 16) in (c.special_specs or ())
 
 
 @register(0xBBF8C44B, "CAR_PURCHASE")
@@ -169,14 +195,16 @@ def car_purchase(ctx: Ctx, body: bytes):
         return 0x4239B014, (struct.pack(">HIIIq", 0xFFFF, p.bucks, p.cc, 0, -1) + cars.array(0, b"")
                             + cars.array(0, b""))
     model = int(v["model"], 16)
-    price = c.prices.get(model, 0)
+    price = c.prices.get(model)
     s = cars.slots(c, variant, paint, part, livery)
     garage = cars.entries(p)
     configs = next((cs for m, cs in garage if m == model), None)
-    cfg = cars.config(c, variant, s, len(configs) + 1 if configs else 1)
+    cfg = cars.config(c, variant, s, cars.BOUGHT)
     ok = False
-    if currency == 1:
-        price = price * (100 - CAR_DISCOUNT_STEP * p.perks[CAR_DISCOUNT_PERK]) // 100
+    if price is None or dlc_only(c, v, p) or garage_full(garage, configs):
+        pass
+    elif currency == 1:
+        price = car_price(price, p.perks[CAR_DISCOUNT_PERK])
         if p.bucks >= price:
             p.bucks -= price
             ok = True
@@ -187,7 +215,7 @@ def car_purchase(ctx: Ctx, body: bytes):
             configs = []
             garage.append((model, configs))
         configs[:] = [cars.with_state(x, 0) for x in configs]
-        configs.append(cfg)
+        configs.append(cars.with_state(cfg, len(configs) + 1))
         cars.store(p, garage)
         p.save()
     return 0x4239B014, (struct.pack(">HIIIq", 0 if ok else 0xFFFF, p.bucks, p.cc, 0, model if ok else -1)

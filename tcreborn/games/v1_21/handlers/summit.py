@@ -45,7 +45,7 @@ def summit_event(ctx: Ctx, body: bytes):
     slot = summit.event_slot(mission, cur)
     ok = slot is not None and summit.state(p)["entered"]
     if ok:
-        xp, bucks = summit.event_reward(cur)
+        xp, bucks = rewards.allow(p, ctx.now_us(), *summit.event_reward(cur))
         if rewards.TABLES is not None:
             rewards.apply(rewards.TABLES, p, xp, bucks)
         summit.post_score(p, slot, score)
@@ -64,10 +64,11 @@ def summit_result(ctx: Ctx, body: bytes):
     p = ctx.player
     cur = _cur(ctx)
     s = summit.state(p)
+    _xp, bucks = rewards.allow(p, ctx.now_us(), 0, 1)
     if rewards.TABLES is not None:
-        rewards.add_bucks(rewards.TABLES, p, 1)
+        rewards.add_bucks(rewards.TABLES, p, bucks)
     else:
-        p.bucks += 1
+        p.bucks += bucks
     snapshot = struct.pack(">4B", *s["tokens"], s["next_kind"])
     entered = s["entered"]
     summit.result(p, rank, cur)

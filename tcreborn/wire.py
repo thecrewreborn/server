@@ -1,7 +1,9 @@
 # The Crew Reborn - Knutwurst
 # https://thecrewreborn.github.io - https://ko-fi.com/knutwurst
+import collections
 import socket
 import struct
+import threading
 import zlib
 from dataclasses import dataclass
 
@@ -96,10 +98,70 @@ def resolve_reply(request_body: bytes, ip: str, port: int) -> bytes:
     return frame(T_RESOLVE_REPLY, request_body[:13] + socket.inet_aton(ip) + struct.pack(">H", port))
 
 
-def assemble(partial: dict, msg) -> tuple[bytes | None, int]:
-    parts = partial.setdefault((msg.transfer, msg.channel), {})
-    parts[msg.chunk] = msg.payload
-    if sum(map(len, parts.values())) < msg.total:
+MAX_REQUEST = 65536
+MAX_PENDING = 16
+
+
+MAX_PENDING_BYTES = 64 * 2 ** 20
+_COST_TRANSFER, _COST_CHUNK = 512, 128
+_lock = threading.Lock()
+
+
+_held: collections.OrderedDict = collections.OrderedDict()
+_held_bytes = 0
+
+
+def pending_bytes() -> int:
+    return _held_bytes
+
+
+def _charge(home: dict, key, entry: list, cost: int) -> None:
+    global _held_bytes
+    record = _held.get(id(entry))
+    if record is None:
+        record = _held[id(entry)] = [home, key, entry, 0]
+    record[3] += cost
+    _held_bytes += cost
+
+
+def _release(entry: list) -> None:
+    global _held_bytes
+    record = _held.pop(id(entry), None)
+    if record is None:
+        return
+    _held_bytes -= record[3]
+    home, key = record[0], record[1]
+    if home.get(key) is entry:
+        del home[key]
+
+
+def release_all(partial: dict) -> None:
+    with _lock:
+        for entry in list(partial.values()):
+            _release(entry)
+        partial.clear()
+
+
+def assemble(partial: dict, msg, chunk: int = CHUNK) -> tuple[bytes | None, int]:
+    if msg.total > MAX_REQUEST or msg.chunk > msg.total // chunk or len(msg.payload) > chunk:
         return None, 0
-    del partial[(msg.transfer, msg.channel)]
+    key = (msg.transfer, msg.channel)
+    with _lock:
+        entry = partial.get(key)
+        if entry is None:
+            while len(partial) >= MAX_PENDING:
+                _release(partial[next(iter(partial))])
+            entry = partial[key] = [{}, 0]
+            _charge(partial, key, entry, _COST_TRANSFER)
+        parts = entry[0]
+        old = parts.get(msg.chunk)
+        parts[msg.chunk] = msg.payload
+        grown = len(msg.payload) - (len(old) if old is not None else 0)
+        entry[1] += grown
+        _charge(partial, key, entry, grown + (_COST_CHUNK if old is None else 0))
+        if entry[1] < msg.total:
+            while _held_bytes > MAX_PENDING_BYTES and _held:
+                _release(next(iter(_held.values()))[2])
+            return None, 0
+        _release(entry)
     return b"".join(parts[i] for i in sorted(parts))[:msg.total], len(parts)

@@ -7,7 +7,7 @@ import struct
 from tcreborn.games.v1_21 import tables
 from tcreborn.games.v1_21 import cars, rewards
 from tcreborn.games.v1_21.handlers import Ctx, register
-from tcreborn.games.v1_21.player import PERKS, set_bit
+from tcreborn.games.v1_21.player import PERK_MAX, PERKS, set_bit
 from tcreborn.wire import blob, frame, serializer_list, u64_array
 
 PERK_POINT_BUCKS, PERK_POINT_CREDITS = 100000, 2000
@@ -49,7 +49,7 @@ def perks(ctx: Ctx, body: bytes):
         else:
             ok = False
     else:
-        p.perks = list(body[0x21:0x21 + PERKS].ljust(PERKS, b"\0"))
+        p.perks = [min(x, PERK_MAX) for x in body[0x21:0x21 + PERKS].ljust(PERKS, b"\0")]
         if sum(p.perks) > p.perk_points:
             p.perks, ok = [0] * PERKS, False
     p.save()
@@ -80,6 +80,9 @@ def table_bit(ctx: Ctx, body: bytes):
 T_COLLECTIBLE = 0x9234FC36
 
 
+MAX_COLLECTIBLES = 4096
+
+
 SETS_PATH = tables.path("collectibles.json")
 SETS = json.load(open(SETS_PATH)) if os.path.exists(SETS_PATH) else None
 
@@ -102,6 +105,7 @@ def collectibles(ctx: Ctx, body: bytes):
     p = ctx.player
     try:
         (count,) = struct.unpack_from(">I", body, 8 + 16)
+        count = min(count, max(0, (len(body) - 8 - 20) // 12))
         entries = [struct.unpack_from(">QI", body, 8 + 20 + 12 * k) for k in range(count)]
     except struct.error:
         entries = []
@@ -109,11 +113,15 @@ def collectibles(ctx: Ctx, body: bytes):
     for item, value in entries:
         if item in known:
             p.collectibles[known[item]][1] = value
-        else:
+        elif len(p.collectibles) < MAX_COLLECTIBLES:
             known[item] = len(p.collectibles)
             p.collectibles.append([item, value])
+    groups = set()
     for item, _value in entries:
-        complete_set(p, item)
+        group = SETS["set_of"].get(f"{item:#x}") if SETS is not None else None
+        if group is not None and group not in groups:
+            groups.add(group)
+            complete_set(p, item)
     if entries:
         p.save()
     return 0x48A252AB, b"\x01"
