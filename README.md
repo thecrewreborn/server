@@ -58,7 +58,10 @@ server address into `/data/TheCrew/server.txt` on the console (PS4).
 
 Each player name has its own save. The first login with a name claims it for the device that logs in; from then on
 only that name's devices can play it. Nobody types a password: each device makes its own key and sends each server
-only a code made from it. The key never leaves the device, and a code is bound to the server's id, address and HTTPS port, so it works only on the server it was made for. A server that copies another server's id and sits at the same address and port in another network (for example a friend's home network with the same 192.168.x address) could learn a code that is valid on the original server.
+only a code made from it. The key never leaves the device, and a code is bound to the server's id, address and HTTPS
+port, so it works only on the server it was made for. A server that copies another server's id and sits at the same
+address and port in another network (for example a friend's home network with the same 192.168.x address) could learn
+a code that is valid on the original server.
 
 - **PS4 / PS5:** the patch creates `/data/TheCrew/console_key.txt` on its first start. The name is the PS4 user name.
 - **PC:** the DLL creates `TheCrewReborn.key` next to `reborn.ini`, or in `%LOCALAPPDATA%\TheCrewReborn` when the game
@@ -471,7 +474,10 @@ am PC `Host` in `reborn.ini` ein oder auf der PS4 die Serveradresse in `/data/Th
 Jeder Spielername hat seinen eigenen Spielstand. Der erste Login mit einem Namen reserviert ihn für das Gerät, das
 sich anmeldet; danach können nur noch die Geräte dieses Namens mit ihm spielen. Niemand tippt ein Passwort ein: Jedes
 Gerät erzeugt seinen eigenen Schlüssel und sendet jedem Server nur einen daraus erzeugten Code. Der Schlüssel verlässt
-das Gerät nie, und ein Code ist an die ID, die Adresse und den HTTPS-Port des Servers gebunden, gilt also nur für den Server, für den er erzeugt wurde. Ein Server, der die ID eines anderen Servers übernimmt und in einem anderen Netz unter derselben Adresse und demselben Port steht (zum Beispiel im Heimnetz eines Freundes mit derselben 192.168.x-Adresse), könnte einen Code erfahren, der auf dem ursprünglichen Server gültig ist.
+das Gerät nie, und ein Code ist an die ID, die Adresse und den HTTPS-Port des Servers gebunden, gilt also nur für den
+Server, für den er erzeugt wurde. Ein Server, der die ID eines anderen Servers übernimmt und in einem anderen Netz
+unter derselben Adresse und demselben Port steht (zum Beispiel im Heimnetz eines Freundes mit derselben
+192.168.x-Adresse), könnte einen Code erfahren, der auf dem ursprünglichen Server gültig ist.
 
 - **PS4 / PS5:** Der Patch legt beim ersten Start `/data/TheCrew/console_key.txt` an. Der Name ist der
   PS4-Benutzername.
