@@ -237,9 +237,6 @@ NAME_MAX = 32
 _AUTH_LOCK = threading.Lock()
 
 
-PC_FALLBACK_NAME = "TheCrewReborn"
-
-
 def credential(body: dict, auth: str) -> str:
     t = auth_ticket(auth)
     if not t:
@@ -377,8 +374,6 @@ def _check_login(name: str, platform: str, body: dict, auth: str, client_ip: str
                               "or signs of plain ASCII")
     if account_key(name) == account_key(DEFAULT_NAME):
         return _login_refused(client_ip, "this name", "name not allowed, choose another")
-    if platform == "uplay" and account_key(name) == account_key(PC_FALLBACK_NAME):
-        return _login_refused(client_ip, name, "name not allowed, set your own Name in reborn.ini")
     stamp = _begin_attempt(client_ip)
     if stamp is None:
         return _login_refused(client_ip, name, "too many failed logins, try again later")
