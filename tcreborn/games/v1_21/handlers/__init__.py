@@ -25,12 +25,11 @@ class Ctx:
     pc: bool = False
     crew_group: int = 0
     verified: bool = False
+    client_ip: str = ""
 
     def client_now_us(self) -> int:
-        from tcreborn import config, ubi
         from tcreborn.games.v1_21 import summit
-        calendar = self.pc or ubi.ACCOUNTS is not None or config.multiplayer()
-        return summit.calendar_time_us(self.now_us()) if calendar else self.now_us()
+        return summit.calendar_time_us(self.now_us())
 
 
 Handler = Callable[[Ctx, bytes], tuple[int, bytes]]

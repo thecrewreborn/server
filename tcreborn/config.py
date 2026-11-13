@@ -140,12 +140,23 @@ def bots() -> bool:
     return _load().get("world", "bots", fallback="off").strip().lower() in ("on", "1", "true", "yes")
 
 
-def multiplayer() -> bool:
+def _multiplayer_setting() -> str | None:
     cfg = _load()
-    if not cfg.has_option("world", "multiplayer"):
-        from tcreborn import ubi
-        return ubi.ACCOUNTS is None
-    return cfg.get("world", "multiplayer").strip().lower() in ("on", "1", "true", "yes")
+    return cfg.get("world", "multiplayer").strip() if cfg.has_option("world", "multiplayer") else None
+
+
+def multiplayer() -> str:
+    value = _multiplayer_setting()
+    if value is None or value.lower() == "lan":
+        return "lan"
+    return "on" if SWITCH.get(value.lower(), False) else "off"
+
+
+def multiplayer_problem() -> str | None:
+    value = _multiplayer_setting()
+    if value is None or value.lower() == "lan" or value.lower() in SWITCH:
+        return None
+    return f"config.ini [world] multiplayer = {value} is not on, off or lan"
 
 
 def afk_kick() -> bool:
@@ -156,19 +167,23 @@ SWITCH = {"on": True, "1": True, "true": True, "yes": True, "off": False, "0": F
           "": False}
 
 
-def _public_setting() -> str:
-    return _load().get("server", "public", fallback="off").strip()
+def public_set() -> bool:
+    return _load().has_option("server", "public")
 
 
-def public() -> bool:
-    return SWITCH.get(_public_setting().lower(), False)
+def _link_home_setting() -> str:
+    return _load().get("server", "link_home", fallback="on").strip()
 
 
-def public_problem() -> str | None:
-    value = _public_setting()
+def link_home() -> bool:
+    return SWITCH.get(_link_home_setting().lower(), False)
+
+
+def link_home_problem() -> str | None:
+    value = _link_home_setting()
     if value.lower() in SWITCH:
         return None
-    return f"config.ini [server] public = {value} is not on or off (also allowed: yes/no, true/false, 1/0)"
+    return f"config.ini [server] link_home = {value} is not on or off (also allowed: yes/no, true/false, 1/0)"
 
 
 def proxy_key() -> tuple[bytes, bytes]:

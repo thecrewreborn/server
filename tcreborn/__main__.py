@@ -59,7 +59,7 @@ def _check_server_ip() -> None:
 
 def _check_config() -> None:
     try:
-        problem = config.public_problem()
+        problem = config.link_home_problem() or config.multiplayer_problem()
     except configparser.Error as e:
         raise SystemExit(f"ERROR: config.ini cannot be read: {e}\nOpen config.ini and change the existing lines; each "
                          f"[section] heading and each key may appear only once.")
@@ -67,20 +67,26 @@ def _check_config() -> None:
         raise SystemExit(f"ERROR: {problem}. The server does not start.")
 
 
-def _say_mode() -> None:
-    public = config.public()
-    print(f"public mode: {'on' if public else 'off'}", flush=True)
-    if public and config.advertised_ip() is None:
-        print("WARNING: public mode without [server] ip: the server announces the address it is reached at in its own "
-              "network. Behind NAT (a cloud VM, a router at home) players on the internet cannot reach that address; "
-              "set [server] ip to the public IPv4 address (README: Running a public server).", flush=True)
+def _say_settings() -> None:
+    if config.public_set():
+        print("[server] public has no effect any more: the server always checks names", flush=True)
+    if config.https_port() == 0:
+        print("WARNING: PS4 consoles send their key only over HTTPS; with https_port = 0 they cannot log in",
+              flush=True)
 
 
-def _public_mode(ubi, versions) -> None:
+def _warn_link_home() -> None:
+    from tcreborn import ubi
+    ip = config.advertised_ip()
+    if config.link_home() and ip is not None and not ubi.trusted(ip):
+        print("WARNING: link_home: devices from private addresses join a name without a link window; if a proxy, "
+              "tunnel or container port forward sits in front of this server, set link_home = off", flush=True)
+
+
+def _accounts(ubi, versions) -> None:
     from tcreborn.accounts import STORE_NAME, AccountStore
     from tcreborn.saves import DEFAULT_NAME, account_key, save_name
     ubi.ACCOUNTS = AccountStore(paths.home("save", STORE_NAME))
-    print("names are claimed with a password (PC) or console key (PS4)", flush=True)
     claimed = {account_key(n) for n in ubi.ACCOUNTS.names()} | {account_key(DEFAULT_NAME)}
     unclaimed = set()
     for game in versions:
@@ -92,6 +98,14 @@ def _public_mode(ubi, versions) -> None:
     unclaimed = {n for n in unclaimed if account_key(n) not in claimed}
     if unclaimed:
         print(f"unclaimed saves (anyone may claim them at the next login): {', '.join(sorted(unclaimed))}", flush=True)
+
+
+def _old_single_player_saves(versions) -> None:
+    for game in versions:
+        path = paths.home("save", game.NAME, "player.json")
+        if os.path.isfile(path):
+            print(f"{os.path.relpath(path, paths.HOME)} is the old single-player save and is no longer used; to keep "
+                  f"it, rename it to players/<Name>.json and log in as <Name>", flush=True)
 
 
 def _check_server_id() -> None:
@@ -123,7 +137,7 @@ def main(argv: list[str] | None = None) -> None:
                     help="build the game tables from your game files (PC data_win32 or PS4 app0/patch0) and exit")
     args = ap.parse_args(argv)
     print(f"The Crew Reborn server {VERSION}", flush=True)
-    _say_mode()
+    _say_settings()
     versions = games.available()
     if args.generate:
         builders = [g for g in versions if hasattr(g, "generate")]
@@ -152,8 +166,9 @@ def main(argv: list[str] | None = None) -> None:
     detail(f"abilities: {config.abilities()}, unlocks: {config.unlocks()}, dlc: {config.dlc()}")
     print(f"DLC: {'on' if config.dlc() == 'all' else 'off'} (config.ini [player] dlc)", flush=True)
     _check_server_ip()
-    if config.public():
-        _public_mode(ubi, versions)
+    _accounts(ubi, versions)
+    _warn_link_home()
+    _old_single_player_saves(versions)
     requests_log = os.path.join(os.path.dirname(args.log), "requests.jsonl")
     _, http_port = _bind(ubi.serve, args.http_port, "http", requests_log)
     ubi.HTTP_PORT = http_port

@@ -1,4 +1,4 @@
-# systemd unit for a public The Crew Reborn server (see "Running a public server" in the README).
+# systemd unit that runs The Crew Reborn server on the internet (see "Running a server on the internet" in the README).
 # Adjust User= and the two paths to your setup, then:
 #   sudo cp thecrewreborn.service /etc/systemd/system/
 #   sudo systemctl daemon-reload && sudo systemctl enable --now thecrewreborn

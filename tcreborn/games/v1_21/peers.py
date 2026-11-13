@@ -70,10 +70,9 @@ class Peers:
 
     def add(self, pid: int, info: bytes, entity: bytes, x: float, y: float) -> None:
         with self.lock:
-            if ubi.ACCOUNTS is not None:
-                now = self.clock()
-                for gone in [k for k, p in self.by_id.items() if now - p.seen > STALE_S]:
-                    del self.by_id[gone]
+            now = self.clock()
+            for gone in [k for k, p in self.by_id.items() if now - p.seen > STALE_S]:
+                del self.by_id[gone]
             old = self.by_id.get(pid)
             if old and self.clock() - old.seen <= STALE_S:
                 order = old.order
@@ -133,13 +132,15 @@ def platform_property(platform: str, name: str) -> tuple[int, bytes]:
 
 
 def enabled() -> bool:
-    return config.multiplayer()
+    return config.multiplayer() != "off"
 
 
 def acting_id(ctx, pid: int) -> int | None:
-    if ubi.ACCOUNTS is None:
-        return pid
-    return ctx.player_id if ctx.verified else None
+    mode = config.multiplayer()
+    lan_ok = config.link_home() and ubi.trusted(ctx.client_ip)
+    if not ctx.verified or mode == "off" or (mode == "lan" and not lan_ok):
+        return None
+    return ctx.player_id
 
 
 def _u32(b: bytes, p: int) -> int:
@@ -187,12 +188,12 @@ def register(body: bytes, ctx=None) -> int | None:
         pid = acting_id(ctx, pid)
         if pid is None:
             return None
-        if ubi.ACCOUNTS is not None:
-            at = 4 + 4 + _u32(info, 4)
-            info = info[:at] + struct.pack(">Q", pid) + info[at + 8:]
-            at += 8 + 4 + 4 + 2 + 2 + 1 + 1
-            wide = ctx.player_name.encode("utf-16-le")
-            info = info[:at] + struct.pack(">I", len(wide)) + wide + info[at + 4 + _u32(info, at):]
+
+        at = 4 + 4 + _u32(info, 4)
+        info = info[:at] + struct.pack(">Q", pid) + info[at + 8:]
+        at += 8 + 4 + 4 + 2 + 2 + 1 + 1
+        wide = ctx.player_name.encode("utf-16-le")
+        info = info[:at] + struct.pack(">I", len(wide)) + wide + info[at + 4 + _u32(info, at):]
     PEERS.add(pid, info, entity, x, y)
     return pid
 

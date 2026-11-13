@@ -8,9 +8,7 @@ import time
 import types
 
 from tcreborn.games.v1_21 import relay
-from tcreborn import ubi
 from tcreborn.keys import K0
-from tcreborn.session import Session
 from tcreborn.games.v1_00 import PORT_OFFSET, crypto, handlers
 from tcreborn.wire import assemble, data_chunk
 
@@ -158,7 +156,7 @@ class V100Server(relay.Server):
 
     def _key_exchange(self, addr):
 
-        sess = self._new_session(addr) if ubi.ACCOUNTS is not None else self.sessions.setdefault(addr, Session())
+        sess = self._new_session(addr)
         sess.key, sess.iv, sess.connected = os.urandom(32), b"", True
         self.muted = False
         reply = b"\x00\x00\x00\x00\x00\x01" + crypto.encrypt(self.key, sess.key)

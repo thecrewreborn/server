@@ -147,8 +147,7 @@ def _rgba(png: bytes, size: int, client_ip: str | None = None) -> bytes | None:
     rgba = _RGBA.get(key)
     if rgba is not None:
         return rgba
-    from tcreborn import ubi
-    if client_ip is not None and ubi.ACCOUNTS is not None and not _DECODES.allow(client_ip):
+    if client_ip is not None and not _DECODES.allow(client_ip):
         return None
     width, height, rgba = _decode(png)
     rgba = rgba if width == height == size else _box(width, height, rgba, size)

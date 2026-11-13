@@ -4,6 +4,7 @@ import base64
 import binascii
 import datetime
 import io
+import ipaddress
 import json
 import os
 import re
@@ -15,7 +16,7 @@ import urllib.parse
 import uuid
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
-from tcreborn import avatar, server_id
+from tcreborn import accounts, avatar, config, server_id
 from tcreborn.accounts import AccountStore
 from tcreborn.limits import LineLimit, RateLimit
 from tcreborn.saves import account_key
@@ -186,7 +187,7 @@ _LINES = LineLimit("http")
 
 
 def say(client_ip: str, text: str, verified: bool = False) -> None:
-    if ACCOUNTS is not None and not verified and not _LINES.allow(client_ip, _now()):
+    if not verified and not _LINES.allow(client_ip, _now()):
         return
     try:
         print(f"[{datetime.datetime.now():%H:%M:%S}] {text}", flush=True)
@@ -217,7 +218,7 @@ def logout(client_ip: str) -> None:
             del ONLINE[key]
 
 
-ACCOUNTS: AccountStore | None = None
+ACCOUNTS: AccountStore = None
 TICKET_TTL = 3 * 3600
 
 
@@ -254,8 +255,22 @@ def credential(body: dict, auth: str) -> str:
     return ticket.partition("|")[2]
 
 
-def _claim_id(name: str) -> str | None:
-    return ACCOUNTS.claim_id(name) if ACCOUNTS is not None else None
+def _account_id(name: str) -> str | None:
+    return ACCOUNTS.account_id(name)
+
+
+HOME_NETWORKS = tuple(ipaddress.ip_network(n) for n in
+                      ("10.0.0.0/8", "172.16.0.0/12", "192.168.0.0/16", "127.0.0.0/8", "::1/128"))
+
+
+def trusted(ip: str) -> bool:
+    try:
+        addr = ipaddress.ip_address(ip.split("%", 1)[0])
+    except (ValueError, AttributeError):
+        return False
+    if addr.version == 6 and addr.ipv4_mapped is not None:
+        addr = addr.ipv4_mapped
+    return any(addr in net for net in HOME_NETWORKS if net.version == addr.version)
 
 
 def _expired(entry: tuple[str, str, float, str | None], now: float) -> bool:
@@ -274,7 +289,7 @@ def ticket_owner(ticket: str, refresh: bool = False) -> tuple[str, str] | None:
         entry = TICKETS.get(ticket)
         if entry is None or _expired(entry, now):
             return None
-    claim = _claim_id(entry[0])
+    claim = _account_id(entry[0])
     if claim is None or claim != entry[3]:
         return None
     if refresh:
@@ -290,7 +305,7 @@ def live_ticket(auth: str) -> bool:
 
 
 def _issue(ticket: str, name: str, platform: str) -> None:
-    now, account, claim = _now(), account_key(name), _claim_id(name)
+    now, account, claim = _now(), account_key(name), _account_id(name)
     with _AUTH_LOCK:
         for old in [t for t, entry in TICKETS.items() if _expired(entry, now) or account_key(entry[0]) == account]:
             del TICKETS[old]
@@ -341,7 +356,7 @@ def _end_attempt(client_ip: str, stamp: float, failed: bool) -> None:
 
 
 def loggable(reply: object) -> object:
-    if ACCOUNTS is not None and isinstance(reply, dict) and ("ticket" in reply or "token" in reply):
+    if isinstance(reply, dict) and ("ticket" in reply or "token" in reply):
         return {k: "***" if k in ("ticket", "token") else v for k, v in reply.items()}
     return reply
 
@@ -355,7 +370,7 @@ def _login_refused(client_ip: str, name: str, why: str, short: str | None = None
     return 409, {"error": f"{name}: {short or why}", "errorCode": 409}
 
 
-def _public_login(name: str, platform: str, body: dict, auth: str, client_ip: str) -> tuple[int, dict] | None:
+def _check_login(name: str, platform: str, body: dict, auth: str, client_ip: str) -> tuple[int, dict] | None:
     from tcreborn.saves import DEFAULT_NAME
     if not name_allowed(name):
         return _login_refused(client_ip, "this name", "name not allowed, use at most 32 letters, digits "
@@ -377,12 +392,13 @@ def _public_login(name: str, platform: str, body: dict, auth: str, client_ip: st
     if crowded:
         _give_back(CLAIMS, CLAIM_WINDOW, client_ip, slot)
         slot = None
-    verdict = "unavailable"
+    verdict, home = "unavailable", trusted(client_ip) and config.link_home()
     try:
-        verdict = ACCOUNTS.check(name, platform, credential(body, auth), slot is not None)
+        verdict = ACCOUNTS.check(name, platform, credential(body, auth), slot is not None,
+                                 link="always" if home else "window")
     finally:
         _end_attempt(client_ip, stamp, verdict == "wrong")
-        if verdict not in ("ok", "claimed"):
+        if verdict not in ("ok", "claimed", "linked"):
             _give_back(LOGINS, LOGIN_WINDOW, client_ip, login)
         if slot is not None and verdict != "claimed":
             _give_back(CLAIMS, CLAIM_WINDOW, client_ip, slot)
@@ -394,7 +410,8 @@ def _public_login(name: str, platform: str, body: dict, auth: str, client_ip: st
         return _login_refused(client_ip, name, "wrong password")
     if verdict == "missing":
         if platform == "uplay":
-            return _login_refused(client_ip, name, "no password set in reborn.ini")
+            return _login_refused(client_ip, name, "no device key: PC patch older than 0.0.4 or no server id yet "
+                                  "(start the server first)")
 
 
         return _login_refused(client_ip, name,
@@ -405,6 +422,13 @@ def _public_login(name: str, platform: str, body: dict, auth: str, client_ip: st
                               "plain HTTP server, or the server changed after the game started: restart the game)")
     if verdict == "unavailable":
         return _login_refused(client_ip, name, "account store unavailable")
+    if verdict == "full":
+        limit = accounts.DEVICES_MAX
+        status, reply = _login_refused(client_ip, name, f"has {limit} devices; free one with tools/accounts.py")
+        return status, dict(reply, error=f"{name} has {limit} devices; free one with tools/accounts.py")
+    if verdict == "linked":
+        say(client_ip, f"login {client_ip}: {name}: new device linked "
+                       f"({'home network' if home else 'link window'})", True)
     return None
 
 
@@ -412,20 +436,19 @@ _CONSOLE_UPLOADS = RateLimit(CONSOLE_UPLOADS_PER_MIN, 60.0)
 
 
 def console_picture(name: str, auth: str, raw: bytes, client_ip: str) -> tuple[int, dict]:
-    if ACCOUNTS is not None and not _CONSOLE_UPLOADS.allow(client_ip, _now()):
+    if not _CONSOLE_UPLOADS.allow(client_ip, _now()):
         return 429, {"error": "too many picture uploads, try again later"}
     why = avatar.check_console_picture(raw, decode=False)
     if why:
         return (413 if len(raw) > avatar.MAX_UPLOAD else 400), {"error": why}
-    if ACCOUNTS is not None:
-        scheme, _, code = auth.strip().partition(" ")
-        if scheme.lower() != CONSOLE_AUTH or not code.strip():
-            return 401, {"error": "the console's login code is missing"}
-        verdict = ACCOUNTS.check(name, "psn", code.strip(), claim=False)
-        if verdict == "unavailable":
-            return 503, {"error": "account store unavailable"}
-        if verdict != "ok":
-            return 403, {"error": "only the console that claimed this name may set its picture"}
+    scheme, _, code = auth.strip().partition(" ")
+    if scheme.lower() != CONSOLE_AUTH or not code.strip():
+        return 401, {"error": "the console's login code is missing"}
+    verdict = ACCOUNTS.check(name, "psn", code.strip(), claim=False, link="never")
+    if verdict == "unavailable":
+        return 503, {"error": "account store unavailable"}
+    if verdict != "ok":
+        return 403, {"error": "only the console that claimed this name may set its picture"}
     why = avatar.save_console_upload(name, raw)
     if why:
         return 400, {"error": why}
@@ -450,12 +473,10 @@ def session(body: dict, client_ip: str, auth: str = "") -> dict:
     profile = stable_id("profile", name)
     PROFILES[profile] = (name, platform)
     utc = datetime.datetime.now(datetime.timezone.utc)
-    ticket = base64.b64encode(f"offline-ticket:{profile}".encode()).decode()
-    token = base64.b64encode(f"offline-token:{profile}".encode()).decode()
-    if ACCOUNTS is not None:
-        ticket = base64.b64encode(f"offline-ticket:{uuid.uuid4()}".encode()).decode()
-        token = base64.b64encode(f"offline-token:{uuid.uuid4()}".encode()).decode()
-        _issue(ticket, ACCOUNTS.display_name(name) or name, platform)
+
+    ticket = base64.b64encode(f"offline-ticket:{uuid.uuid4()}".encode()).decode()
+    token = base64.b64encode(f"offline-token:{uuid.uuid4()}".encode()).decode()
+    _issue(ticket, ACCOUNTS.display_name(name) or name, platform)
     return {
         "platformType": platform,
         "ticket": ticket,
@@ -477,10 +498,7 @@ def session(body: dict, client_ip: str, auth: str = "") -> dict:
 
 
 def announced_host(host: str) -> str:
-    if ACCOUNTS is not None:
-        from tcreborn import config
-        return config.advertised_ip() or host
-    return host
+    return config.advertised_ip() or host
 
 
 HTTP_PORT = 80
@@ -540,7 +558,7 @@ def route(method: str, path: str, body: dict, host: str, client: tuple[str, int]
         client_version = dict(urllib.parse.parse_qsl(query)).get("client")
         if client_version:
             say(client[0], f"version {client[0]}: {printable(client_version, 200)}, server {VERSION}",
-                ACCOUNTS is not None and live_ticket(auth))
+                live_ticket(auth))
         return 200, _version()
     if method == "GET" and path.endswith("/v2/profiles"):
         return 200, profiles(query)
@@ -567,10 +585,9 @@ def route(method: str, path: str, body: dict, host: str, client: tuple[str, int]
         if method != "POST":
             return 200, {}
         name, platform = login_name(body, auth)
-        if ACCOUNTS is not None:
-            refused = _public_login(name, platform, body, auth, client[0])
-            if refused:
-                return refused
+        refused = _check_login(name, platform, body, auth, client[0])
+        if refused:
+            return refused
         other = online_elsewhere(name, client[0]) if name != "Player" else None
         if other:
             print(f"[{datetime.datetime.now():%H:%M:%S}] login {client[0]} refused: {name} is playing on {other}",
@@ -749,7 +766,7 @@ class Handler(BaseHTTPRequestHandler):
             self.path.split("?")[0].rstrip("/").endswith("/profiles/sessions")
         say(self.client_address[0], f"http {self.client_address[0]} {self.command} "
                                     f"{printable(self.path.split('?')[0])} -> {status}",
-            ACCOUNTS is not None and (login or live_ticket(auth)))
+            login or live_ticket(auth))
         if self.log_path:
             line = json.dumps({"time": datetime.datetime.now().isoformat(), "client": self.client_address[0],
                                "method": self.command, "path": log_path(self.path)[:LOG_PATH], "auth": redact(auth),
