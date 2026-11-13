@@ -8,8 +8,8 @@ After=network-online.target
 Wants=network-online.target
 
 [Service]
-# A normal user that owns the server folder; "ubuntu" is an example.
-User=ubuntu
+# A normal user that owns the server folder; "crew" is an example.
+User=crew
 # Example path: the folder with start-server.sh.
 WorkingDirectory=/opt/thecrewreborn
 ExecStart=/bin/sh /opt/thecrewreborn/start-server.sh

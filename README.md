@@ -29,13 +29,13 @@ again in the game. The very first start needs the server running.
     shows 01.21, with Wild Run) or as the base game without any update (01.00). Tested on a PS4 with firmware 11.50.
     The base game 1.00 is new and experimental: tested from the start of the story to the first tuning shop.
   - **PC:** Ubisoft Connect or Steam version, `TheCrew.exe` 1.2.0.0 (build 502193). Tested on Windows 11, also Windows 11 on ARM
-    (Parallels on a Mac with Apple silicon).
+    (in a virtual machine).
 
   Not tested yet: the PS5. Other PS4 regions and game versions don't work yet; the
   patch fits only CUSA00161 1.00 and 1.21.
 - A computer on the same network as the console or the gaming PC: Windows, macOS or Linux. The server can also run
   on the gaming PC itself, or on a computer on the internet (see "Running a server on the internet"). Linux needs
-  Python 3.10 or newer with venv (Debian/Ubuntu: `sudo apt install python3 python3-venv`); on Windows and macOS the
+  Python 3.10 or newer with venv (with apt: `sudo apt install python3 python3-venv`); on Windows and macOS the
   start script installs Python if it is missing.
 
 ## The server
@@ -264,7 +264,7 @@ logrotate do it with a file `/etc/logrotate.d/thecrewreborn` (adjust the path an
 
 ```
 /opt/thecrewreborn/captures/*.jsonl {
-    su ubuntu ubuntu
+    su crew crew
     weekly
     rotate 4
     compress
@@ -280,7 +280,7 @@ Open exactly the ports of "Ports" between the internet and the server. If the se
 
 **Option 1: a Linux server**
 
-Any Linux machine with a public IPv4 address works, rented or your own. The steps below are for Ubuntu or Debian;
+Any Linux machine with a public IPv4 address works, rented or your own. The steps below are for a Linux system with apt and systemd;
 the server needs little (see "Load" below).
 
 1. Open the ports above to the server: in the firewall of your hosting provider, if it has one, and on the machine
@@ -292,7 +292,7 @@ the server needs little (see "Load" below).
    ```
 
 2. Install the server. Set `VERSION` to the newest version on the download page (0.0.4 or later) and replace
-   `ubuntu` with the user the unit runs as (`User=` in `thecrewreborn.service`, see step 3):
+   `crew` with the user the unit runs as (`User=` in `thecrewreborn.service`, see step 3):
 
    ```
    sudo apt install python3 python3-venv unzip
@@ -301,10 +301,10 @@ the server needs little (see "Load" below).
    unzip server.zip
    sudo mkdir -p /opt/thecrewreborn
    sudo cp -a TheCrewReborn-Server-$VERSION/. /opt/thecrewreborn/
-   sudo chown -R ubuntu: /opt/thecrewreborn
+   sudo chown -R crew: /opt/thecrewreborn
    cd /opt/thecrewreborn
-   sudo -u ubuntu chmod +x start-server.sh
-   sudo -u ubuntu cp config.example.ini config.ini
+   sudo -u crew chmod +x start-server.sh
+   sudo -u crew cp config.example.ini config.ini
    ```
 
    Keep the folder out of `/home`, which the unit hides. Put the settings above into `config.ini` by changing its
@@ -323,14 +323,14 @@ the server needs little (see "Load" below).
 **Option 2: at home**
 
 You need a public IPv4 address from your provider (not DS-Lite or CG-NAT). Give the server computer a fixed address,
-then forward the ports above to it on the router. On a FritzBox: Internet, Freigaben, Portfreigaben, add a device,
-one forwarding per port. A plain port forward keeps the players' own addresses, so `link_home` can stay on. If your
-provider changes the address, update `ip` in `config.ini` and `server.txt` on every PS4; every device then needs to
-join its name again (see "Server address"), so a server on the internet needs a fixed address.
+then forward the ports above to it on the router. A plain port forward keeps the players' own addresses, so
+`link_home` can stay on. If your provider changes the address, update `ip` in `config.ini` and `server.txt` on every
+PS4; every device then needs to join its name again (see "Server address"), so a server on the internet needs a fixed
+address.
 
 **Load**
 
-Measured on 2026-11-12: about 0.02 % of one CPU core per player (Apple M2 Max), 1 to 2 kbit/s on average with
+Measured on 2026-11-12: about 0.02 % of one CPU core per player (a notebook CPU from 2023), 1 to 2 kbit/s on average with
 peaks up to 16 kbit/s, and about 22 KB of save per player. The server process uses about 50 MB of memory.
 
 ## What the server checks
@@ -429,13 +429,13 @@ im Spiel erneut an. Beim allerersten Start muss der Server bereits laufen.
     Spielinfo zeigt 01.21, mit Wild Run) oder als Basisspiel ohne Update (01.00). Getestet auf einer PS4 mit Firmware
     11.50. Das Basisspiel 1.00 ist neu und experimentell: getestet vom Beginn der Story bis zum ersten Tuning-Shop.
   - **PC:** Ubisoft-Connect- oder Steam-Version, `TheCrew.exe` 1.2.0.0 (Build 502193). Getestet unter Windows 11, auch unter Windows 11
-    für ARM (Parallels auf einem Mac mit Apple-Chip).
+    für ARM (in einer virtuellen Maschine).
 
   Noch nicht getestet: die PS5. Andere PS4-Regionen und Spielversionen werden
   noch nicht unterstützt; der Patch passt nur auf CUSA00161 1.00 und 1.21.
 - Einen Rechner im selben Netzwerk wie die Konsole oder der Spiele-PC: Windows, macOS oder Linux. Der Server kann
   auch auf dem Spiele-PC selbst laufen oder auf einem Rechner im Internet (siehe „Einen Server im Internet
-  betreiben“). Linux braucht Python 3.10 oder neuer mit venv (Debian/Ubuntu: `sudo apt install python3 python3-venv`);
+  betreiben“). Linux braucht Python 3.10 oder neuer mit venv (mit apt: `sudo apt install python3 python3-venv`);
   unter Windows und macOS installiert das Startskript Python bei Bedarf.
 
 ## Der Server
@@ -669,7 +669,7 @@ crew_credits_refill = off
   Konsole muss den Server außerdem über UDP-Port 4001 erreichen: Dort erfährt sie die Kennung des Servers, ohne sie
   wird die Anmeldung abgelehnt.
 - PC: Setze `Host` unter `[Server]` in `reborn.ini`; dort ist eine Adresse oder ein Hostname möglich. Nutzt der
-  Server 8443, setze außerdem `HttpsPort = 8443`. Ein Hostname, dessen Adresse sich ändert (DynDNS), gibt dem PC bei
+  Server 8443, setze außerdem `HttpsPort = 8443`. Ein Hostname, dessen Adresse sich ändert (dynamisches DNS), gibt dem PC bei
   jeder Änderung einen neuen Code.
 - Der erste Login reserviert den Namen. Für ein zweites Gerät bittet der Spieler den Betreiber um ein Zeitfenster.
 
@@ -688,7 +688,7 @@ Benutzer an):
 
 ```
 /opt/thecrewreborn/captures/*.jsonl {
-    su ubuntu ubuntu
+    su crew crew
     weekly
     rotate 4
     compress
@@ -705,7 +705,7 @@ Benutzer an):
 **Variante 1: ein Linux-Server**
 
 Jeder Linux-Rechner mit öffentlicher IPv4-Adresse eignet sich, gemietet oder dein eigener. Die Schritte unten gelten
-für Ubuntu oder Debian; der Server braucht wenig (siehe „Last“ unten).
+für ein Linux-System mit apt und systemd; der Server braucht wenig (siehe „Last“ unten).
 
 1. Öffne die obigen Ports zum Server: in der Firewall deines Hosting-Anbieters, falls es eine gibt, und auf dem
    Rechner selbst. Mit ufw:
@@ -716,7 +716,7 @@ für Ubuntu oder Debian; der Server braucht wenig (siehe „Last“ unten).
    ```
 
 2. Installiere den Server. Setze `VERSION` auf die neueste Version der Download-Seite (0.0.4 oder neuer) und
-   ersetze `ubuntu` durch den Benutzer, unter dem die Unit läuft (`User=` in `thecrewreborn.service`, siehe
+   ersetze `crew` durch den Benutzer, unter dem die Unit läuft (`User=` in `thecrewreborn.service`, siehe
    Schritt 3):
 
    ```
@@ -726,10 +726,10 @@ für Ubuntu oder Debian; der Server braucht wenig (siehe „Last“ unten).
    unzip server.zip
    sudo mkdir -p /opt/thecrewreborn
    sudo cp -a TheCrewReborn-Server-$VERSION/. /opt/thecrewreborn/
-   sudo chown -R ubuntu: /opt/thecrewreborn
+   sudo chown -R crew: /opt/thecrewreborn
    cd /opt/thecrewreborn
-   sudo -u ubuntu chmod +x start-server.sh
-   sudo -u ubuntu cp config.example.ini config.ini
+   sudo -u crew chmod +x start-server.sh
+   sudo -u crew cp config.example.ini config.ini
    ```
 
    Lege den Ordner nicht unter `/home`, das die Unit ausblendet. Trage die Einstellungen von oben in `config.ini`
@@ -749,15 +749,14 @@ für Ubuntu oder Debian; der Server braucht wenig (siehe „Last“ unten).
 **Variante 2: zu Hause**
 
 Du brauchst eine öffentliche IPv4-Adresse von deinem Anbieter (kein DS-Lite oder CG-NAT). Gib dem Server-Rechner eine
-feste Adresse und leite dann am Router die obigen Ports auf ihn weiter. Bei einer FritzBox: Internet, Freigaben,
-Portfreigaben, Gerät hinzufügen, je Port eine Freigabe. Eine einfache Portfreigabe behält die eigenen Adressen der
-Spieler bei, `link_home` kann also an bleiben. Ändert dein Anbieter die Adresse, passe `ip` in `config.ini` und
-`server.txt` auf jeder PS4 an; jedes Gerät muss seinem Namen dann erneut beitreten (siehe „Serveradresse“). Ein
-Server im Internet braucht daher eine feste Adresse.
+feste Adresse und leite dann am Router die obigen Ports auf ihn weiter. Eine einfache Portfreigabe behält die eigenen
+Adressen der Spieler bei, `link_home` kann also an bleiben. Ändert dein Anbieter die Adresse, passe `ip` in
+`config.ini` und `server.txt` auf jeder PS4 an; jedes Gerät muss seinem Namen dann erneut beitreten (siehe
+„Serveradresse“). Ein Server im Internet braucht daher eine feste Adresse.
 
 **Last**
 
-Gemessen am 12.11.2026: etwa 0,02 % eines CPU-Kerns pro Spieler (Apple M2 Max), 1 bis 2 kbit/s im Durchschnitt mit
+Gemessen am 12.11.2026: etwa 0,02 % eines CPU-Kerns pro Spieler (ein Notebook-Prozessor von 2023), 1 bis 2 kbit/s im Durchschnitt mit
 Spitzen bis 16 kbit/s und etwa 22 KB Spielstand pro Spieler. Der Serverprozess belegt etwa 50 MB Arbeitsspeicher.
 
 ## Was der Server prüft
