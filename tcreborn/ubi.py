@@ -15,8 +15,10 @@ import urllib.parse
 import uuid
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
-from tcreborn import avatar
+from tcreborn import avatar, server_id
 from tcreborn.accounts import AccountStore
+from tcreborn.limits import LineLimit
+from tcreborn.saves import account_key
 from tcreborn.version import VERSION
 
 APP_ID = "103649f4-9ca6-49a7-a122-522f3099854b"
@@ -177,23 +179,30 @@ def log_failed(path: str, err: BaseException) -> None:
         pass
 
 
+_LINES = LineLimit("http")
+
+
+def say(client_ip: str, text: str, verified: bool = False) -> None:
+    if ACCOUNTS is not None and not verified and not _LINES.allow(client_ip, _now()):
+        return
+    try:
+        print(f"[{datetime.datetime.now():%H:%M:%S}] {text}", flush=True)
+    except (OSError, ValueError):
+        pass
+
+
 def printable(text: str, limit: int = LOG_PATH) -> str:
     return "".join(c if c.isprintable() else "?" for c in text[:limit])
 
 
-def _save_key(name: str) -> str:
-    from tcreborn.saves import save_name
-    return save_name(name).lower()
-
-
 def touch(name: str, client_ip: str) -> None:
     with _ONLINE_LOCK:
-        ONLINE[_save_key(name)] = (client_ip, _now())
+        ONLINE[account_key(name)] = (client_ip, _now())
 
 
 def online_elsewhere(name: str, client_ip: str) -> str | None:
     with _ONLINE_LOCK:
-        entry = ONLINE.get(_save_key(name))
+        entry = ONLINE.get(account_key(name))
     if entry and entry[0] != client_ip and _now() - entry[1] < ONLINE_TIMEOUT:
         return entry[0]
     return None
@@ -208,13 +217,23 @@ def logout(client_ip: str) -> None:
 ACCOUNTS: AccountStore | None = None
 TICKET_TTL = 3 * 3600
 
+
 TICKETS: dict[str, tuple[str, str, float, str | None]] = {}
+ACTIVE: dict[str, float] = {}
 FAILED: dict[str, list[float]] = {}
 FAIL_LIMIT, FAIL_WINDOW = 5, 600.0
 CLAIMS: dict[str, list[float]] = {}
 CLAIM_LIMIT, CLAIM_WINDOW = 3, 3600.0
+
+CLAIMS_ALL: dict[str, list[float]] = {}
+CLAIM_ALL_LIMIT = 200
+LOGINS: dict[str, list[float]] = {}
+LOGIN_LIMIT, LOGIN_WINDOW = 30, 600.0
 NAME_MAX = 32
 _AUTH_LOCK = threading.Lock()
+
+
+PC_FALLBACK_NAME = "TheCrewReborn"
 
 
 def credential(body: dict, auth: str) -> str:
@@ -236,23 +255,44 @@ def _claim_id(name: str) -> str | None:
     return ACCOUNTS.claim_id(name) if ACCOUNTS is not None else None
 
 
-def ticket_owner(ticket: str) -> tuple[str, str] | None:
+def _expired(entry: tuple[str, str, float, str | None], now: float) -> bool:
+    return now - max(entry[2], ACTIVE.get(account_key(entry[0]), -1e18)) >= TICKET_TTL
+
+
+def active(name: str) -> None:
+    now = _now()
+    with _AUTH_LOCK:
+        ACTIVE[account_key(name)] = now
+
+
+def ticket_owner(ticket: str, refresh: bool = False) -> tuple[str, str] | None:
+    now = _now()
     with _AUTH_LOCK:
         entry = TICKETS.get(ticket)
-    if entry is None or _now() - entry[2] >= TICKET_TTL:
-        return None
+        if entry is None or _expired(entry, now):
+            return None
     claim = _claim_id(entry[0])
     if claim is None or claim != entry[3]:
         return None
+    if refresh:
+        with _AUTH_LOCK:
+            if TICKETS.get(ticket) == entry:
+                TICKETS[ticket] = (entry[0], entry[1], max(entry[2], now), entry[3])
     return entry[0], entry[1]
 
 
+def live_ticket(auth: str) -> bool:
+    t = auth_ticket(auth)
+    return bool(t) and ticket_owner(t[2].strip()) is not None
+
+
 def _issue(ticket: str, name: str, platform: str) -> None:
-    now, account, claim = _now(), _save_key(name), _claim_id(name)
+    now, account, claim = _now(), account_key(name), _claim_id(name)
     with _AUTH_LOCK:
-        for old in [t for t, (owner, _, issued, _) in TICKETS.items()
-                    if now - issued >= TICKET_TTL or _save_key(owner) == account]:
+        for old in [t for t, entry in TICKETS.items() if _expired(entry, now) or account_key(entry[0]) == account]:
             del TICKETS[old]
+        for key in [k for k, seen in ACTIVE.items() if now - seen >= TICKET_TTL]:
+            del ACTIVE[key]
         TICKETS[ticket] = (name, platform, now, claim)
 
 
@@ -303,9 +343,66 @@ def loggable(reply: object) -> object:
     return reply
 
 
-def _login_refused(client_ip: str, name: str, why: str) -> tuple[int, dict]:
-    print(f"[{datetime.datetime.now():%H:%M:%S}] login {client_ip} refused: {name}: {why}", flush=True)
-    return 409, {"error": f"{name}: {why}", "errorCode": 409}
+_REFUSALS = LineLimit("login refusals")
+
+
+def _login_refused(client_ip: str, name: str, why: str, short: str | None = None) -> tuple[int, dict]:
+    if _REFUSALS.allow((client_ip, why), _now()):
+        print(f"[{datetime.datetime.now():%H:%M:%S}] login {client_ip} refused: {name}: {why}", flush=True)
+    return 409, {"error": f"{name}: {short or why}", "errorCode": 409}
+
+
+def _public_login(name: str, platform: str, body: dict, auth: str, client_ip: str) -> tuple[int, dict] | None:
+    from tcreborn.saves import DEFAULT_NAME
+    if not name_allowed(name):
+        return _login_refused(client_ip, "this name", "name not allowed, use at most 32 letters, digits "
+                              "or signs of plain ASCII")
+    if account_key(name) == account_key(DEFAULT_NAME):
+        return _login_refused(client_ip, "this name", "name not allowed, choose another")
+    if platform == "uplay" and account_key(name) == account_key(PC_FALLBACK_NAME):
+        return _login_refused(client_ip, name, "name not allowed, set your own Name in reborn.ini")
+    stamp = _begin_attempt(client_ip)
+    if stamp is None:
+        return _login_refused(client_ip, name, "too many failed logins, try again later")
+    login = _take(LOGINS, LOGIN_LIMIT, LOGIN_WINDOW, client_ip)
+    if login is None:
+        _end_attempt(client_ip, stamp, False)
+        return _login_refused(client_ip, name, "too many logins from this address, try again later")
+    slot = _take(CLAIMS, CLAIM_LIMIT, CLAIM_WINDOW, client_ip)
+    shared = None if slot is None else _take(CLAIMS_ALL, CLAIM_ALL_LIMIT, CLAIM_WINDOW, "")
+    crowded = slot is not None and shared is None
+    if crowded:
+        _give_back(CLAIMS, CLAIM_WINDOW, client_ip, slot)
+        slot = None
+    verdict = "unavailable"
+    try:
+        verdict = ACCOUNTS.check(name, platform, credential(body, auth), slot is not None)
+    finally:
+        _end_attempt(client_ip, stamp, verdict == "wrong")
+        if verdict not in ("ok", "claimed"):
+            _give_back(LOGINS, LOGIN_WINDOW, client_ip, login)
+        if slot is not None and verdict != "claimed":
+            _give_back(CLAIMS, CLAIM_WINDOW, client_ip, slot)
+            _give_back(CLAIMS_ALL, CLAIM_WINDOW, "", shared)
+    if verdict == "unclaimed":
+        return _login_refused(client_ip, name, "too many new names right now, try again later" if crowded
+                              else "too many new names from this address, try again later")
+    if verdict == "wrong":
+        return _login_refused(client_ip, name, "wrong password")
+    if verdict == "missing":
+        if platform == "uplay":
+            return _login_refused(client_ip, name, "no password set in reborn.ini")
+
+
+        return _login_refused(client_ip, name,
+                              "no console key: PS4 patch older than 0.0.4, the console found an older server first, "
+                              "UDP 4001 not reachable, plain HTTP server, or the server changed after the game "
+                              "started (restart the game)",
+                              "no console key (PS4 patch older than 0.0.4, older server found first, UDP 4001 blocked, "
+                              "plain HTTP server, or the server changed after the game started: restart the game)")
+    if verdict == "unavailable":
+        return _login_refused(client_ip, name, "account store unavailable")
+    return None
 
 
 def login_name(body: dict, auth: str = "") -> tuple[str, str]:
@@ -343,7 +440,7 @@ def session(body: dict, client_ip: str, auth: str = "") -> dict:
         "spaceId": SPACE_ID,
         "productId": stable_id("product", "thecrew-ps4"),
         "environment": "Prod",
-        "expiration": ubi_time(utc + datetime.timedelta(hours=3)),
+        "expiration": ubi_time(utc + datetime.timedelta(seconds=TICKET_TTL)),
         "serverTime": ubi_time(utc),
         "clientIp": client_ip,
         "initializeUser": False,
@@ -379,6 +476,8 @@ def configuration(host: str) -> dict:
                           {"name": "DefaultAvatarUrl", "url": f"{base}/avatars/default_avatar.png"}],
         "punch": {"detectUrl1": f"{base}/detect", "detectUrl2": f"{base}/detect", "traversalUrl": f"{base}/traversal",
                   **PUNCH},
+
+
         "sdkConfig": {"timeoutSec": 30, "keepAliveTimeoutMin": 10, "ticketTTL": 3600, "lspPort": 1200,
                       "httpSafetySleepTime": 0},
         "featuresSwitches": switches,
@@ -399,6 +498,13 @@ def profiles(query: str) -> dict:
     return {"profiles": found}
 
 
+def _version() -> dict:
+    try:
+        return {"server": VERSION, "server_id": server_id.hex_id()}
+    except OSError:
+        return {"server": VERSION}
+
+
 def route(method: str, path: str, body: dict, host: str, client: tuple[str, int],
           auth: str = "", raw: bytes = b"") -> tuple[int, object]:
     path, _, query = path.partition("?")
@@ -406,9 +512,9 @@ def route(method: str, path: str, body: dict, host: str, client: tuple[str, int]
     if path == "/version":
         client_version = dict(urllib.parse.parse_qsl(query)).get("client")
         if client_version:
-            print(f"[{datetime.datetime.now():%H:%M:%S}] version {client[0]}: {printable(client_version, 200)}, "
-                  f"server {VERSION}", flush=True)
-        return 200, {"server": VERSION}
+            say(client[0], f"version {client[0]}: {printable(client_version, 200)}, server {VERSION}",
+                ACCOUNTS is not None and live_ticket(auth))
+        return 200, _version()
     if method == "GET" and path.endswith("/v2/profiles"):
         return 200, profiles(query)
     m = AVATAR_UPLOAD.fullmatch(path)
@@ -420,7 +526,8 @@ def route(method: str, path: str, body: dict, host: str, client: tuple[str, int]
         return (200, {"saved": True}) if avatar.save_upload(m.group(1), raw) else (400, {"error": "need 256x256 RGBA"})
     m = AVATAR_RGBA.fullmatch(path)
     if m:
-        return 200, avatar.rgba_for(PROFILES.get(m.group(1), (None,))[0], int(m.group(2)), client[0])
+        rgba = avatar.rgba_for(PROFILES.get(m.group(1), (None,))[0], int(m.group(2)), client[0])
+        return (200, rgba) if rgba is not None else (503, b"")
     if path.startswith("/avatars/") and path.endswith(".png"):
         return 200, avatar.for_request(SESSIONS.get(client[0]), path, client[0])
     if path.endswith("/profiles/sessions"):
@@ -431,32 +538,9 @@ def route(method: str, path: str, body: dict, host: str, client: tuple[str, int]
             return 200, {}
         name, platform = login_name(body, auth)
         if ACCOUNTS is not None:
-            from tcreborn.saves import DEFAULT_NAME, save_name
-            if not name_allowed(name):
-                return _login_refused(client[0], "this name", "name not allowed, use at most 32 letters, digits "
-                                      "or signs of plain ASCII")
-            if save_name(name).lower() == DEFAULT_NAME.lower():
-                return _login_refused(client[0], "this name", "name not allowed, choose another")
-            stamp = _begin_attempt(client[0])
-            if stamp is None:
-                return _login_refused(client[0], name, "too many failed logins, try again later")
-            slot = _take(CLAIMS, CLAIM_LIMIT, CLAIM_WINDOW, client[0])
-            verdict = "unavailable"
-            try:
-                verdict = ACCOUNTS.check(name, platform, credential(body, auth), slot is not None)
-            finally:
-                _end_attempt(client[0], stamp, verdict == "wrong")
-                if slot is not None and verdict != "claimed":
-                    _give_back(CLAIMS, CLAIM_WINDOW, client[0], slot)
-            if verdict == "unclaimed":
-                return _login_refused(client[0], name, "too many new names from this address, try again later")
-            if verdict == "wrong":
-                return _login_refused(client[0], name, "wrong password")
-            if verdict == "missing":
-                return _login_refused(client[0], name, "no password set in reborn.ini" if platform == "uplay"
-                                      else "PS4 patch too old, it sends no console key")
-            if verdict == "unavailable":
-                return _login_refused(client[0], name, "account store unavailable")
+            refused = _public_login(name, platform, body, auth, client[0])
+            if refused:
+                return refused
         other = online_elsewhere(name, client[0]) if name != "Player" else None
         if other:
             print(f"[{datetime.datetime.now():%H:%M:%S}] login {client[0]} refused: {name} is playing on {other}",
@@ -509,6 +593,7 @@ def log_body(path: str, raw: bytes) -> str:
 MAX_CONN_PER_IP = 16
 MAX_CONN = 512
 FIRST_LINE_TIMEOUT = 15
+BODY_TIMEOUT = 30
 
 
 class _Deadline(io.RawIOBase):
@@ -516,15 +601,27 @@ class _Deadline(io.RawIOBase):
     def __init__(self, raw, sock, deadline: float):
         super().__init__()
         self.raw, self.sock, self.deadline = raw, sock, deadline
+        self.idle: float | None = None
 
     def readable(self) -> bool:
         return True
 
+    def wait_idle(self, idle: float) -> None:
+        self.deadline, self.idle = None, idle
+
+    def arm(self, seconds: float) -> None:
+        self.deadline, self.idle = time.monotonic() + seconds, None
+
     def readinto(self, b) -> int | None:
+        if self.idle is not None:
+            self.sock.settimeout(self.idle)
+            n = self.raw.readinto(b)
+            self.arm(FIRST_LINE_TIMEOUT)
+            return n
         if self.deadline is not None:
             left = self.deadline - time.monotonic()
             if left <= 0:
-                raise TimeoutError("first request line too slow")
+                raise TimeoutError("request too slow")
             self.sock.settimeout(left)
         return self.raw.readinto(b)
 
@@ -545,20 +642,33 @@ class Handler(BaseHTTPRequestHandler):
     def setup(self) -> None:
         super().setup()
 
-        self._first = _Deadline(self.rfile.detach(), self.connection, time.monotonic() + FIRST_LINE_TIMEOUT)
-        self.rfile = io.BufferedReader(self._first)
+        self._reader = _Deadline(self.rfile.detach(), self.connection, time.monotonic() + FIRST_LINE_TIMEOUT)
+        self.rfile = io.BufferedReader(self._reader)
+        self._requests = 0
+
+    def handle_one_request(self) -> None:
+        if self._requests:
+            self._reader.wait_idle(self.timeout)
+        self._requests += 1
+        super().handle_one_request()
 
     def parse_request(self) -> bool:
-        self._first.deadline = None
+        try:
+            return super().parse_request()
+        finally:
+            self._reader.arm(BODY_TIMEOUT)
+
+    def _replying(self) -> None:
+        self._reader.deadline = None
         self.connection.settimeout(self.timeout)
-        return super().parse_request()
 
     def version_string(self) -> str:
         return f"TheCrewReborn/{VERSION}"
 
     def _refuse(self, status: int, why: str) -> None:
-        print(f"[{datetime.datetime.now():%H:%M:%S}] http {self.client_address[0]} {self.command} "
-              f"{printable(self.path.split('?')[0])} -> {status} ({why})", flush=True)
+        self._replying()
+        say(self.client_address[0], f"http {self.client_address[0]} {self.command} "
+                                    f"{printable(self.path.split('?')[0])} -> {status} ({why})")
         payload = json.dumps({"error": why}).encode()
         self.close_connection = True
         self.send_response(status)
@@ -570,7 +680,7 @@ class Handler(BaseHTTPRequestHandler):
 
     def _drain(self, n: int) -> None:
         try:
-            self.connection.settimeout(5)
+            self._reader.arm(5)
             while n > 0:
                 chunk = self.rfile.read(min(n, 65536))
                 if not chunk:
@@ -592,9 +702,10 @@ class Handler(BaseHTTPRequestHandler):
                 self._drain(min(length, MAX_BODY + 65536))
             return None
         raw = self.rfile.read(length)
+        self._replying()
         try:
             body = json.loads(raw) if raw else {}
-        except ValueError:
+        except (ValueError, RecursionError):
             body = {}
         host = self.request.getsockname()[0]
         auth = self.headers.get("Authorization", "")
@@ -604,8 +715,11 @@ class Handler(BaseHTTPRequestHandler):
         payload = reply if binary else json.dumps(reply).encode()
         if binary:
             reply = f"<png {len(payload)} bytes>"
-        print(f"[{datetime.datetime.now():%H:%M:%S}] http {self.client_address[0]} {self.command} "
-              f"{printable(self.path.split('?')[0])} -> {status}", flush=True)
+        login = self.command == "POST" and status == 200 and \
+            self.path.split("?")[0].rstrip("/").endswith("/profiles/sessions")
+        say(self.client_address[0], f"http {self.client_address[0]} {self.command} "
+                                    f"{printable(self.path.split('?')[0])} -> {status}",
+            ACCOUNTS is not None and (login or live_ticket(auth)))
         if self.log_path:
             line = json.dumps({"time": datetime.datetime.now().isoformat(), "client": self.client_address[0],
                                "method": self.command, "path": log_path(self.path)[:LOG_PATH], "auth": redact(auth),
@@ -668,8 +782,7 @@ class _Server(ThreadingHTTPServer):
         err = sys.exc_info()[1]
         if isinstance(err, (ConnectionError, ssl.SSLError, TimeoutError)):
             reason = getattr(err, "reason", None) or getattr(err, "strerror", None) or ""
-            print(f"[{datetime.datetime.now():%H:%M:%S}] http {client_address[0]} {type(err).__name__} {reason}".rstrip(),
-                  flush=True)
+            say(client_address[0], f"http {client_address[0]} {type(err).__name__} {reason}".rstrip())
         else:
             super().handle_error(request, client_address)
 

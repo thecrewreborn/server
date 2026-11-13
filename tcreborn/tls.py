@@ -4,6 +4,8 @@ import datetime
 import ipaddress
 import os
 
+from tcreborn.files import write_atomic
+
 NAMES = ["public-ubiservices.ubi.com", "*.ubi.com"]
 
 
@@ -29,10 +31,9 @@ def ensure(cert_path: str, key_path: str, ip: str | None = None) -> bool:
             .sign(key, hashes.SHA256()))
     for path in (cert_path, key_path):
         os.makedirs(os.path.dirname(os.path.abspath(path)), exist_ok=True)
-    with open(key_path, "wb") as f:
-        f.write(key.private_bytes(serialization.Encoding.PEM, serialization.PrivateFormat.TraditionalOpenSSL,
-                                  serialization.NoEncryption()))
-    os.chmod(key_path, 0o600)
+
+    write_atomic(key_path, key.private_bytes(serialization.Encoding.PEM, serialization.PrivateFormat.TraditionalOpenSSL,
+                                             serialization.NoEncryption()), private=True)
     with open(cert_path, "wb") as f:
         f.write(cert.public_bytes(serialization.Encoding.PEM))
     return True

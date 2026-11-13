@@ -53,31 +53,31 @@ def garage_full(garage: list[tuple[int, list[bytes]]], configs: list[bytes] | No
 SPEC_REPLY_TAIL = bytes([1]) + struct.pack(">H", 0) + bytes([0, 0, 0, 3])
 
 
-def _spec_purchase(p, body: bytes) -> bytes:
+def _spec_purchase(p, body: bytes) -> tuple[bytes, bool]:
     c = cars.CATALOG
     currency = body[0x1C]
     (count,) = struct.unpack_from(">I", body, 0x1D + 16)
     if count == 0:
-        return struct.pack(">q", -1) + cars.array(1, cars.EMPTY_CONFIG) + cars.part_list([0] * 38)
+        return struct.pack(">q", -1) + cars.array(1, cars.EMPTY_CONFIG) + cars.part_list([0] * 38), False
     model = struct.unpack_from(">Q", body, 0x1D + 20)[0]
     fail = struct.pack(">Q", model) + cars.array(1, cars.EMPTY_CONFIG) + cars.part_list([0] * 38)
     (n,) = struct.unpack_from(">I", body, 0x1D + 28 + 16)
     if c is None or n == 0:
-        return fail
+        return fail, False
     variant, *parts = struct.unpack_from(">Q9Q", body, 0x1D + 28 + 20)
     garage = cars.entries(p)
     configs = next((cs for m, cs in garage if m == model), None)
     if not configs or variant not in c.variants:
-        return fail
+        return fail, False
     v = c.variants[variant]
     if dlc_only(c, v, p):
-        return fail
+        return fail, False
     price = cars.spec_price(c, garage, variant)
     owned = next((cfg for cfg in configs if cars.variant_of(cfg) == variant), None)
     if owned is not None and price is None:
-        return fail
+        return fail, False
     if owned is None and garage_full(garage, configs):
-        return fail
+        return fail, False
     if price is not None:
         token = TOKENS.get((currency, int(c.variants[variant]["spec"], 16)))
         if currency == 1 and p.bucks >= price:
@@ -87,7 +87,7 @@ def _spec_purchase(p, body: bytes) -> bytes:
         elif token is not None and summit.state(p)["tokens"][token] > 0:
             summit.state(p)["tokens"][token] -= 1
         else:
-            return fail
+            return fail, False
     s = cars.slots(c, variant, parts[1], parts[3], parts[5])
     if owned is None:
         configs[:] = [cars.with_state(cfg, 0) for cfg in configs]
@@ -97,14 +97,15 @@ def _spec_purchase(p, body: bytes) -> bytes:
         owned = configs[-1]
     else:
         s = list(struct.unpack_from(">38H", owned, 0x23))
-    return struct.pack(">Q", model) + cars.array(1, cars.with_state(owned, cars.BOUGHT)) + cars.part_list(s)
+    return struct.pack(">Q", model) + cars.array(1, cars.with_state(owned, cars.BOUGHT)) + cars.part_list(s), True
 
 
 @register(0xF70D87D3, "SPEC_PURCHASE")
 def spec_purchase(ctx: Ctx, body: bytes):
     p = ctx.player
-    element = _spec_purchase(p, body)
-    p.save()
+    element, changed = _spec_purchase(p, body)
+    if changed:
+        p.save()
     return 0x05E0DCFF, (struct.pack(">H3I", 0, p.bucks, p.cc, 0) + cars.array(1, element)
                         + SPEC_REPLY_TAIL)
 

@@ -30,6 +30,8 @@ def chase(p, escaped: bool, wanted: int, start: int, now: int) -> int:
         bucks = fine
         p.heat = 1.0
     xp, bucks = rewards.allow(p, now * 1_000_000, xp, bucks)
+    if escaped:
+        bonus = min(bonus, bucks)
     if rewards.TABLES is not None:
         rewards.add_bucks(rewards.TABLES, p, bucks)
         rewards.add_xp(rewards.TABLES, p, xp)

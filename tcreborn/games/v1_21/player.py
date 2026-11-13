@@ -4,6 +4,7 @@ import json
 import os
 from dataclasses import dataclass, field
 
+from tcreborn.files import write_atomic
 from tcreborn.games.v1_21 import tables
 
 PERKS = 30
@@ -156,14 +157,10 @@ class Player:
             return
         self.clamp()
         os.makedirs(os.path.dirname(os.path.abspath(self.path)), exist_ok=True)
-        tmp = self.path + ".tmp"
-        with open(tmp, "w") as f:
-            json.dump({"stats": self.stats,
-                       "records": [{"a": a, "b": b, "fields": v} for (a, b), v in self.records.items()],
-                       **{k: getattr(self, k) for k in STATE_KEYS}, "save_blob": self.save_blob.hex()}, f)
-            f.flush()
-            os.fsync(f.fileno())
-        os.replace(tmp, self.path)
+
+        write_atomic(self.path, json.dumps({
+            "stats": self.stats, "records": [{"a": a, "b": b, "fields": v} for (a, b), v in self.records.items()],
+            **{k: getattr(self, k) for k in STATE_KEYS}, "save_blob": self.save_blob.hex()}).encode())
 
     def set_progress_bit(self, id_: int) -> None:
         set_bit(self.progress, id_)

@@ -24,6 +24,17 @@ RESEND_WINDOW = 0.2
 TABLE_MAX = 65536
 
 
+GUEST_REQUESTS = frozenset({
+    0x036D7773,
+    0x27C711C5,
+    0x2E0E24CB,
+    0x368D58C9,
+    0x40BD5E2B,
+    0x720CC96E,
+    0xB1F54E5C,
+})
+
+
 def _note(table: collections.OrderedDict, key, now: float, window: float) -> None:
     table[key] = now
     table.move_to_end(key)
@@ -66,7 +77,9 @@ def _v100(fn):
 
 class V100Server(relay.Server):
 
-    _tunnel_121 = _v100(relay.Server._tunnel)
+    guest_requests = GUEST_REQUESTS
+
+    _tunnel_plain = _v100(relay.Server._tunnel_plain)
 
     def _tunnel(self, sess, header, body, addr):
         plain = crypto.decrypt(sess.key, body)
@@ -78,7 +91,7 @@ class V100Server(relay.Server):
             if now - self.seen.get(key, -1e9) < DUPLICATE_WINDOW:
                 return []
             _note(self.seen, key, now, DUPLICATE_WINDOW)
-        out = self._tunnel_121(sess, header, body, addr)
+        out = self._tunnel_plain(sess, header, plain, addr)
         if msg and msg.crc_ok and msg.type == relay.T_DATA and msg.flags is not None and msg.flags & 3 == 1:
 
 
@@ -110,12 +123,15 @@ class V100Server(relay.Server):
                 if w & 0x7FFFFFFF < len(chunks):
                     missing.add(w & 0x7FFFFFFF)
                 k += 1
-        now, out = time.monotonic(), []
-        for i in sorted(missing):
-            key = (addr, transfer, channel, i)
-            if now - self.resent.get(key, -1e9) >= RESEND_WINDOW:
-                _note(self.resent, key, now, RESEND_WINDOW)
-                out.append((header + crypto.encrypt(sess.key, chunks[i]), addr))
+        now = time.monotonic()
+        due = [i for i in sorted(missing) if now - self.resent.get((addr, transfer, channel, i), -1e9) >= RESEND_WINDOW]
+        if not due or not self._bytes_ok(addr) or not self._may_request(addr):
+            return []
+        self._charge_bytes(addr, sum(len(chunks[i]) for i in due))
+        out = []
+        for i in due:
+            _note(self.resent, (addr, transfer, channel, i), now, RESEND_WINDOW)
+            out.append((header + crypto.encrypt(sess.key, chunks[i]), addr))
         if out:
             self.say(addr, f"NACK transfer {transfer} -> resent {len(out)} of {len(chunks)} chunk(s)")
             self.log({"dir": "out", "dst": f"{addr[0]}:{addr[1]}", "kind": "resend", "transfer": transfer,
@@ -123,8 +139,6 @@ class V100Server(relay.Server):
         return out
     _reply_chunks = _v100(relay.Server._reply_chunks)
     _direct = _v100(relay.Server._direct)
-    if hasattr(relay.Server, "_late_reply"):
-        _late_reply = _v100(relay.Server._late_reply)
 
     def __init__(self, ip: str, port: int, log_path: str | None, save_path: str | None, key: bytes = K0, **kw):
         super().__init__(ip, port, log_path, save_path, dlc="none", **kw)
@@ -153,5 +167,5 @@ class V100Server(relay.Server):
                   "session_key": sess.key.hex()})
         return [(reply, addr)]
 
-    def say(self, addr, text: str) -> None:
-        super().say(addr, f"[1.00] {text}")
+    def say(self, addr, text: str, always: bool = False) -> None:
+        super().say(addr, f"[1.00] {text}", always)

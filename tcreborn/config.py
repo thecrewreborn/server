@@ -152,8 +152,23 @@ def afk_kick() -> bool:
     return _load().get("world", "afk_kick", fallback="off").strip().lower() in ("on", "1", "true", "yes")
 
 
+SWITCH = {"on": True, "1": True, "true": True, "yes": True, "off": False, "0": False, "false": False, "no": False,
+          "": False}
+
+
+def _public_setting() -> str:
+    return _load().get("server", "public", fallback="off").strip()
+
+
 def public() -> bool:
-    return _load().get("server", "public", fallback="off").strip().lower() in ("on", "1", "true", "yes")
+    return SWITCH.get(_public_setting().lower(), False)
+
+
+def public_problem() -> str | None:
+    value = _public_setting()
+    if value.lower() in SWITCH:
+        return None
+    return f"config.ini [server] public = {value} is not on or off (also allowed: yes/no, true/false, 1/0)"
 
 
 def proxy_key() -> tuple[bytes, bytes]:

@@ -150,7 +150,9 @@ def assemble(partial: dict, msg, chunk: int = CHUNK) -> tuple[bytes | None, int]
         entry = partial.get(key)
         if entry is None:
             while len(partial) >= MAX_PENDING:
-                _release(partial[next(iter(partial))])
+                oldest = next(iter(partial))
+                _release(partial[oldest])
+                partial.pop(oldest, None)
             entry = partial[key] = [{}, 0]
             _charge(partial, key, entry, _COST_TRANSFER)
         parts = entry[0]

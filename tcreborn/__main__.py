@@ -1,6 +1,7 @@
 # The Crew Reborn - Knutwurst
 # https://thecrewreborn.github.io - https://ko-fi.com/knutwurst
 import argparse
+import configparser
 import errno
 import os
 import shutil
@@ -56,20 +57,51 @@ def _check_server_ip() -> None:
         print(f"ERROR: {problem}", flush=True)
 
 
+def _check_config() -> None:
+    try:
+        problem = config.public_problem()
+    except configparser.Error as e:
+        raise SystemExit(f"ERROR: config.ini cannot be read: {e}\nOpen config.ini and change the existing lines; each "
+                         f"[section] heading and each key may appear only once.")
+    if problem:
+        raise SystemExit(f"ERROR: {problem}. The server does not start.")
+
+
+def _say_mode() -> None:
+    public = config.public()
+    print(f"public mode: {'on' if public else 'off'}", flush=True)
+    if public and config.advertised_ip() is None:
+        print("WARNING: public mode without [server] ip: the server announces the address it is reached at in its own "
+              "network. Behind NAT (a cloud VM, a router at home) players on the internet cannot reach that address; "
+              "set [server] ip to the public IPv4 address (README: Running a public server).", flush=True)
+
+
 def _public_mode(ubi, versions) -> None:
     from tcreborn.accounts import STORE_NAME, AccountStore
-    from tcreborn.saves import save_name
+    from tcreborn.saves import DEFAULT_NAME, account_key, save_name
     ubi.ACCOUNTS = AccountStore(paths.home("save", STORE_NAME))
-    print("public mode: names are claimed with a password (PC) or console key (PS4)", flush=True)
-    claimed = {save_name(n).lower() for n in ubi.ACCOUNTS.names()}
+    print("names are claimed with a password (PC) or console key (PS4)", flush=True)
+    claimed = {account_key(n) for n in ubi.ACCOUNTS.names()} | {account_key(DEFAULT_NAME)}
     unclaimed = set()
     for game in versions:
         folder = paths.home("save", game.NAME, "players")
         if os.path.isdir(folder):
-            unclaimed |= {f[:-5] for f in os.listdir(folder) if f.endswith(".json")}
-    unclaimed = {n for n in unclaimed if n.lower() not in claimed}
+
+            unclaimed |= {f[:-5] for f in os.listdir(folder) if f.endswith(".json") and save_name(f[:-5]) == f[:-5]
+                          and os.path.isfile(os.path.join(folder, f))}
+    unclaimed = {n for n in unclaimed if account_key(n) not in claimed}
     if unclaimed:
         print(f"unclaimed saves (anyone may claim them at the next login): {', '.join(sorted(unclaimed))}", flush=True)
+
+
+def _check_server_id() -> None:
+    from tcreborn import server_id
+    try:
+        server_id.get()
+    except server_id.Damaged as e:
+        raise SystemExit(f"ERROR: {e}")
+    except OSError as e:
+        raise SystemExit(f"ERROR: the server id {server_id.PATH} cannot be written: {e}. The server does not start.")
 
 
 def main(argv: list[str] | None = None) -> None:
@@ -77,6 +109,7 @@ def main(argv: list[str] | None = None) -> None:
         if hasattr(stream, "reconfigure"):
             stream.reconfigure(errors="replace")
     _first_config()
+    _check_config()
     ap = argparse.ArgumentParser(prog="tcreborn")
     relay_ip, relay_port = config.relay_address()
     ap.add_argument("--version", action="version", version=f"The Crew Reborn server {VERSION}")
@@ -90,6 +123,7 @@ def main(argv: list[str] | None = None) -> None:
                     help="build the game tables from your game files (PC data_win32 or PS4 app0/patch0) and exit")
     args = ap.parse_args(argv)
     print(f"The Crew Reborn server {VERSION}", flush=True)
+    _say_mode()
     versions = games.available()
     if args.generate:
         builders = [g for g in versions if hasattr(g, "generate")]
@@ -109,6 +143,7 @@ def main(argv: list[str] | None = None) -> None:
     if taken:
         raise SystemExit(f"\nThe Crew Reborn server is already running on this computer (udp port {taken} is in use).\n"
                          f"Use that one, or close its window first.")
+    _check_server_id()
     os.makedirs(os.path.dirname(args.log), exist_ok=True)
     if not config.save_path_configured() and os.path.abspath(args.save) == config.save_path():
         saves.move_into_version_folders()
@@ -139,12 +174,16 @@ def main(argv: list[str] | None = None) -> None:
             relays.append(game.make_relay(start))
         except Exception as e:
             print(f"game version {game.NAME} not started: {type(e).__name__}: {e}", flush=True)
-    print(f"\nServer address: {config.server_ip()}\n"
+    print(f"\nServer address: {server_address(config.server_ip(), https_port)}\n"
           f"Ready. Start The Crew on your PS4 or PC; the game finds the server on the local network by itself.\n"
           f"Stop the server with Ctrl+C.\n", flush=True)
     for beside in relays[1:]:
         threading.Thread(target=beside.serve_forever, daemon=True).start()
     relays[0].serve_forever()
+
+
+def server_address(ip: str, https_port: int) -> str:
+    return f"{ip}:{https_port}" if https_port and https_port != 443 else ip
 
 
 if __name__ == "__main__":

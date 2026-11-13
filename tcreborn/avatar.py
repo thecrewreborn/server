@@ -1,14 +1,19 @@
 # The Crew Reborn - Knutwurst
 # https://thecrewreborn.github.io - https://ko-fi.com/knutwurst
+import collections
 import ftplib
 import functools
+import hashlib
 import io
 import os
 import re
 import struct
+import threading
 import zlib
 
 from tcreborn import paths
+from tcreborn.files import write_atomic
+from tcreborn.limits import RateLimit
 
 FOLDER = paths.home("save", "avatars")
 LOGO = paths.bundled("avatar_logo.png")
@@ -19,6 +24,8 @@ FTP_PORT = 2121
 CACHE = "/system_data/priv/cache/profile"
 MAX_DOWNLOAD = 2 * 2 ** 20
 MAX_SIDE = 1024
+RGBA_CACHE_BYTES = 32 * 2 ** 20
+DECODES_PER_S = 10
 
 
 class TooLarge(ftplib.Error):
@@ -114,10 +121,46 @@ def fit(data: bytes) -> bytes:
     return _encode(FIT, FIT, _box(width, height, rgba, FIT))
 
 
-@functools.lru_cache(maxsize=32)
-def _rgba(png: bytes, size: int) -> bytes:
+class _RgbaCache:
+
+    def __init__(self, budget: int):
+        self.budget, self.size = budget, 0
+        self.entries: collections.OrderedDict[tuple[bytes, int], bytes] = collections.OrderedDict()
+        self.lock = threading.Lock()
+
+    def get(self, key):
+        with self.lock:
+            rgba = self.entries.get(key)
+            if rgba is not None:
+                self.entries.move_to_end(key)
+            return rgba
+
+    def put(self, key, rgba: bytes) -> None:
+        with self.lock:
+            old = self.entries.pop(key, None)
+            self.size -= len(old) if old is not None else 0
+            self.entries[key] = rgba
+            self.size += len(rgba)
+            while self.size > self.budget and len(self.entries) > 1:
+                self.size -= len(self.entries.popitem(last=False)[1])
+
+
+_RGBA = _RgbaCache(RGBA_CACHE_BYTES)
+_DECODES = RateLimit(DECODES_PER_S, 1.0)
+
+
+def _rgba(png: bytes, size: int, client_ip: str | None = None) -> bytes | None:
+    key = (hashlib.sha256(png).digest(), size)
+    rgba = _RGBA.get(key)
+    if rgba is not None:
+        return rgba
+    from tcreborn import ubi
+    if client_ip is not None and ubi.ACCOUNTS is not None and not _DECODES.allow(client_ip):
+        return None
     width, height, rgba = _decode(png)
-    return rgba if width == height == size else _box(width, height, rgba, size)
+    rgba = rgba if width == height == size else _box(width, height, rgba, size)
+    _RGBA.put(key, rgba)
+    return rgba
 
 
 def save_upload(name: str, rgba: bytes) -> bool:
@@ -125,15 +168,13 @@ def save_upload(name: str, rgba: bytes) -> bool:
         return False
     os.makedirs(FOLDER, exist_ok=True)
     path = os.path.join(FOLDER, name + ".png")
-    with open(path + ".tmp", "wb") as f:
-        f.write(_encode(FIT, FIT, rgba))
-    os.replace(path + ".tmp", path)
+    write_atomic(path, _encode(FIT, FIT, rgba))
     return True
 
 
-def rgba_for(name: str | None, size: int, client_ip: str) -> bytes:
+def rgba_for(name: str | None, size: int, client_ip: str) -> bytes | None:
     path = f"/avatars/name/{name}.png" if name else ""
-    return _rgba(for_request(name, path, client_ip), size)
+    return _rgba(for_request(name, path, client_ip), size, client_ip)
 
 
 @functools.lru_cache(maxsize=16)
@@ -164,9 +205,7 @@ def _console_picture(ip: str, user: str) -> str | None:
     try:
         data = fetch_from_console(ip, user)
         if data[:8] == b"\x89PNG\r\n\x1a\n":
-            os.makedirs(os.path.dirname(kept), exist_ok=True)
-            with open(kept, "wb") as f:
-                f.write(data)
+            write_atomic(kept, data)
     except (OSError, EOFError, ftplib.Error):
         pass
     return kept if os.path.exists(kept) else None

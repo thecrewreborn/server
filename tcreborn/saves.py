@@ -18,6 +18,10 @@ def save_name(name: str) -> str:
     return re.sub(r"[^A-Za-z0-9_-]", "_", name)[:32] or DEFAULT_NAME
 
 
+def account_key(name: str) -> str:
+    return save_name(name).lower()
+
+
 def move_into_version_folders(save_root: str | None = None) -> list[str]:
     root = save_root or paths.home("save")
     target = os.path.join(root, FOLDER_1_21)

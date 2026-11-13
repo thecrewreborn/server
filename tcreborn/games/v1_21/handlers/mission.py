@@ -64,8 +64,11 @@ def owned_dealer_car(p, body: bytes) -> bytes | None:
     configs = next((cs for m, cs in cars.entries(p) if m == model), None)
     if not configs:
         return None
-    k = next((i for i, cfg in enumerate(configs) if cars.variant_of(cfg) == variant), len(configs) - 1)
-    shown = [cars.with_state(cfg, cars.NEW) if i == k else cfg for i, cfg in enumerate(configs)]
+    k = next((i for i, cfg in enumerate(configs) if cars.variant_of(cfg) == variant), None)
+    if k is None:
+        k, shown = len(configs) - 1, configs
+    else:
+        shown = [cars.with_state(cfg, cars.NEW) if i == k else cfg for i, cfg in enumerate(configs)]
     s = list(struct.unpack_from(">38H", configs[k], 0x23))
     return (struct.pack(">Q", model) + cars.array(len(shown), b"".join(shown)) + cars.part_list(s)
             + struct.pack(">H", 0))

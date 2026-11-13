@@ -27,9 +27,10 @@ class Ctx:
     verified: bool = False
 
     def client_now_us(self) -> int:
-        from tcreborn import config
+        from tcreborn import config, ubi
         from tcreborn.games.v1_21 import summit
-        return summit.calendar_time_us(self.now_us()) if self.pc or config.multiplayer() else self.now_us()
+        calendar = self.pc or ubi.ACCOUNTS is not None or config.multiplayer()
+        return summit.calendar_time_us(self.now_us()) if calendar else self.now_us()
 
 
 Handler = Callable[[Ctx, bytes], tuple[int, bytes]]

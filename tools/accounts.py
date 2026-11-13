@@ -10,6 +10,22 @@ from tcreborn import paths
 from tcreborn.accounts import STORE_NAME, AccountStore
 
 
+def owner_of(path: str) -> tuple[int, int] | None:
+    for p in (path, os.path.dirname(os.path.abspath(path))):
+        try:
+            st = os.lstat(p)
+        except FileNotFoundError:
+            continue
+        if p == path and os.path.islink(p):
+            continue
+        return st.st_uid, st.st_gid
+    return None
+
+
+def run_as_root() -> bool:
+    return hasattr(os, "geteuid") and os.geteuid() == 0
+
+
 def main(argv=None) -> int:
     ap = argparse.ArgumentParser(description="List or free player-name claims.")
     ap.add_argument("--file", default=paths.home("save", STORE_NAME), help="accounts file (default: %(default)s)")
@@ -18,7 +34,9 @@ def main(argv=None) -> int:
     fr = sub.add_parser("free", help="free a claim")
     fr.add_argument("name")
     args = ap.parse_args(argv)
-    store = AccountStore(args.file)
+
+
+    store = AccountStore(args.file, owner_of(args.file) if run_as_root() else None)
     if args.cmd == "list":
         for e in store.entries().values():
             name = e['name']

@@ -6,6 +6,7 @@ import random
 import threading
 
 from tcreborn import config, paths
+from tcreborn.files import write_atomic
 
 
 PATH = paths.home("save", "factions.json") if config.save_path_configured() else paths.home("save", "1.21",
@@ -68,12 +69,7 @@ def _load(now: int, path: str) -> list[list[int]]:
         state["time"] = state["time"] + hours * HOUR if hours < MAX_CATCH_UP else now
     if hours or not os.path.exists(path):
         os.makedirs(os.path.dirname(path), exist_ok=True)
-        tmp = path + ".tmp"
-        with open(tmp, "w") as f:
-            json.dump(state, f)
-            f.flush()
-            os.fsync(f.fileno())
-        os.replace(tmp, path)
+        write_atomic(path, json.dumps(state).encode())
     return state["groups"]
 
 

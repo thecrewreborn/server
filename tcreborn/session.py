@@ -5,6 +5,8 @@ import os
 import time
 from dataclasses import dataclass, field
 
+from tcreborn.accounts import write_private
+
 STORE_NAME = "sessions.json"
 STORE_MAX_AGE = 2 * 24 * 3600
 
@@ -14,8 +16,9 @@ class Session:
     key: bytes = field(default_factory=lambda: os.urandom(32))
     iv: bytes = field(default_factory=lambda: os.urandom(16))
     connected: bool = False
-    answered: set = field(default_factory=set)
+    answered: dict = field(default_factory=dict)
     replies: dict = field(default_factory=dict)
+    reply_bytes: int = 0
     partial: dict = field(default_factory=dict)
     ctx: object = None
     name: str | None = None
@@ -54,13 +57,7 @@ class SessionStore:
         entries = [{"addr": f"{a[0]}:{a[1]}", "key": s.key.hex(), "iv": s.iv.hex(), "name": s.name,
                     "platform": s.platform, "time": s.stamp}
                    for a, s in sessions.items() if s.connected]
-        tmp = self.path + ".tmp"
         try:
-            os.makedirs(os.path.dirname(os.path.abspath(self.path)), exist_ok=True)
-            with open(tmp, "w") as f:
-                json.dump(entries, f, indent=1)
-                f.flush()
-                os.fsync(f.fileno())
-            os.replace(tmp, self.path)
+            write_private(self.path, entries)
         except OSError as e:
             print(f"could not write {self.path}: {e}", flush=True)

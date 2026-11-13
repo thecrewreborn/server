@@ -47,7 +47,8 @@ in `reborn.ini` (your Windows user name if empty). Back up that folder to keep y
 (`save/1.00`); they are separate from those of 1.21 and the PC.
 
 Cross-save: the same name on PS4 and PC plays the same save. To continue your PS4 progress on the PC, set `Name` in
-`reborn.ini` to your PS4 user name, spelled exactly the same; it works the other way round too.
+`reborn.ini` to your PS4 user name, spelled exactly the same; it works the other way round too. On a public server
+the name also needs its password or console key (see "What players do" under "Running a public server").
 
 One name plays on one device at a time. While a game is online with a name, the server refuses a second login with
 that name from another device, so two games never write the same save; the game then shows error #0_35. Quit the
@@ -103,43 +104,97 @@ These changes apply to every server, also without `public = on`:
   character other than A-Z, a-z, 0-9, `-` and `_` counts as `_` (`Max.Power`, `max_power` and `MAX POWER` are one
   name). A PS4 login without a name plays as `Player`.
 - `requests.jsonl` hides secrets: tickets, passwords and keys in the `Authorization` header, and the values of query
-  parameters whose name contains ticket, token, key or pass (`?ticket=***`). Bodies over 4096 bytes are cut. A log
-  file that passes 256 MB moves to `<name>.1`. A failing log write no longer stops the server.
+  parameters whose name contains ticket, token, key or pass (`?ticket=***`). Bodies over 4096 bytes are cut, binary
+  bodies appear only as their size, and paths are cut at 2048 characters. A log file that passes 256 MB moves to
+  `<name>.1`. A failing log write no longer stops the server.
 - When the server takes port 8080 instead of 80, the service configuration names that port.
-- HTTP: at most 16 open connections per address and 512 in all. A new connection has 15 seconds for its first
-  request line; an idle connection is closed after 120 seconds. A body over 300 000 bytes gets error 413.
+- HTTP: at most 16 open connections per address and 512 in all. Every request has 15 seconds for its request line
+  and headers (on a kept connection counted from its first byte) and 30 seconds for its whole body; an idle
+  connection is closed after 120 seconds. A body over 300 000 bytes gets error 413, a `Content-Length` that is not a
+  number or is negative error 400.
+- `sessions.json` (the session keys of connected games) is readable only by the user that runs the server.
 - `[server] ip` must be an IPv4 address; the server ignores any other value and says so at start.
 - `[world] multiplayer`: without the line multiplayer is on at home. An empty value (`multiplayer =`) means off, as
   before. `config.example.ini` now leaves the line commented out.
-- Avatars: a console picture over 2 MB or larger than 1024 x 1024 pixels gets the default picture.
-- The server drops game requests over 64 KB (the largest the games send has about 20 KB).
+- Avatars: a console picture over 2 MB or larger than 1024 x 1024 pixels gets the default picture. The server keeps
+  up to 32 MB of decoded PC pictures in memory.
+- Discovery answers one address at most once a second and prints at most 20 lines a minute.
+- The server drops game requests over 64 KB (the largest the games send has about 20 KB). Requests that arrive in
+  parts may hold at most 64 MB in all while they wait for their last part; the oldest go first.
+- A reply the server cannot send prints one line on the console instead of an error report.
 - When a save loads, values too large for the game's fields (money, levels, perk levels and the like) are cut to
   the largest value that fits.
+- A tuner purchase the server refuses does not write the save.
+- Rewards: a save earns at most 200 000 bucks and 50 000 XP within any 60 seconds; the rest of a larger reward is not
+  credited. Losses such as a police fine and one-off payments (the dealer budget, a first reward, the daily reward)
+  do not count.
+- Garage: a car model holds at most 254 configurations, the whole garage 1100. A purchase past either cap fails like
+  a purchase the money does not cover.
+- The server answers a request the game sends again from its store of recent replies. When that reply is no longer
+  stored, the server drops the request instead of running it a second time, so a purchase is never made twice. The
+  game is expected to treat it like a lost connection; this is not yet tested on a console.
+- `public` in `[server]` takes `on` or `off` (also `yes`/`no`, `true`/`false`, `1`/`0`, any case; empty is off). With
+  any other value the server does not start and names the value. Every start prints `public mode: on` or
+  `public mode: off`. A `config.ini` the server cannot read, for example one with a second `[server]` heading, also
+  stops the start with a message.
 
 **What `public = on` does**
 
 - The first login with a name claims it. Later logins need the same credential, so nobody else can play on that
-  save. The default name `Player` cannot be claimed.
+  save. The default name `Player` cannot be claimed, and a PC cannot claim `TheCrewReborn` (see "What players do").
 - Names compare without case, and every character other than A-Z, a-z, 0-9, `-` and `_` counts as `_`:
   `Max.Power`, `Max_Power` and `max_power` are one name (at home, `Ünal` and `_nal` share one save the same way). A
   public server accepts names of at most 32 characters of plain ASCII (letters, digits, spaces and signs, no
   umlauts or accents) and refuses others.
-- One IP address can claim at most 3 new names per hour. Logins to names it already claimed are not limited.
+- One IP address can claim at most 3 new names per hour (all addresses together 200) and log in successfully at most
+  30 times in 10 minutes (a game logs in once per start).
 - After 5 wrong passwords from one IP address within 10 minutes, that address is refused for the rest of the window.
+- Until a game has logged in with its name, the relay answers only the requests of the login itself (no purchases,
+  no rewards, no multiplayer); it drops everything else without an answer.
 - At start the server lists saves nobody has claimed yet ("unclaimed saves"); anyone may claim them at their next
   login. A new player starts with a fresh save: your own single-player save (`save/1.21/player.json`) is not handed
   to the first stranger. To keep it, copy it to `save/1.21/players/<Name>.json` and claim that name first.
 - The logs in `captures` leave out tickets, passwords and keys, so players may attach them to bug reports.
+- A login ticket stays valid while its game plays and for 3 hours after the game's last packet, so a long session
+  that reconnects to the relay is not refused.
 
 **What players do**
 
-- PC: in `reborn.ini` set `Ticket = Name|Password` under `[Player]`. Everything after the first `|` is the password.
-  Use a password that you use nowhere else (see "Limits").
-- PS4: the PS4 patch from release 0.0.4 on creates a key for the console in `/data/TheCrew/console_key.txt` on its
-  first start. Players should back this file up. Copying it to a new console keeps the name; a damaged file is kept
-  as `console_key.bad`. An older PS4 patch sends no key and is refused on a public server.
+- PC (release 0.0.4 and later): in `reborn.ini` set `Password = ...` under `[Player]`. The game logs in with its
+  `Name` and this password. Use a password that you use nowhere else (see "Limits"). The older line
+  `Ticket = Name|Password` still works, and it overrides `Password`, but only if the name before the `|` is exactly
+  the game's `Name` (letters, digits, `.`, `_` and `-`, umlauts spelled out, no spaces, at most 15 characters).
+  Everything after the first `|` is the password.
+- PC: set your own `Name` under `[Player]` in `reborn.ini`. Without it the game takes the Windows user name. A name
+  with fewer than 3 usable characters (letters A-Z, digits, `.`, `_` and `-`; umlauts are spelled out, other letters
+  such as Cyrillic or Chinese are dropped) becomes `TheCrewReborn`, and a public server refuses that name for a PC.
+  PC names are cut at 15 characters, so a PS4 name of 16 characters cannot be played on the PC.
+- Cross-save: a name claimed by a PS4 is bound to that console. The console's key never leaves it: the PS4 sends each
+  server its own code, made from the key, that server's id and the address and HTTPS port the game talks to. To play the
+  same name on the PC, copy `/data/TheCrew/console_key.txt` from the PS4 and run, in a server folder (the server
+  release; its start script creates `.venv`),
+  `.venv/bin/python tools/console_password.py console_key.txt <server address>` (Windows:
+  `.venv\Scripts\python tools\console_password.py console_key.txt <server address>`). Give the server address exactly as
+  in the PS4's `server.txt`, with its port (for example `https://203.0.113.5:8443`; without a port the tool takes 443,
+  as the PS4 does). The tool asks the server for its id on UDP port 4001. For a console without `server.txt` (it found
+  the server on the LAN), give the address the server announces: `ip` under `[server]` in `config.ini`, else the
+  `Server address` the server shows at its start, with `:<port>` when its HTTPS port is not 443; the tool names the
+  address and port when they differ. When UDP port 4001 cannot be reached, add `--server-id <id>` with the `server_id`
+  that `https://<server address>/version` shows. Set the printed value as `Password` in `reborn.ini`. It works only on
+  that server at that address and HTTPS port. A name claimed on the PC with another password cannot be played on a PS4,
+  so claim it on the PS4 first.
+- Fixed address: the PS4 code works only at the server address and HTTPS port it was made for. When a public server's
+  address or HTTPS port changes, every PS4 player gets a new code and is refused for the claimed name; the owner frees
+  those names with `tools/accounts.py free NAME`, and the players claim them again. A public server therefore needs a
+  fixed public IPv4 address and HTTPS port.
+- PS4: the patch from 0.0.4 on creates `/data/TheCrew/console_key.txt` on its first start. Back this file up; copying
+  it to a new console keeps the name, and a damaged file is kept as `console_key.bad`. Older PS4 patches send no
+  key, and a 0.0.4 patch sends none to a server older than 0.0.4 (it sends `OFFLINE`); a public server refuses that
+  login.
 - PS4: put the server's public IPv4 address into `/data/TheCrew/server.txt` (an address like `203.0.113.5`, no
-  hostname). If the server uses 8080/8443 (see Ports), write `https://203.0.113.5:8443`.
+  hostname). If the server uses 8080/8443 (see Ports), write `https://203.0.113.5:8443`. The console must also reach
+  the server on UDP port 4001: it learns the server's id there, and without it the login is refused. Public play
+  needs HTTPS: over `http://` the PS4 sends no code (`OFFLINE`), and a public server refuses the login.
 - PC: set `Host` in `reborn.ini`; it takes an address or a hostname.
 
 **Looking after names**
@@ -151,15 +206,23 @@ In the server folder (the release start script creates `.venv` there):
 .venv/bin/python tools/accounts.py free NAME
 ```
 
-`free` lets the next login with that name claim it again (for a player who lost the password or the key). To use
+Run them as the user that runs the server (`sudo -u <user> .venv/bin/python tools/accounts.py list`), not with
+plain `sudo`; started as root, the tool gives the file back to its owner, so the server can still read it. `free`
+lets the next login with that name claim it again (for a player who lost the password or the key). To use
 another accounts file, put `--file PATH` before `list` or `free`:
 `.venv/bin/python tools/accounts.py --file PATH list`. `save/accounts.json` holds salted hashes, never passwords;
-`save/<version>/sessions.json` holds the session keys. Never share the `save` folder. The `captures` folder is the
-one players send.
+`save/<version>/sessions.json` holds the session keys. `save/server_id` holds the server's id: back it up together
+with `save/accounts.json`. If it is lost, the server makes a new id, every PS4 sends a new code, and every name
+claimed by a PS4 on that server must be freed and claimed again. A damaged file is never replaced: the server keeps
+it as `save/server_id.bad` (`server_id.bad.1` and so on when an older one exists) and does not start until you
+restore `save/server_id` from the backup or delete the `.bad` files to start with a new id. The id itself is no password (every discovery
+answer and `/version` carry it), but keep the file with the rest of `save`. Never share the `save` folder. The
+`captures` folder is the one players send.
 
 **Settings for a public server**
 
-In `config.ini`:
+In `config.ini`, change the existing lines (`public` and `ip` are already under `[server]`, `crew_credits_refill`
+under `[player]`). Do not add a second `[server]` heading: the server refuses to start with one.
 
 ```
 [server]
@@ -168,22 +231,29 @@ ip = 203.0.113.5
 
 [world]
 multiplayer = off
+
+[player]
+crew_credits_refill = off
 ```
 
 - `ip` is the address the server announces to the game, and the game connects to it. With `public = on` the server
   also puts it into the service configuration the game fetches at start. Set it to the server's public IPv4
   address (not a hostname). The server ignores any other value and says so at start. Without it the server announces
-  its address in its own network, which players on the internet cannot reach.
+  its address in its own network, which players on the internet cannot reach, and it prints a warning at start.
 - `multiplayer`: with `public = on` multiplayer is off unless `config.ini` sets it, because multiplayer over the
   internet does not work yet (see "Limits"). An empty value (`multiplayer =`) is off too. A `config.ini` made from
   an older `config.example.ini` contains `multiplayer = on`: change it to `off` or leave the value empty.
+- `crew_credits_refill = off` is recommended. With the default `on` every player always has the full balance and
+  every purchase with Crew Credits is free, so anyone can buy everything on the first day. With `off` each save keeps
+  its own balance and purchases take from it (see "Crew Credits").
 - Test the first login yourself from another network, PS4 or PC, before you invite players.
 
 **Logs**
 
 The `captures` folder grows while people play: about 50 to 100 KB per minute of play and player. A log file that
 passes 256 MB moves to `<name>.1` (replacing an older `.1`), so each log takes at most about 512 MB. With
-`public = on` the logs hold only the traffic of connected games, and long entries are cut. The server has no switch
+`public = on` `proxy.jsonl` (`v100.jsonl` for 1.00) holds only the traffic of games that got a session key,
+`requests.jsonl` every HTTP request with its secrets masked, and long entries are cut. The server has no switch
 to turn the logs off; `--log PATH` after `./start-server.sh` (or at the end of `ExecStart=` in the
 unit) only moves them: the 1.21 relay log goes to PATH, `requests.jsonl` and `v100.jsonl` into the same folder. The
 server opens each log for every entry, so you may move or delete the files at any time; it starts new ones. To keep
@@ -227,9 +297,28 @@ total and 10 TB of outbound data per month. The server needs a small fraction of
 
    Run `sudo iptables -L INPUT -n --line-numbers` first and insert the rules above the final REJECT rule (the
    position 5 is an example).
-4. Install the server: `sudo apt install python3 python3-venv unzip`, unpack the release into `/opt/thecrewreborn`
-   (owned by the user that runs it; not under `/home`, which the unit hides), run `chmod +x start-server.sh`, put
-   the settings above into `config.ini`, and start `./start-server.sh` once by hand to check that it comes up.
+4. Install the server. Set `VERSION` to the newest version on the download page (0.0.4 or later) and replace
+   `ubuntu` with the user the unit runs as (`User=` in `thecrewreborn.service`, see step 5):
+
+   ```
+   sudo apt install python3 python3-venv unzip
+   VERSION=0.0.4
+   curl -L -o server.zip https://github.com/thecrewreborn/server/releases/download/v$VERSION/TheCrewReborn-Server-$VERSION.zip
+   unzip server.zip
+   sudo mkdir -p /opt/thecrewreborn
+   sudo cp -a TheCrewReborn-Server-$VERSION/. /opt/thecrewreborn/
+   sudo chown -R ubuntu: /opt/thecrewreborn
+   cd /opt/thecrewreborn
+   sudo -u ubuntu chmod +x start-server.sh
+   sudo -u ubuntu cp config.example.ini config.ini
+   ```
+
+   Keep the folder out of `/home`, which the unit hides. Put the settings above into `config.ini` by changing its
+   existing lines. Then, as that user, start `./start-server.sh` once by hand to check that it comes up (it prints
+   `public mode: on`), and stop it with Ctrl+C. Started by hand, it may not bind ports 80 and 443: it says so,
+   suggests a `setcap` command and takes 8080 and 8443. That is expected without the unit. The unit in step 5 grants
+   that right (`AmbientCapabilities`), so do not run the `setcap` command: it would apply to the system's Python and
+   every program that runs it.
 5. Install the unit: edit `User=` and the two paths in `thecrewreborn.service` if yours differ (keep the folder out
    of `/home`), then `sudo cp thecrewreborn.service /etc/systemd/system/` and
    `sudo systemctl daemon-reload && sudo systemctl enable --now thecrewreborn`.
@@ -247,22 +336,29 @@ not checked here).
 You need a public IPv4 address from your provider (not DS-Lite or CG-NAT). Give the server computer a fixed address,
 then forward the ports above to it on the router. On a FritzBox: Internet, Freigaben, Portfreigaben, add a device,
 one forwarding per port. If your provider changes the address, update `ip` in `config.ini`; PS4 players must update
-`server.txt`, PC players may use a dynamic DNS hostname (for example MyFRITZ!) as `Host`.
+`server.txt`, PC players may use a dynamic DNS hostname (for example MyFRITZ!) as `Host`. A new address also changes
+every PS4 code: names claimed by a PS4 must be freed and claimed again (see "Looking after names"), so a public
+server needs a fixed address.
 
 **Limits**
 
 - Multiplayer over the internet is not built yet: there is no NAT traversal, one session is shared, and at most 5
   players can be nearby. Public mode is for the solo game with saves; set `multiplayer = off` (see above).
 - The games accept any server certificate, so someone on the network path between a player and the server can read
-  the PC password or the console key. Players should use a password only for this server.
+  the PC password or the PS4's code for this server (not the console key itself). Players should use a password only
+  for this server.
 - Only one server can run per IP address and port set.
 - One account plays on one device at a time. A login from a second IP address is refused while the first device
   plays. Two devices behind one IP address (for example a PS4 and a PC at home) knock each other out: each login
   ends the session of the other device.
 - Players behind one IP address share limits: at most 16 open HTTP connections and 32 games that have not finished
-  their login at the same time.
+  their login at the same time. Players behind one shared address (a household, or a provider's carrier-grade NAT)
+  also share the server's request and data budget for that address.
+- Two consoles behind one IP address that look for the server within the same second may see the DLC as not owned
+  for that game run. Restart the game on that console.
 - Anyone who can read a player's network traffic and knows the public relay key can replay that player's login ticket
-  for up to 3 hours. Only an attacker on the network path can do this.
+  while any game plays with it; the ticket ends at the owner's next login or with `tools/accounts.py free`. Only an
+  attacker on the network path can do this.
 
 **Load**
 
@@ -334,7 +430,8 @@ Spielstände (`save/1.00`), getrennt von denen der Version 1.21 und des PCs.
 
 Cross-Save: Derselbe Name auf PS4 und PC spielt denselben Spielstand. Um deinen PS4-Fortschritt am PC
 weiterzuspielen, trage in `reborn.ini` bei `Name` deinen PS4-Benutzernamen in exakt derselben Schreibweise ein;
-umgekehrt funktioniert es ebenso.
+umgekehrt funktioniert es ebenso. Auf einem öffentlichen Server braucht der Name zusätzlich sein Passwort oder seinen
+Konsolenschlüssel (siehe „Was Spieler tun“ unter „Einen öffentlichen Server betreiben“).
 
 Ein Name spielt immer nur auf einem Gerät. Solange ein Spiel mit einem Namen online ist, lehnt der Server eine zweite
 Anmeldung mit diesem Namen von einem anderen Gerät ab, damit nie zwei Spiele in denselben Spielstand schreiben; das
@@ -395,49 +492,107 @@ Diese Änderungen gelten für jeden Server, auch ohne `public = on`:
   und `MAX POWER` sind ein Name). Ein PS4-Login ohne Namen spielt als `Player`.
 - `requests.jsonl` verbirgt Geheimnisse: Tickets, Passwörter und Schlüssel im `Authorization`-Header sowie die Werte
   von Abfrageparametern, deren Name ticket, token, key oder pass enthält (`?ticket=***`). Inhalte über 4096 Bytes
-  werden gekürzt. Eine Logdatei über 256 MB wird zu `<Name>.1`. Ein fehlgeschlagener Logeintrag hält den Server
-  nicht mehr an.
+  werden gekürzt, binäre Inhalte erscheinen nur mit ihrer Größe, und Pfade werden nach 2048 Zeichen gekürzt. Eine
+  Logdatei über 256 MB wird zu `<Name>.1`. Ein fehlgeschlagener Logeintrag hält den Server nicht mehr an.
 - Nimmt der Server Port 8080 statt 80, nennt die Dienstkonfiguration diesen Port.
-- HTTP: höchstens 16 offene Verbindungen pro Adresse und 512 insgesamt. Eine neue Verbindung hat 15 Sekunden für
-  ihre erste Anfragezeile; eine untätige Verbindung wird nach 120 Sekunden geschlossen. Ein Inhalt über 300 000 Bytes
-  erhält den Fehler 413.
+- HTTP: höchstens 16 offene Verbindungen pro Adresse und 512 insgesamt. Jede Anfrage hat 15 Sekunden für ihre
+  Anfragezeile samt Headern (auf einer gehaltenen Verbindung ab ihrem ersten Byte gezählt) und 30 Sekunden für ihren
+  ganzen Inhalt; eine untätige Verbindung wird nach 120 Sekunden geschlossen. Ein Inhalt über 300 000 Bytes erhält
+  den Fehler 413, ein `Content-Length`, das keine Zahl oder negativ ist, den Fehler 400.
+- `sessions.json` (die Sitzungsschlüssel verbundener Spiele) kann nur der Benutzer lesen, unter dem der Server läuft.
 - `[server] ip` muss eine IPv4-Adresse sein; jeden anderen Wert ignoriert der Server und meldet das beim Start.
 - `[world] multiplayer`: Ohne die Zeile ist Mehrspieler zu Hause an. Ein leerer Wert (`multiplayer =`) bedeutet aus,
   wie bisher. `config.example.ini` enthält die Zeile jetzt nur als Kommentar.
-- Avatare: Ein Konsolenbild über 2 MB oder größer als 1024 x 1024 Pixel erhält das Standardbild.
-- Der Server verwirft Spielanfragen über 64 KB (die größte, die die Spiele senden, hat etwa 20 KB).
+- Avatare: Ein Konsolenbild über 2 MB oder größer als 1024 x 1024 Pixel erhält das Standardbild. Der Server hält
+  bis zu 32 MB entpackter PC-Bilder im Arbeitsspeicher.
+- Die Serversuche (Discovery) antwortet einer Adresse höchstens einmal pro Sekunde und schreibt höchstens 20 Zeilen
+  pro Minute.
+- Der Server verwirft Spielanfragen über 64 KB (die größte, die die Spiele senden, hat etwa 20 KB). Anfragen, die in
+  Teilen ankommen, dürfen zusammen höchstens 64 MB belegen, während sie auf ihren letzten Teil warten; die ältesten
+  fallen zuerst weg.
+- Kann der Server eine Antwort nicht senden, schreibt er eine Zeile auf die Konsole statt eines Fehlerberichts.
 - Beim Laden eines Spielstands werden Werte, die zu groß für die Felder des Spiels sind (Geld, Stufen,
   Perk-Stufen und Ähnliches), auf den größten passenden Wert gekürzt.
+- Ein Kauf beim Tuner, den der Server ablehnt, schreibt den Spielstand nicht.
+- Belohnungen: Ein Spielstand verdient innerhalb von 60 Sekunden höchstens 200 000 Bucks und 50 000 XP; den Rest
+  einer größeren Belohnung schreibt der Server nicht gut. Verluste wie ein Bußgeld der Polizei und einmalige
+  Zahlungen (das Händlerbudget, eine erste Belohnung, die tägliche Belohnung) zählen nicht mit.
+- Garage: Ein Automodell fasst höchstens 254 Konfigurationen, die ganze Garage 1100. Ein Kauf über eine dieser
+  Grenzen hinaus schlägt fehl wie ein Kauf, für den das Geld nicht reicht.
+- Eine Anfrage, die das Spiel erneut sendet, beantwortet der Server aus seinem Speicher der letzten Antworten. Ist
+  diese Antwort dort nicht mehr vorhanden, verwirft der Server die Anfrage, statt sie ein zweites Mal auszuführen;
+  ein Kauf geschieht also nie doppelt. Das Spiel sollte sie wie eine verlorene Verbindung behandeln; das ist auf
+  einer Konsole noch nicht getestet.
+- `public` in `[server]` nimmt `on` oder `off` an (auch `yes`/`no`, `true`/`false`, `1`/`0`, Groß- und
+  Kleinschreibung egal; leer bedeutet aus). Mit jedem anderen Wert startet der Server nicht und nennt den Wert. Jeder
+  Start schreibt `public mode: on` oder `public mode: off`. Eine `config.ini`, die der Server nicht lesen kann, etwa
+  mit einer zweiten Überschrift `[server]`, beendet den Start ebenfalls mit einer Meldung.
 
 **Was `public = on` bewirkt**
 
 - Der erste Login mit einem Namen reserviert ihn. Spätere Logins brauchen dieselben Zugangsdaten; niemand sonst kann
-  auf diesem Spielstand spielen. Der Standardname `Player` kann nicht reserviert werden.
+  auf diesem Spielstand spielen. Der Standardname `Player` kann nicht reserviert werden, und ein PC kann
+  `TheCrewReborn` nicht reservieren (siehe „Was Spieler tun“).
 - Namen werden ohne Groß- und Kleinschreibung verglichen, und jedes Zeichen außer A-Z, a-z, 0-9, `-` und `_` zählt
   als `_`: `Max.Power`, `Max_Power` und `max_power` sind ein Name (zu Hause teilen sich `Ünal` und `_nal` auf
   dieselbe Weise einen Spielstand). Ein öffentlicher Server nimmt Namen mit höchstens 32 Zeichen aus einfachem ASCII
   an (Buchstaben, Ziffern, Leerzeichen und Satzzeichen, keine Umlaute oder Akzente) und lehnt andere ab.
-- Eine IP-Adresse kann höchstens 3 neue Namen pro Stunde reservieren. Logins mit Namen, die sie schon reserviert
-  hat, sind nicht begrenzt.
+- Eine IP-Adresse kann höchstens 3 neue Namen pro Stunde reservieren (alle Adressen zusammen 200) und sich innerhalb
+  von 10 Minuten höchstens 30-mal erfolgreich anmelden (ein Spiel meldet sich einmal pro Start an).
 - Nach 5 falschen Passwörtern von einer IP-Adresse innerhalb von 10 Minuten wird diese Adresse für den Rest des
   Zeitfensters abgewiesen.
+- Bis ein Spiel sich mit seinem Namen angemeldet hat, beantwortet das Relay nur die Anfragen der Anmeldung selbst
+  (keine Käufe, keine Belohnungen, kein Mehrspieler); alles andere verwirft es ohne Antwort.
 - Beim Start listet der Server Spielstände auf, die noch niemand reserviert hat („unclaimed saves“); jeder darf sie
   beim nächsten Login übernehmen. Ein neuer Spieler beginnt mit einem frischen Spielstand: Dein eigener
   Einzelspieler-Spielstand (`save/1.21/player.json`) wird nicht an den ersten Fremden vergeben. Willst du ihn
   behalten, kopiere ihn nach `save/1.21/players/<Name>.json` und reserviere zuerst diesen Namen.
 - Die Logs in `captures` enthalten keine Tickets, Passwörter und Schlüssel; Spieler können sie deshalb an
   Fehlermeldungen anhängen.
+- Ein Login-Ticket bleibt gültig, solange sein Spiel spielt, und noch 3 Stunden nach dem letzten Paket des Spiels;
+  eine lange Sitzung, die sich neu mit dem Relay verbindet, wird also nicht abgewiesen.
 
 **Was Spieler tun**
 
-- PC: Trage in `reborn.ini` unter `[Player]` die Zeile `Ticket = Name|Passwort` ein. Alles nach dem ersten `|` ist
-  das Passwort. Nimm ein Passwort, das du nirgends sonst verwendest (siehe „Grenzen“).
-- PS4: Der PS4-Patch ab Version 0.0.4 legt beim ersten Start einen Schlüssel für die Konsole in
-  `/data/TheCrew/console_key.txt` an. Spieler sollten diese Datei sichern (Backup). Wird sie auf eine neue Konsole
-  kopiert, bleibt der Name erhalten; eine beschädigte Datei wird als `console_key.bad` aufbewahrt. Ein älterer
-  PS4-Patch sendet keinen Schlüssel und wird von einem öffentlichen Server abgelehnt.
+- PC (ab Version 0.0.4): Trage in `reborn.ini` unter `[Player]` die Zeile `Password = ...` ein. Das Spiel meldet
+  sich mit seinem `Name` und diesem Passwort an. Nimm ein Passwort, das du nirgends sonst verwendest (siehe
+  „Grenzen“). Die ältere Zeile `Ticket = Name|Passwort` funktioniert weiterhin und hat Vorrang vor `Password`, aber
+  nur, wenn der Name vor dem `|` exakt dem `Name` des Spiels entspricht (Buchstaben, Ziffern, `.`, `_` und `-`,
+  Umlaute ausgeschrieben, keine Leerzeichen, höchstens 15 Zeichen). Alles nach dem ersten `|` ist das Passwort.
+- PC: Trage in `reborn.ini` unter `[Player]` einen eigenen `Name` ein. Ohne ihn nimmt das Spiel den
+  Windows-Benutzernamen. Ein Name mit weniger als 3 verwendbaren Zeichen (Buchstaben A-Z, Ziffern, `.`, `_` und `-`;
+  Umlaute werden ausgeschrieben, andere Buchstaben wie kyrillische oder chinesische fallen weg) wird zu
+  `TheCrewReborn`, und diesen Namen lehnt ein öffentlicher Server für einen PC ab. PC-Namen werden nach 15 Zeichen
+  abgeschnitten; einen PS4-Namen mit 16 Zeichen kannst du am PC also nicht spielen.
+- Cross-Save: Ein Name, den eine PS4 reserviert hat, ist an diese Konsole gebunden. Der Schlüssel der Konsole verlässt
+  sie nie: Die PS4 schickt jedem Server einen eigenen Code aus dem Schlüssel, der Kennung dieses Servers sowie der
+  Adresse und dem HTTPS-Port, mit denen das Spiel spricht. Um denselben Namen am PC zu spielen, kopiere
+  `/data/TheCrew/console_key.txt` von der PS4 und führe in einem Serverordner (die Serverversion; ihr Startskript legt
+  `.venv` an) `.venv/bin/python tools/console_password.py console_key.txt <Serveradresse>` aus (Windows:
+  `.venv\Scripts\python tools\console_password.py console_key.txt <Serveradresse>`). Gib die Serveradresse genau so an
+  wie in der `server.txt` der PS4, mit ihrem Port (zum Beispiel `https://203.0.113.5:8443`; ohne Port nimmt das Werkzeug
+  wie die PS4 443). Das Werkzeug fragt den Server über UDP-Port 4001 nach seiner Kennung. Für eine Konsole ohne
+  `server.txt` (sie hat den Server im LAN gefunden) gib die Adresse an, die der Server bekannt gibt: `ip` unter
+  `[server]` in `config.ini`, sonst die `Server address`, die der Server beim Start anzeigt, mit `:<Port>`, wenn sein
+  HTTPS-Port nicht 443 ist; weichen Adresse oder Port ab, nennt das Werkzeug sie. Ist UDP-Port 4001 nicht erreichbar,
+  ergänze `--server-id <Kennung>` mit der `server_id`, die `https://<Serveradresse>/version` anzeigt. Trage den
+  ausgegebenen Wert als `Password` in `reborn.ini` ein. Er gilt nur für diesen Server unter dieser Adresse und diesem
+  HTTPS-Port. Ein am PC mit einem anderen Passwort reservierter Name lässt sich auf keiner PS4 spielen; reserviere ihn
+  daher zuerst auf der PS4.
+- Feste Adresse: Der PS4-Code gilt nur für die Serveradresse und den HTTPS-Port, für die er erzeugt wurde. Ändert sich
+  die Adresse oder der HTTPS-Port eines öffentlichen Servers, bekommt jede PS4 einen neuen Code und wird für den
+  reservierten Namen abgelehnt; der Betreiber gibt diese Namen mit `tools/accounts.py free NAME` frei, und die Spieler
+  reservieren sie neu. Ein öffentlicher Server braucht daher eine feste öffentliche IPv4-Adresse und einen festen
+  HTTPS-Port.
+- PS4: Der Patch ab 0.0.4 legt beim ersten Start `/data/TheCrew/console_key.txt` an. Sichere diese Datei; auf eine
+  neue Konsole kopiert, bleibt der Name erhalten, und eine beschädigte Datei wird als `console_key.bad` aufbewahrt.
+  Ältere PS4-Patches senden keinen Schlüssel, und ein Patch ab 0.0.4 sendet einem Server vor 0.0.4 keinen (er sendet
+  `OFFLINE`); ein öffentlicher Server lehnt diese Anmeldung ab.
 - PS4: Trage die öffentliche IPv4-Adresse des Servers in `/data/TheCrew/server.txt` ein (eine Adresse wie
-  `203.0.113.5`, kein Hostname). Nutzt der Server 8080/8443 (siehe Ports), schreibe `https://203.0.113.5:8443`.
+  `203.0.113.5`, kein Hostname). Nutzt der Server 8080/8443 (siehe Ports), schreibe `https://203.0.113.5:8443`. Die
+  Konsole muss den Server außerdem über UDP-Port 4001 erreichen: Dort erfährt sie die Kennung des Servers, ohne sie
+  wird die Anmeldung abgelehnt. Öffentliches Spiel braucht HTTPS: Über `http://` sendet die PS4 keinen Code
+  (`OFFLINE`), und ein öffentlicher Server lehnt die Anmeldung ab.
 - PC: Setze `Host` in `reborn.ini`; dort ist eine Adresse oder ein Hostname möglich.
 
 **Namen verwalten**
@@ -449,15 +604,26 @@ Im Serverordner (das Startskript der Version legt dort `.venv` an):
 .venv/bin/python tools/accounts.py free NAME
 ```
 
-`free` gibt den Namen frei. Der nächste Login mit diesem Namen reserviert ihn dann neu (nützlich, wenn ein Spieler
-Passwort oder Schlüssel verloren hat). Für eine andere Accounts-Datei schreibe `--file PATH` vor `list` oder `free`:
-`.venv/bin/python tools/accounts.py --file PATH list`. `save/accounts.json` enthält
-gesalzene Hashes, nie Passwörter; `save/<Version>/sessions.json` enthält die Sitzungsschlüssel. Gib den Ordner `save`
-niemals weiter. Spieler senden den Ordner `captures` ein.
+Führe sie als der Benutzer aus, der den Server ausführt
+(`sudo -u <Benutzer> .venv/bin/python tools/accounts.py list`), nicht mit einfachem `sudo`; als root gestartet, gibt
+das Werkzeug die Datei ihrem Eigentümer zurück, damit der Server sie weiter lesen kann. `free` gibt den Namen frei.
+Der nächste Login mit diesem Namen reserviert ihn dann neu (nützlich, wenn ein Spieler Passwort oder Schlüssel
+verloren hat). Für eine andere Accounts-Datei schreibe `--file PATH` vor `list` oder `free`:
+`.venv/bin/python tools/accounts.py --file PATH list`. `save/accounts.json` enthält gesalzene Hashes, nie Passwörter;
+`save/<Version>/sessions.json` enthält die Sitzungsschlüssel. `save/server_id` enthält die Kennung des Servers: Sichere
+sie zusammen mit `save/accounts.json`. Geht sie verloren, erzeugt der Server eine neue Kennung, jede PS4 sendet einen
+neuen Code, und jeder von einer PS4 reservierte Name auf diesem Server muss freigegeben und neu reserviert werden.
+Eine beschädigte Datei wird nie ersetzt: Der Server bewahrt sie als `save/server_id.bad` auf (`server_id.bad.1` usw.,
+wenn schon eine ältere existiert) und startet nicht, bis du `save/server_id` aus der Sicherung wiederherstellst oder die
+`.bad`-Dateien löschst, um mit einer neuen Kennung zu beginnen. Die Kennung selbst ist kein Passwort (jede Antwort der Serversuche und `/version` enthalten sie), bewahre die Datei
+aber mit dem übrigen Ordner `save` auf. Gib den Ordner `save` niemals weiter. Spieler senden den Ordner `captures`
+ein.
 
 **Einstellungen für einen öffentlichen Server**
 
-In `config.ini`:
+Ändere in `config.ini` die vorhandenen Zeilen (`public` und `ip` stehen bereits unter `[server]`,
+`crew_credits_refill` unter `[player]`). Füge keine zweite Überschrift `[server]` hinzu: Damit startet der Server
+nicht.
 
 ```
 [server]
@@ -466,27 +632,34 @@ ip = 203.0.113.5
 
 [world]
 multiplayer = off
+
+[player]
+crew_credits_refill = off
 ```
 
 - `ip` ist die Adresse, die der Server dem Spiel mitteilt; mit ihr verbindet sich das Spiel. Mit `public = on`
   trägt der Server sie auch in die Dienstkonfiguration ein, die das Spiel beim Start abruft. Trage die öffentliche
   IPv4-Adresse des Servers ein (keinen Hostnamen). Jeden anderen Wert ignoriert der Server und meldet das beim
   Start. Ohne diese Zeile teilt der Server seine Adresse im eigenen Netzwerk mit, die Spieler im Internet nicht
-  erreichen.
+  erreichen, und schreibt beim Start eine Warnung.
 - `multiplayer`: Mit `public = on` ist Mehrspieler aus, solange `config.ini` den Wert nicht setzt, denn Mehrspieler
   über das Internet funktioniert noch nicht (siehe „Grenzen“). Ein leerer Wert (`multiplayer =`) bedeutet ebenfalls
   aus. Eine aus einer älteren `config.example.ini` erstellte `config.ini` enthält `multiplayer = on`: Ändere den Wert
   auf `off` oder lass ihn leer.
+- `crew_credits_refill = off` wird empfohlen. Mit dem Standard `on` hat jeder Spieler immer den vollen Kontostand,
+  und jeder Kauf mit Crew Credits ist kostenlos; jeder kann also am ersten Tag alles kaufen. Mit `off` behält jeder
+  Spielstand seinen eigenen Kontostand, und Käufe ziehen davon ab (siehe „Crew Credits“).
 - Teste den ersten Login selbst aus einem anderen Netzwerk, mit PS4 oder PC, bevor du Spieler einlädst.
 
 **Logs**
 
 Der Ordner `captures` wächst, während gespielt wird: etwa 50 bis 100 KB pro Spielminute und Spieler. Überschreitet
 eine Log-Datei 256 MB, benennt der Server sie in `<Name>.1` um (eine ältere `.1` wird ersetzt); jedes Log belegt
-also höchstens etwa 512 MB. Mit `public = on` enthalten die Logs nur den Verkehr verbundener Spiele, und lange
-Einträge werden gekürzt. Der Server hat keinen Schalter, der die Logs abschaltet; `--log PFAD` hinter `./start-server.sh` (oder am Ende von
-`ExecStart=` in der Unit) verschiebt sie nur: Das Relay-Log von 1.21 landet in PFAD, `requests.jsonl` und
-`v100.jsonl` im selben Ordner. Der Server öffnet jedes Log für jeden Eintrag neu; du kannst die Dateien also
+also höchstens etwa 512 MB. Mit `public = on` enthält `proxy.jsonl` (für 1.00 `v100.jsonl`) nur den Verkehr von
+Spielen, die einen Sitzungsschlüssel erhalten haben, `requests.jsonl` jede HTTP-Anfrage mit verdeckten Geheimnissen;
+lange Einträge werden gekürzt. Der Server hat keinen Schalter, der die Logs abschaltet; `--log PFAD` hinter
+`./start-server.sh` (oder am Ende von `ExecStart=` in der Unit) verschiebt sie nur: Das Relay-Log von 1.21 landet in
+PFAD, `requests.jsonl` und `v100.jsonl` im selben Ordner. Der Server öffnet jedes Log für jeden Eintrag neu; du kannst die Dateien also
 jederzeit verschieben oder löschen, er legt neue an. Damit der Ordner kleiner bleibt, lösche alte Dateien ab und zu
 oder überlasse das logrotate mit einer Datei `/etc/logrotate.d/thecrewreborn` (passe Pfad und Benutzer an):
 
@@ -528,10 +701,30 @@ Arbeitsspeicher sowie 10 TB ausgehenden Datenverkehr pro Monat. Der Server brauc
 
    Führe vorher `sudo iptables -L INPUT -n --line-numbers` aus und füge die Regeln oberhalb der abschließenden
    REJECT-Regel ein (die Position 5 ist ein Beispiel).
-4. Installiere den Server: `sudo apt install python3 python3-venv unzip`, entpacke die Version nach
-   `/opt/thecrewreborn` (Eigentümer: der Benutzer, der den Server ausführt; nicht unter `/home`, das die Unit
-   ausblendet), führe `chmod +x start-server.sh` aus, trage die Einstellungen von oben in `config.ini` ein und
-   starte einmal von Hand `./start-server.sh`, um zu prüfen, ob er hochfährt.
+4. Installiere den Server. Setze `VERSION` auf die neueste Version der Download-Seite (0.0.4 oder neuer) und
+   ersetze `ubuntu` durch den Benutzer, unter dem die Unit läuft (`User=` in `thecrewreborn.service`, siehe
+   Schritt 5):
+
+   ```
+   sudo apt install python3 python3-venv unzip
+   VERSION=0.0.4
+   curl -L -o server.zip https://github.com/thecrewreborn/server/releases/download/v$VERSION/TheCrewReborn-Server-$VERSION.zip
+   unzip server.zip
+   sudo mkdir -p /opt/thecrewreborn
+   sudo cp -a TheCrewReborn-Server-$VERSION/. /opt/thecrewreborn/
+   sudo chown -R ubuntu: /opt/thecrewreborn
+   cd /opt/thecrewreborn
+   sudo -u ubuntu chmod +x start-server.sh
+   sudo -u ubuntu cp config.example.ini config.ini
+   ```
+
+   Lege den Ordner nicht unter `/home`, das die Unit ausblendet. Trage die Einstellungen von oben in `config.ini`
+   ein, indem du die vorhandenen Zeilen änderst. Starte dann als dieser Benutzer einmal von Hand
+   `./start-server.sh`, um zu prüfen, ob er hochfährt (er schreibt `public mode: on`), und beende ihn mit Strg+C. Von
+   Hand gestartet darf er die Ports 80 und 443 unter Umständen nicht belegen: Er meldet das, schlägt einen
+   `setcap`-Befehl vor und nimmt 8080 und 8443. Ohne die Unit ist das zu erwarten. Die Unit aus Schritt 5 erteilt
+   dieses Recht (`AmbientCapabilities`); führe den `setcap`-Befehl deshalb nicht aus: Er gälte für das Python des
+   Systems und jedes Programm, das es nutzt.
 5. Installiere die Unit: Passe `User=` und die beiden Pfade in `thecrewreborn.service` an, falls deine abweichen
    (lege den Ordner nicht unter `/home`), dann `sudo cp thecrewreborn.service /etc/systemd/system/` und
    `sudo systemctl daemon-reload && sudo systemctl enable --now thecrewreborn`.
@@ -550,7 +743,8 @@ Du brauchst eine öffentliche IPv4-Adresse von deinem Anbieter (kein DS-Lite ode
 feste Adresse und leite dann am Router die obigen Ports auf ihn weiter. Bei einer FritzBox: Internet, Freigaben,
 Portfreigaben, Gerät hinzufügen, je Port eine Freigabe. Ändert dein Anbieter die Adresse, passe `ip` in `config.ini`
 an; PS4-Spieler müssen `server.txt` anpassen, PC-Spieler können einen DynDNS-Hostnamen (zum Beispiel MyFRITZ!) als
-`Host` nutzen.
+`Host` nutzen. Eine neue Adresse ändert auch jeden PS4-Code: Von einer PS4 reservierte Namen müssen freigegeben und
+neu reserviert werden (siehe „Namen verwalten“), ein öffentlicher Server braucht daher eine feste Adresse.
 
 **Grenzen**
 
@@ -558,17 +752,20 @@ an; PS4-Spieler müssen `server.txt` anpassen, PC-Spieler können einen DynDNS-H
   höchstens 5 Spieler können in der Nähe sein. Der öffentliche Modus ist für das Solospiel mit Spielständen gedacht;
   setze `multiplayer = off` (siehe oben).
 - Die Spiele akzeptieren jedes Serverzertifikat. Wer auf dem Netzwerkpfad zwischen einem Spieler und dem Server
-  mitliest, kann deshalb das PC-Passwort oder den Konsolenschlüssel lesen. Spieler sollten ein Passwort nur für
-  diesen Server verwenden.
+  mitliest, kann deshalb das PC-Passwort oder den Code der PS4 für diesen Server lesen (nicht den Konsolenschlüssel
+  selbst). Spieler sollten ein Passwort nur für diesen Server verwenden.
 - Pro IP-Adresse und Portsatz kann nur ein Server laufen.
 - Ein Account spielt immer nur auf einem Gerät. Ein Login von einer zweiten IP-Adresse wird abgelehnt, solange das
   erste Gerät spielt. Zwei Geräte hinter einer IP-Adresse (zum Beispiel eine PS4 und ein PC zu Hause) werfen sich
   gegenseitig hinaus: Jeder Login beendet die Sitzung des anderen Geräts.
 - Spieler hinter einer IP-Adresse teilen sich Grenzen: höchstens 16 offene HTTP-Verbindungen und 32 Spiele, die ihren
-  Login noch nicht abgeschlossen haben, gleichzeitig.
+  Login noch nicht abgeschlossen haben, gleichzeitig. Spieler hinter einer gemeinsamen Adresse (ein Haushalt oder das
+  Carrier-Grade-NAT eines Anbieters) teilen sich außerdem das Anfrage- und Datenbudget des Servers für diese Adresse.
+- Zwei Konsolen hinter einer IP-Adresse, die in derselben Sekunde nach dem Server suchen, sehen die DLCs unter
+  Umständen für diesen Spielstart als nicht gekauft. Starte das Spiel auf dieser Konsole neu.
 - Wer den Netzwerkverkehr eines Spielers mitlesen kann und den öffentlichen Relay-Schlüssel kennt, kann das
-  Login-Ticket dieses Spielers bis zu 3 Stunden lang wiederverwenden. Das kann nur ein Angreifer auf dem
-  Netzwerkpfad.
+  Login-Ticket dieses Spielers wiederverwenden, solange irgendein Spiel mit ihm spielt; das Ticket endet beim nächsten Login des Besitzers oder mit
+  `tools/accounts.py free`. Das kann nur ein Angreifer auf dem Netzwerkpfad.
 
 **Last**
 
