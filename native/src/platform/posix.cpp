@@ -408,6 +408,7 @@ void catch_interrupt() {
   sa.sa_handler = on_sigint;
   sigemptyset(&sa.sa_mask);
   sigaction(SIGINT, &sa, nullptr);
+  sigaction(SIGTERM, &sa, nullptr);
 }
 
 bool interrupted() { return g_interrupted != 0; }

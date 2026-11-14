@@ -449,7 +449,7 @@ bool bind_address(const std::string& host, std::string* ip, std::string* error_l
 namespace {
 volatile LONG g_interrupted = 0;
 BOOL WINAPI on_console_event(DWORD kind) {
-  if (kind == CTRL_C_EVENT) {
+  if (kind == CTRL_C_EVENT || kind == CTRL_CLOSE_EVENT || kind == CTRL_LOGOFF_EVENT || kind == CTRL_SHUTDOWN_EVENT) {
     InterlockedExchange(&g_interrupted, 1);
     return TRUE;
   }
