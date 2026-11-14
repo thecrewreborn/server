@@ -65,6 +65,8 @@ def _decode(data: bytes) -> tuple[int, int, bytes]:
         raise ValueError(f"unsupported PNG (depth {depth}, color {color}, interlace {interlace})")
     if width > MAX_SIDE or height > MAX_SIDE:
         raise ValueError(f"picture too large ({width}x{height})")
+    if not width or not height:
+        raise ValueError(f"picture without pixels ({width}x{height})")
     stride = channels * width
     raw = zlib.decompressobj().decompress(idat, height * (stride + 1))
     out, prev = bytearray(), bytearray(stride)
@@ -183,6 +185,8 @@ def check_console_picture(data: bytes, decode: bool = True) -> str | None:
     width, height = struct.unpack(">II", data[16:24])
     if width > MAX_SIDE or height > MAX_SIDE:
         return f"picture larger than {MAX_SIDE}x{MAX_SIDE}"
+    if not width or not height:
+        return "picture without pixels"
     if not decode:
         return None
     try:
