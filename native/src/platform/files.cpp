@@ -549,8 +549,49 @@ bool SystemFiles::stat(const std::string& path, FileStat* st, OsError* err) {
   return true;
 }
 
+bool SystemFiles::lstat(const std::string& path, FileStat* st, OsError* err) {
+#if defined(_WIN32)
+  DWORD attrs = GetFileAttributesW(wide(path).c_str());
+  if (attrs == INVALID_FILE_ATTRIBUTES) {
+    *err = win_error(GetLastError(), path, std::nullopt);
+    return false;
+  }
+  if (attrs & FILE_ATTRIBUTE_REPARSE_POINT) {
+    *st = FileStat();
+    st->mode = 0xA000;
+    return true;
+  }
+  return stat(path, st, err);
+#else
+  struct stat s;
+  if (::lstat(path.c_str(), &s) != 0) {
+    *err = os_error(errno, path);
+    return false;
+  }
+  st->size = static_cast<uint64_t>(s.st_size);
+  st->mode = static_cast<uint32_t>(s.st_mode);
+  st->ino = static_cast<uint64_t>(s.st_ino);
+#if defined(__APPLE__)
+  st->mtime_ns = static_cast<int64_t>(s.st_mtimespec.tv_sec) * 1000000000 + s.st_mtimespec.tv_nsec;
+#else
+  st->mtime_ns = static_cast<int64_t>(s.st_mtim.tv_sec) * 1000000000 + s.st_mtim.tv_nsec;
+#endif
+  return true;
+#endif
+}
+
 bool SystemFiles::write_atomic(const std::string& path, std::string_view data, bool private_file, int64_t owner_uid,
                                int64_t owner_gid, FileStat* st, OsError* err) {
+  return write_atomic_impl(path, data, private_file, owner_uid, owner_gid, -1, st, err);
+}
+
+bool SystemFiles::write_atomic_mode(const std::string& path, std::string_view data, uint32_t mode, FileStat* st,
+                                    OsError* err) {
+  return write_atomic_impl(path, data, false, -1, -1, static_cast<int64_t>(mode & 07777), st, err);
+}
+
+bool SystemFiles::write_atomic_impl(const std::string& path, std::string_view data, bool private_file,
+                                    int64_t owner_uid, int64_t owner_gid, int64_t mode, FileStat* st, OsError* err) {
   const std::string tmp = path + ".tmp";
   std::string abs;
   if (!absolute(path, &abs, err)) return false;
@@ -558,6 +599,7 @@ bool SystemFiles::write_atomic(const std::string& path, std::string_view data, b
 #if defined(_WIN32)
   (void)owner_uid;
   (void)owner_gid;
+  (void)mode;
   if (_wunlink(wide(tmp).c_str()) != 0 && errno != ENOENT) {
     *err = os_error(errno, tmp);
     return false;
@@ -624,6 +666,7 @@ bool SystemFiles::write_atomic(const std::string& path, std::string_view data, b
     return false;
   };
   if (private_file && fchmod(fd, 0600) != 0) return fail(errno);
+  if (mode >= 0 && fchmod(fd, static_cast<mode_t>(mode)) != 0) return fail(errno);
   if (owner_uid >= 0 || owner_gid >= 0) {
     if (fchown(fd, static_cast<uid_t>(owner_uid), static_cast<gid_t>(owner_gid)) != 0) return fail(errno);
   }

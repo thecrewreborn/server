@@ -156,6 +156,9 @@ code, pre, .mono { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, "
 #stopped[hidden], #restarted[hidden] { display: none; }
 #restarted button { margin-left: 12px; }
 .devices { color: var(--muted); font-size: 13px; }
+.badge { display: inline-block; font-size: 12px; padding: 2px 8px; border-radius: 10px; border: 1px solid var(--line); color: var(--muted); white-space: nowrap; }
+.badge.restart { border-color: var(--danger); color: var(--error-text); }
+.setting-value input, .setting-value select { width: 100%; max-width: 22em; box-sizing: border-box; }
 @media (max-width: 640px) {
   header, nav { padding-left: 12px; padding-right: 12px; }
   main { padding: 12px; }
@@ -174,6 +177,7 @@ code, pre, .mono { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, "
   .cards td.actions > * { margin-left: 0; flex: 1 1 auto; text-align: center; }
   #viewer pre { white-space: pre-wrap; overflow-wrap: anywhere; }
   #log-lines { height: 55vh; }
+  .setting-value input, .setting-value select { max-width: none; min-height: 44px; font-size: 16px; }
 }
 </style>
 </head>
@@ -184,6 +188,8 @@ code, pre, .mono { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, "
   <div class="tools">
     <button id="lang" type="button" lang="de">Deutsch</button>
     <button id="logout" type="button" data-t="logout" hidden>Log out</button>
+    <button id="page-off" type="button" data-t="page_off">Turn this page off</button>
+    <button id="restart" type="button" data-t="restart">Restart server</button>
     <button id="stop" class="danger" type="button" data-t="stop">Stop server</button>
   </div>
 </header>
@@ -192,9 +198,11 @@ code, pre, .mono { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, "
 <nav>
   <a href="#overview" data-tab="overview" data-t="tab_overview">Overview</a>
   <a href="#clients" data-tab="clients"><span data-t="tab_clients">Clients</span> <span id="client-count"></span></a>
+  <a href="#players" data-tab="players" data-t="tab_players">Players</a>
   <a href="#names" data-tab="names" data-t="tab_names">Names</a>
   <a href="#saves" data-tab="saves" data-t="tab_saves">Saves</a>
   <a href="#log" data-tab="log" data-t="tab_log">Log</a>
+  <a href="#settings" data-tab="settings" data-t="tab_settings">Settings</a>
 </nav>
 <main>
   <section id="tab-overview">
@@ -212,6 +220,22 @@ code, pre, .mono { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, "
     </div>
   </section>
 
+  <section id="tab-players" hidden>
+    <div class="panel">
+      <h2 data-t="p_title">Players in the game</h2>
+      <p class="hint" data-t="p_hint">The logged-in players with what the server holds in memory. A saved player's details open from the Saves tab.</p>
+      <div id="players"></div>
+    </div>
+    <div class="panel" id="player-panel" hidden>
+      <div class="row">
+        <h2 id="player-title" style="margin: 0"></h2>
+        <span style="margin-left: auto"></span>
+        <button type="button" id="player-close" data-t="close">Close</button>
+      </div>
+      <dl class="facts" id="player-facts"></dl>
+    </div>
+  </section>
+
   <section id="tab-names" hidden>
     <div class="panel">
       <h2 data-t="names_title">Claimed names</h2>
@@ -225,6 +249,14 @@ code, pre, .mono { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, "
 
   <section id="tab-saves" hidden>
     <div id="saves"></div>
+    <div class="panel" id="saved-panel" hidden>
+      <div class="row">
+        <h2 id="saved-title" style="margin: 0"></h2>
+        <span style="margin-left: auto"></span>
+        <button type="button" id="saved-close" data-t="close">Close</button>
+      </div>
+      <dl class="facts" id="saved-facts"></dl>
+    </div>
     <div class="panel" id="viewer" hidden>
       <div class="row">
         <h2 id="viewer-title" style="margin: 0"></h2>
@@ -248,6 +280,19 @@ code, pre, .mono { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, "
       <div id="log-lines" class="mono" role="log" aria-live="off"></div>
     </div>
   </section>
+
+  <section id="tab-settings" hidden>
+    <div class="panel">
+      <div class="row">
+        <h2 data-t="settings_title" style="margin: 0">Settings</h2>
+        <span style="margin-left: auto"></span>
+        <button type="button" id="settings-reload" data-t="reload">Reload</button>
+      </div>
+      <p class="hint" data-t="settings_hint">The values of config.ini. Saving changes only that line of config.ini; comments and the other lines stay. You can still edit the file by hand.</p>
+      <p class="folder mono" id="settings-path"></p>
+    </div>
+    <div id="settings"></div>
+  </section>
 </main>
 <div id="notice" role="status" hidden></div>
 <script>
@@ -258,6 +303,12 @@ code, pre, .mono { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, "
       title: "The Crew Reborn server",
       stop: "Stop server",
       logout: "Log out",
+      page_off: "Turn this page off",
+      confirm_page_off: "Turn the admin page off? The server keeps running. To turn the page on again, set [ui] enabled = on in config.ini and restart the server.",
+      page_is_off: "The admin page is off. To turn it on again, set [ui] enabled = on in config.ini and restart the server.",
+      restart: "Restart server",
+      confirm_restart: "Restart the server? It reads config.ini again. The players' sessions are kept.",
+      restarting: "The server restarts. The page reloads by itself.",
       stopped: "The server is stopped. Start it again to use this page.",
       restarted: "The server was restarted. Reload the page to go on.",
       reload: "Reload",
@@ -334,12 +385,64 @@ code, pre, .mono { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, "
       errors_only: "Errors only",
       follow: "Scroll with new lines",
       lines: "{shown} of {total} lines",
-      error: "Error: {text}"
+      error: "Error: {text}",
+      tab_settings: "Settings",
+      p_title: "Players in the game",
+      p_hint: "The logged-in players with what the server holds in memory. A saved player's details open from the Saves tab.",
+      tab_players: "Players",
+      no_players: "No player is logged in.",
+      details: "Details",
+      player_title: "Player {name}",
+      saved_title: "Saved player {file}",
+      p_level: "Level",
+      p_xp: "XP",
+      p_bucks: "Bucks",
+      p_cc: "Crew credits",
+      p_car: "Current car (id)",
+      p_garage: "Cars in the garage",
+      p_missions: "Missions done",
+      p_activities: "Activities done",
+      p_perks: "Perk levels (sum)",
+      p_perk_points: "Unspent perk points",
+      p_collectibles: "Collectibles",
+      p_faction: "Faction",
+      p_faction_joined: "Faction since",
+      p_crew: "Crew (id)",
+      p_zone: "Region (zone id)",
+      p_position: "Last position (x, y, z)",
+      p_since: "Connected since",
+      p_seen: "Last activity",
+      none: "none",
+      player_details: "Player",
+      settings_title: "Settings",
+      settings_hint: "The values of config.ini. Saving changes only that line of config.ini; comments and the other lines stay. You can still edit the file by hand.",
+      k_key: "Key",
+      k_value: "Value",
+      k_source: "Source",
+      k_effect: "Takes effect",
+      src_file: "config.ini",
+      src_default: "default",
+      effect_live: "at once",
+      effect_restart: "needs a restart",
+      save: "Save",
+      saved_live: "Saved: [{section}] {key}. The change counts at once.",
+      saved_restart: "Saved: [{section}] {key}. Restart the server for the change to count.",
+      changed_on_disk: "config.ini was changed in the meantime. The settings are loaded again: check them and save again.",
+      hidden_set: "set (type a new one to change it)",
+      hidden_unset: "not set",
+      confirm_clear: "Remove the login of this page? Everyone in the home network can then open it.",
+      settings_error: "config.ini cannot be read: {text}"
     },
     de: {
       title: "The Crew Reborn Server",
       stop: "Server beenden",
       logout: "Abmelden",
+      page_off: "Diese Seite ausschalten",
+      confirm_page_off: "Die Verwaltungsseite ausschalten? Der Server läuft weiter. Um die Seite wieder einzuschalten, setze [ui] enabled = on in config.ini und starte den Server neu.",
+      page_is_off: "Die Verwaltungsseite ist ausgeschaltet. Um sie wieder einzuschalten, setze [ui] enabled = on in config.ini und starte den Server neu.",
+      restart: "Server neu starten",
+      confirm_restart: "Server neu starten? Er liest config.ini neu ein. Die Sitzungen der Spieler bleiben erhalten.",
+      restarting: "Der Server startet neu. Die Seite lädt sich danach selbst neu.",
       stopped: "Der Server ist beendet. Starte ihn neu, um diese Seite zu nutzen.",
       restarted: "Der Server wurde neu gestartet. Lade die Seite neu, um weiterzumachen.",
       reload: "Neu laden",
@@ -416,7 +519,53 @@ code, pre, .mono { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, "
       errors_only: "Nur Fehler",
       follow: "Bei neuen Zeilen mitscrollen",
       lines: "{shown} von {total} Zeilen",
-      error: "Fehler: {text}"
+      error: "Fehler: {text}",
+      tab_settings: "Einstellungen",
+      p_title: "Spieler im Spiel",
+      p_hint: "Die angemeldeten Spieler mit dem, was der Server im Speicher hält. Die Daten eines gespeicherten Spielers öffnest du im Reiter Spielstände.",
+      tab_players: "Spieler",
+      no_players: "Kein Spieler ist angemeldet.",
+      details: "Details",
+      player_title: "Spieler {name}",
+      saved_title: "Gespeicherter Spieler {file}",
+      p_level: "Stufe",
+      p_xp: "XP",
+      p_bucks: "Bucks",
+      p_cc: "Crew Credits",
+      p_car: "Aktuelles Auto (ID)",
+      p_garage: "Autos in der Garage",
+      p_missions: "Erledigte Missionen",
+      p_activities: "Erledigte Aktivitäten",
+      p_perks: "Perk-Stufen (Summe)",
+      p_perk_points: "Freie Perk-Punkte",
+      p_collectibles: "Sammelobjekte",
+      p_faction: "Fraktion",
+      p_faction_joined: "Fraktion seit",
+      p_crew: "Crew (ID)",
+      p_zone: "Region (Zonen-ID)",
+      p_position: "Letzte Position (x, y, z)",
+      p_since: "Verbunden seit",
+      p_seen: "Letzte Aktivität",
+      none: "keine",
+      player_details: "Spieler",
+      settings_title: "Einstellungen",
+      settings_hint: "Die Werte aus config.ini. Beim Speichern ändert sich nur diese Zeile in config.ini; Kommentare und die übrigen Zeilen bleiben erhalten. Du kannst die Datei weiterhin von Hand bearbeiten.",
+      k_key: "Schlüssel",
+      k_value: "Wert",
+      k_source: "Herkunft",
+      k_effect: "Wirkung",
+      src_file: "config.ini",
+      src_default: "Standardwert",
+      effect_live: "sofort",
+      effect_restart: "erfordert einen Neustart",
+      save: "Speichern",
+      saved_live: "Gespeichert: [{section}] {key}. Die Änderung gilt sofort.",
+      saved_restart: "Gespeichert: [{section}] {key}. Starte den Server neu, damit die Änderung gilt.",
+      changed_on_disk: "config.ini wurde inzwischen geändert. Die Einstellungen werden neu geladen: Prüfe sie und speichere erneut.",
+      hidden_set: "gesetzt (zum Ändern einen neuen Wert eingeben)",
+      hidden_unset: "nicht gesetzt",
+      confirm_clear: "Die Anmeldung für diese Seite entfernen? Dann kann jeder im Heimnetz sie öffnen.",
+      settings_error: "config.ini kann nicht gelesen werden: {text}"
     }
   };
   const TOKEN = document.querySelector('meta[name="admin-token"]').content;
@@ -441,6 +590,8 @@ code, pre, .mono { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, "
   let facts = null, clients = [], names = [], saves = [];
   let logLines = [], logLast = 0;
   let viewing = null;
+  let settings = null;
+  let players = [], shownPlayer = null, savedPlayer = null;
 
   function t(key, vars) {
     let s = (TEXT[lang] && TEXT[lang][key]) || TEXT.en[key] || key;
@@ -575,6 +726,74 @@ code, pre, .mono { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, "
     s.textContent = ok ? t("live") : t("offline");
   }
 
+  function num(v) {
+    return v === null || v === undefined ? "" : typeof v === "number" ? v.toLocaleString(locale()) : String(v);
+  }
+  function playerRows(p) {
+    const rows = [];
+    if (p.name !== undefined) {
+      rows.push([t("c_platform"), platform(p.platform)], [t("c_version"), p.version], [t("c_address"), p.address],
+        [t("p_since"), when(p.since)], [t("p_seen"), when(p.last_seen)]);
+    }
+    rows.push([t("p_level"), num(p.level)], [t("p_xp"), num(p.xp)], [t("p_bucks"), num(p.bucks)],
+      [t("p_cc"), num(p.crew_credits)], [t("p_car"), p.car || t("none")], [t("p_garage"), num(p.garage)],
+      [t("p_missions"), num(p.missions_done)], [t("p_activities"), num(p.activities_done)],
+      [t("p_perks"), (p.perks || []).join(" ") + " (" + num(p.perk_total) + ")"],
+      [t("p_perk_points"), num(p.perk_points)], [t("p_collectibles"), num(p.collectibles)],
+      [t("p_faction"), p.faction ? num(p.faction) : t("none")],
+      [t("p_faction_joined"), p.faction && p.faction_joined ? when(p.faction_joined) : ""]);
+    if (p.name !== undefined) rows.push([t("p_crew"), p.crew || t("none")]);
+    rows.push([t("p_zone"), num(p.zone)],
+      [t("p_position"), p.position ? p.position.map((x) => x.toLocaleString(locale(), { maximumFractionDigits: 1 })).join(", ") : ""]);
+    return rows;
+  }
+  function fillFacts(dl, rows) {
+    dl.textContent = "";
+    rows.forEach((row) => {
+      dl.appendChild(el("dt", { text: row[0] }));
+      dl.appendChild(el("dd", { text: String(row[1]) }));
+    });
+  }
+  function renderPlayers() {
+    if (!players.length) {
+      replace($("players"), el("p", { class: "empty", text: t("no_players") }));
+    } else {
+      const rows = players.map((p) => el("tr", null, [
+        el("td", { text: p.name }),
+        el("td", { text: platform(p.platform) }),
+        el("td", { text: p.version }),
+        el("td", { text: num(p.level) }),
+        el("td", { text: num(p.bucks) }),
+        el("td", { text: num(p.missions_done) }),
+        el("td", { text: when(p.last_seen) }),
+        el("td", { class: "actions" }, [el("button", { type: "button", text: t("details"), onclick: () => { shownPlayer = p.version + "/" + p.name; renderPlayer(); } })])
+      ]));
+      replace($("players"), table([t("c_name"), t("c_platform"), t("c_version"), t("p_level"), t("p_bucks"), t("p_missions"), t("p_seen"), ""], rows));
+    }
+    renderPlayer();
+  }
+  function renderPlayer() {
+    const p = players.find((x) => x.version + "/" + x.name === shownPlayer);
+    $("player-panel").hidden = !p;
+    if (!p) return;
+    $("player-title").textContent = t("player_title", { name: p.name });
+    fillFacts($("player-facts"), playerRows(p));
+  }
+  function renderSavedPlayer() {
+    $("saved-panel").hidden = !savedPlayer;
+    if (!savedPlayer) return;
+    $("saved-title").textContent = t("saved_title", { file: savedPlayer.version + " / " + savedPlayer.file });
+    if (savedPlayer.error) fillFacts($("saved-facts"), [[t("error", { text: "" }), savedPlayer.error]]);
+    else fillFacts($("saved-facts"), playerRows(savedPlayer));
+  }
+  async function showSavedPlayer(version, file) {
+    try {
+      savedPlayer = await get("/api/player?version=" + encodeURIComponent(version) + "&file=" + encodeURIComponent(file));
+      renderSavedPlayer();
+      $("saved-panel").scrollIntoView({ behavior: "smooth", block: "start" });
+    } catch (e) { notice(e.message, true); }
+  }
+
   function renderFacts() {
     const dl = $("facts");
     dl.textContent = "";
@@ -669,6 +888,7 @@ code, pre, .mono { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, "
           el("td", { text: size(f.bytes) }),
           el("td", { text: when(f.modified) }),
           el("td", { class: "actions" }, [
+            el("button", { type: "button", text: t("player_details"), onclick: () => showSavedPlayer(group.version, f.file) }),
             el("button", { type: "button", text: t("view"), onclick: () => view(group.version, f.file) }),
             el("a", { class: "button", href: downloadUrl(group.version, f.file), download: f.file, text: t("download") })
           ])
@@ -693,6 +913,77 @@ code, pre, .mono { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, "
     } catch (e) {
       notice(e.message, true);
     }
+  }
+
+  function settingInput(k) {
+    let input;
+    if (k.type === "switch" || k.type === "choice") {
+      const options = k.type === "switch" ? ["on", "off"] : k.choices.slice();
+      if (options.indexOf(k.value) < 0) options.push(k.value);
+      input = el("select", null, options.map((o) => el("option", { value: o, text: o })));
+      input.value = k.value;
+    } else {
+      input = el("input", { type: "text", autocomplete: "off", spellcheck: "false" });
+      if (k.type === "number") input.setAttribute("inputmode", "numeric");
+      if (k.type === "hidden") input.setAttribute("placeholder", k.set ? t("hidden_set") : t("hidden_unset"));
+      else input.value = k.value;
+    }
+    input.setAttribute("aria-label", "[" + k.section + "] " + k.key);
+    return input;
+  }
+  function renderSettings() {
+    const box = $("settings");
+    box.textContent = "";
+    if (!settings) return;
+    $("settings-path").textContent = settings.path || "";
+    if (settings.error) box.appendChild(el("div", { class: "panel" }, [el("p", { class: "empty", text: t("settings_error", { text: settings.error }) })]));
+    const sections = [];
+    (settings.settings || []).forEach((k) => { if (sections.indexOf(k.section) < 0) sections.push(k.section); });
+    sections.forEach((section) => {
+      const rows = settings.settings.filter((k) => k.section === section).map((k) => {
+        const input = settingInput(k);
+        const source = k.source === "config.ini" ? t("src_file")
+          : t("src_default") + (k.type === "hidden" || k.default === "" ? "" : " (" + k.default + ")");
+        return el("tr", null, [
+          el("td", { text: k.key, class: "mono" }),
+          el("td", { class: "setting-value" }, [input]),
+          el("td", { text: source }),
+          el("td", null, [el("span", { class: k.live ? "badge" : "badge restart", text: k.live ? t("effect_live") : t("effect_restart") })]),
+          el("td", { class: "actions" }, [el("button", { type: "button", text: t("save"), onclick: () => saveSetting(k, input) })])
+        ]);
+      });
+      box.appendChild(el("div", { class: "panel" }, [
+        el("h2", { text: "[" + section + "]", class: "mono" }),
+        table([t("k_key"), t("k_value"), t("k_source"), t("k_effect"), ""], rows)
+      ]));
+    });
+  }
+  async function refreshSettings() {
+    try {
+      settings = await get("/api/settings");
+      renderSettings();
+    } catch (e) { notice(e.message, true); }
+  }
+  async function saveSetting(k, input) {
+    const value = input.value.trim();
+    if (k.section === "ui" && k.type === "hidden" && value === "" && k.set && !window.confirm(t("confirm_clear"))) return;
+    const r = await fetch("/api/settings", {
+      method: "POST",
+      cache: "no-store",
+      headers: { "Content-Type": "application/json", "X-Admin-Token": TOKEN },
+      body: JSON.stringify({ section: k.section, key: k.key, value: value, stamp: settings ? settings.stamp : "" })
+    }).catch(() => null);
+    const body = r ? await r.json().catch(() => ({})) : {};
+    if (r && r.status === 403 && body.stale_token === true) { showRestarted(); return; }
+    if (r && r.status === 409 && body.changed === true) {
+      notice(t("changed_on_disk"), true);
+      await refreshSettings();
+      return;
+    }
+    if (!r || !r.ok) { notice(body.error || (r ? String(r.status) : t("offline")), true); return; }
+    const warned = (body.warnings || []).join(" ");
+    notice(t(k.live ? "saved_live" : "saved_restart", { section: k.section, key: k.key }) + (warned ? " " + warned : ""), false);
+    await refreshSettings();
   }
 
   function logShown(line) {
@@ -740,6 +1031,37 @@ code, pre, .mono { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, "
       await post("/api/open-folder", { version: version });
       notice(t("folder_opened"), false);
     } catch (e) { notice(e.message, true); }
+  }
+  async function pageOff() {
+    if (!window.confirm(t("confirm_page_off"))) return;
+    try {
+      await post("/api/page-off", {});
+    } catch (e) { notice(e.message, true); return; }
+    stopped = true;
+    ["page-off", "restart", "stop"].forEach((id) => { $(id).disabled = true; });
+    $("stopped").textContent = t("page_is_off");
+    $("stopped").removeAttribute("data-t");
+    $("stopped").hidden = false;
+    setStatus(false);
+  }
+  async function restartServer() {
+    if (!window.confirm(t("confirm_restart"))) return;
+    try {
+      await post("/api/restart", {});
+    } catch (e) { notice(e.message, true); return; }
+    stopped = true;  // no polling of the old run
+    $("restart").disabled = true;
+    $("stop").disabled = true;
+    notice(t("restarting"), false);
+    const started = Date.now();
+    const timer = setInterval(async () => {
+      try {
+        const r = await fetch("/api/log?after=0", { cache: "no-store" });
+        const body = await r.json();
+        if (body.run && body.run !== RUN) { clearInterval(timer); window.location.reload(); }
+      } catch (e) { }
+      if (Date.now() - started > 60000) { clearInterval(timer); showRestarted(); }
+    }, 1000);
   }
   async function stopServer() {
     if (!window.confirm(t("confirm_stop"))) return;
@@ -795,6 +1117,10 @@ code, pre, .mono { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, "
       const c = await get("/api/clients");
       if (changed("clients", c)) { clients = c; renderClients(); }
       if (tab === "overview") { facts = await get("/api/facts"); renderFacts(); }
+      if (tab === "players") {
+        const v = await get("/api/players");
+        if (changed("players", v)) { players = v; renderPlayers(); }
+      }
       if (tab === "names") await refreshNames();
       if (tab === "saves") await refreshSaves();
       setStatus(true);
@@ -806,13 +1132,14 @@ code, pre, .mono { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, "
   }
 
   function showTab(name) {
-    if (["overview", "clients", "names", "saves", "log"].indexOf(name) < 0) name = "overview";
+    if (["overview", "clients", "players", "names", "saves", "log", "settings"].indexOf(name) < 0) name = "overview";
     tab = name;
     document.querySelectorAll("nav a").forEach((a) => {
       if (a.getAttribute("data-tab") === name) a.setAttribute("aria-current", "page");
       else a.removeAttribute("aria-current");
     });
     document.querySelectorAll("main > section").forEach((s) => { s.hidden = s.id !== "tab-" + name; });
+    if (name === "settings") refreshSettings();
     poll();
   }
 
@@ -823,6 +1150,9 @@ code, pre, .mono { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, "
     renderNames();
     renderSaves();
     renderLog(null);
+    renderSettings();
+    renderPlayers();
+    renderSavedPlayer();
     setStatus(!stopped && !restarted);
   }
 
@@ -832,6 +1162,8 @@ code, pre, .mono { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, "
     renderAll();
   });
   $("stop").addEventListener("click", stopServer);
+  $("restart").addEventListener("click", restartServer);
+  $("page-off").addEventListener("click", pageOff);
   if (document.querySelector('meta[name="admin-auth"]').content === "1") {
     $("logout").hidden = false;
     $("logout").addEventListener("click", async () => {
@@ -842,6 +1174,9 @@ code, pre, .mono { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, "
   $("reload").addEventListener("click", () => { window.location.reload(); });
   $("viewer-close").addEventListener("click", () => { $("viewer").hidden = true; viewing = null; });
   $("log-filter").addEventListener("input", () => renderLog(null));
+  $("settings-reload").addEventListener("click", refreshSettings);
+  $("player-close").addEventListener("click", () => { shownPlayer = null; renderPlayer(); });
+  $("saved-close").addEventListener("click", () => { savedPlayer = null; renderSavedPlayer(); });
   $("log-errors").addEventListener("change", () => renderLog(null));
   window.addEventListener("hashchange", () => showTab(location.hash.slice(1)));
 

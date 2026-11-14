@@ -40,6 +40,12 @@ class Files {
                             int64_t owner_gid, FileStat* st, OsError* err) = 0;
   virtual bool stat(const std::string& path, FileStat* st, OsError* err) = 0;
   virtual bool read_stat(const std::string& path, std::string* data, FileStat* st, OsError* err) = 0;
+  virtual bool lstat(const std::string& path, FileStat* st, OsError* err) { return stat(path, st, err); }
+  virtual bool write_atomic_mode(const std::string& path, std::string_view data, uint32_t mode, FileStat* st,
+                                 OsError* err) {
+    (void)mode;
+    return write_atomic(path, data, false, -1, -1, st, err);
+  }
   virtual bool makedirs(const std::string& path, OsError* err) = 0;
   virtual bool replace(const std::string& src, const std::string& dst, OsError* err) = 0;
   virtual bool rename(const std::string& src, const std::string& dst, OsError* err) = 0;

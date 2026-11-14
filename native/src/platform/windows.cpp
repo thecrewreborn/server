@@ -447,6 +447,93 @@ bool bind_address(const std::string& host, std::string* ip, std::string* error_l
 }
 
 namespace {
+std::wstring quote_arg(const std::wstring& a) {
+  if (!a.empty() && a.find_first_of(L" \t\n\v\"") == std::wstring::npos) return a;
+  std::wstring out = L"\"";
+  for (size_t i = 0;; ++i) {
+    size_t slashes = 0;
+    while (i < a.size() && a[i] == L'\\') {
+      ++i;
+      ++slashes;
+    }
+    if (i == a.size()) {
+      out.append(slashes * 2, L'\\');
+      break;
+    }
+    if (a[i] == L'"') {
+      out.append(slashes * 2 + 1, L'\\');
+    } else {
+      out.append(slashes, L'\\');
+    }
+    out.push_back(a[i]);
+  }
+  out.push_back(L'"');
+  return out;
+}
+const wchar_t kRestartVar[] = L"TCREBORN_RESTART_PARENT";
+}
+
+bool restart_self(const std::vector<std::string>& args, Error* err) {
+  std::wstring exe = widen(executable_path());
+  std::wstring cmd = quote_arg(exe);
+  for (const std::string& a : args) cmd += L" " + quote_arg(widen(a));
+  std::fflush(stdout);
+  std::fflush(stderr);
+  SetEnvironmentVariableW(kRestartVar, std::to_wstring(GetCurrentProcessId()).c_str());
+  std::vector<HANDLE> std_handles;
+  for (DWORD which : {STD_INPUT_HANDLE, STD_OUTPUT_HANDLE, STD_ERROR_HANDLE}) {
+    HANDLE h = GetStdHandle(which);
+    if (h == nullptr || h == INVALID_HANDLE_VALUE) continue;
+    if (!SetHandleInformation(h, HANDLE_FLAG_INHERIT, HANDLE_FLAG_INHERIT)) continue;
+    bool seen = false;
+    for (HANDLE o : std_handles) seen |= o == h;
+    if (!seen) std_handles.push_back(h);
+  }
+  STARTUPINFOEXW si;
+  ZeroMemory(&si, sizeof(si));
+  si.StartupInfo.cb = sizeof(si);
+  si.StartupInfo.dwFlags = STARTF_USESTDHANDLES;
+  si.StartupInfo.hStdInput = GetStdHandle(STD_INPUT_HANDLE);
+  si.StartupInfo.hStdOutput = GetStdHandle(STD_OUTPUT_HANDLE);
+  si.StartupInfo.hStdError = GetStdHandle(STD_ERROR_HANDLE);
+  SIZE_T size = 0;
+  InitializeProcThreadAttributeList(nullptr, 1, 0, &size);
+  std::vector<unsigned char> attrs(size);
+  si.lpAttributeList = reinterpret_cast<LPPROC_THREAD_ATTRIBUTE_LIST>(attrs.data());
+  bool have_list = !std_handles.empty() && InitializeProcThreadAttributeList(si.lpAttributeList, 1, 0, &size) &&
+                   UpdateProcThreadAttribute(si.lpAttributeList, 0, PROC_THREAD_ATTRIBUTE_HANDLE_LIST,
+                                             std_handles.data(), std_handles.size() * sizeof(HANDLE), nullptr,
+                                             nullptr);
+  PROCESS_INFORMATION pi;
+  ZeroMemory(&pi, sizeof(pi));
+  std::vector<wchar_t> line(cmd.begin(), cmd.end());
+  line.push_back(L'\0');
+  BOOL ok = CreateProcessW(exe.c_str(), line.data(), nullptr, nullptr, have_list ? TRUE : FALSE,
+                           have_list ? EXTENDED_STARTUPINFO_PRESENT : 0, nullptr, nullptr, &si.StartupInfo, &pi);
+  DWORD code = ok ? 0 : GetLastError();
+  if (have_list) DeleteProcThreadAttributeList(si.lpAttributeList);
+  SetEnvironmentVariableW(kRestartVar, nullptr);
+  if (!ok) {
+    if (err) *err = win_error(code);
+    return false;
+  }
+  CloseHandle(pi.hThread);
+  CloseHandle(pi.hProcess);
+  return true;
+}
+
+void wait_restart_parent() {
+  std::string pid = env_var("TCREBORN_RESTART_PARENT");
+  SetEnvironmentVariableW(kRestartVar, nullptr);
+  if (pid.empty()) return;
+  DWORD id = static_cast<DWORD>(std::strtoul(pid.c_str(), nullptr, 10));
+  HANDLE h = OpenProcess(SYNCHRONIZE, FALSE, id);
+  if (!h) return;
+  WaitForSingleObject(h, 30000);
+  CloseHandle(h);
+}
+
+namespace {
 volatile LONG g_interrupted = 0;
 BOOL WINAPI on_console_event(DWORD kind) {
   if (kind == CTRL_C_EVENT || kind == CTRL_CLOSE_EVENT || kind == CTRL_LOGOFF_EVENT || kind == CTRL_SHUTDOWN_EVENT) {

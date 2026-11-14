@@ -253,6 +253,8 @@ const char kOverflow[] = "OverflowError: bind(): port must be 0-65535.";
 
 std::atomic<bool> g_serving{false};
 std::atomic<double> g_stop_at{0.0};
+std::atomic<bool> g_restart{false};
+std::vector<std::string> g_args;
 
 bool stop_due() {
   double at = g_stop_at.load();
@@ -263,6 +265,14 @@ void watch_interrupt() {
   plat::start_thread([]() {
     while (!plat::interrupted() && !stop_due()) plat::sleep_seconds(0.05);
     say("\nServer stopped.");
+    if (g_restart.load() && !plat::interrupted()) {
+      server::CoreLock lock;
+      say("Restarting the server.\n");
+      plat::Error err;
+      if (plat::restart_self(g_args, &err)) std::_Exit(0);
+      say_error("cannot restart the server: " + err.text);
+      std::_Exit(1);
+    }
     if (g_serving.load()) {
       server::CoreLock lock;
       std::_Exit(0);
@@ -273,9 +283,19 @@ void watch_interrupt() {
 
 }
 
-void request_stop() { g_stop_at.store(plat::monotonic() + 0.3); }
+void request_stop() {
+  g_restart.store(false);
+  g_stop_at.store(plat::monotonic() + 0.3);
+}
+
+void request_restart() {
+  g_restart.store(true);
+  g_stop_at.store(plat::monotonic() + 0.3);
+}
 
 int run_server(const std::vector<std::string>& argv) {
+  g_args = argv;
+  plat::wait_restart_parent();
   const double started_wall = plat::wall_time(), started_mono = plat::monotonic();
   server::console_log::start();
   plat::stream_errors_replace();

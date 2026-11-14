@@ -413,6 +413,30 @@ void catch_interrupt() {
 
 bool interrupted() { return g_interrupted != 0; }
 
+bool restart_self(const std::vector<std::string>& args, Error* err) {
+  std::string exe = executable_path();
+  std::vector<char*> argv;
+  argv.push_back(const_cast<char*>(exe.c_str()));
+  for (const std::string& a : args) argv.push_back(const_cast<char*>(a.c_str()));
+  argv.push_back(nullptr);
+  std::fflush(stdout);
+  std::fflush(stderr);
+  long max = sysconf(_SC_OPEN_MAX);
+  if (max < 0 || max > 65536) max = 65536;
+  for (int fd = 3; fd < max; ++fd) close(fd);
+  signal(SIGPIPE, SIG_DFL);
+  signal(SIGINT, SIG_DFL);
+  signal(SIGTERM, SIG_DFL);
+  sigset_t none;
+  sigemptyset(&none);
+  pthread_sigmask(SIG_SETMASK, &none, nullptr);
+  execv(exe.c_str(), argv.data());
+  set_error(err, errno);
+  return false;
+}
+
+void wait_restart_parent() {}
+
 namespace {
 struct ThreadStart {
   void (*fn)(void*);

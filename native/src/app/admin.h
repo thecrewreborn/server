@@ -21,6 +21,7 @@ struct AdminOptions {
 void start_admin_page(Core& core, AdminOptions options);
 
 void request_stop();
+void request_restart();
 
 }
 }

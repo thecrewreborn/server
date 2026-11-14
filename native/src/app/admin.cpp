@@ -1,5 +1,7 @@
 #include "app/admin.h"
 
+#include <algorithm>
+#include <atomic>
 #include <cmath>
 #include <cstdint>
 #include <cstdio>
@@ -37,6 +39,8 @@ constexpr char kCookie[] = "tcr_admin";
 constexpr double kMaxLinkMinutes = 7 * 24 * 60;
 constexpr size_t kMaxSessions = 64;
 constexpr size_t kMaxFailAddresses = 4096;
+constexpr double kRate = 10.0, kBurst = 30.0;
+constexpr size_t kMaxBuckets = 4096;
 
 struct State {
   Core* core = nullptr;
@@ -47,6 +51,13 @@ struct State {
   std::string password;
   std::deque<std::string> sessions;
   std::map<std::string, std::deque<double>> fails;
+  server::HttpServer* http = nullptr;
+  struct Bucket {
+    double tokens = kBurst;
+    double at = 0.0;
+  };
+  std::map<std::string, Bucket> buckets;
+  std::atomic<bool> off{false};
 };
 State* g_state = nullptr;
 
@@ -329,11 +340,33 @@ server::Response log_view(const std::string& query) {
   return json_reply(200, out);
 }
 
+constexpr uint64_t kMaxSaveBytes = 8 * 1024 * 1024;
+
+int save_file_refusal(Files& files, const std::string& path, std::string* why) {
+  FileStat st;
+  OsError err;
+  if (!files.lstat(path, &st, &err)) {
+    *why = "cannot read " + path + ": " + err.text();
+    return 500;
+  }
+  if ((st.mode & 0xF000) != 0x8000) {
+    *why = "the save is no regular file";
+    return 403;
+  }
+  if (st.size > kMaxSaveBytes) {
+    *why = "the save is larger than 8 MB";
+    return 413;
+  }
+  return 0;
+}
+
 server::Response save_view(Core& core, const std::string& query, bool download) {
   std::string version = query_value(query, "version");
   std::string file = query_value(query, "file");
   std::string path = tcr::admin::save_file(core, g_state->o.relays, version, file);
   if (path.empty()) return error_reply(404, "no such save");
+  std::string why;
+  if (int status = save_file_refusal(*core.files(), path, &why)) return error_reply(status, why);
   std::string data;
   OsError err;
   if (!core.files()->read(path, &data, &err)) return error_reply(500, "cannot read " + path + ": " + err.text());
@@ -355,6 +388,37 @@ server::Response save_view(Core& core, const std::string& query, bool download) 
   if (!formatted) text = tcr::admin::valid_utf8(text);
   out.set("text", json::Value::string(text));
   return json_reply(200, out);
+}
+
+server::Response player_view(Core& core, const std::string& query) {
+  std::string version = query_value(query, "version");
+  std::string file = query_value(query, "file");
+  struct Job {
+    Files* files;
+    std::string path, data;
+    OsError err;
+    bool ok = false;
+    int refused = 0;
+    std::string why;
+    json::Value out;
+  } job;
+  job.files = core.files();
+  job.path = tcr::admin::save_file(core, g_state->o.relays, version, file);
+  if (job.path.empty()) return error_reply(404, "no such save");
+  core.env().hash_unlocked(
+      [](void* arg) {
+        Job& j = *static_cast<Job*>(arg);
+        j.refused = save_file_refusal(*j.files, j.path, &j.why);
+        if (j.refused) return;
+        j.ok = j.files->read(j.path, &j.data, &j.err);
+        if (j.ok) j.out = tcr::admin::saved_player(j.data);
+      },
+      &job);
+  if (job.refused) return error_reply(job.refused, job.why);
+  if (!job.ok) return error_reply(500, "cannot read " + job.path + ": " + job.err.text());
+  job.out.set("version", json::Value::string(version));
+  job.out.set("file", json::Value::string(file));
+  return json_reply(200, job.out);
 }
 
 json::Value body_of(const server::Request& req) {
@@ -444,13 +508,61 @@ server::Response open_folder(Core& core, const json::Value& body) {
   return json_reply(200, out);
 }
 
+server::Response page_off(Core& core) {
+  json::Value view = tcr::admin::settings(core);
+  const json::Value* stamp = view.get("stamp");
+  json::Value body = json::Value::object();
+  body.set("section", json::Value::string("ui"));
+  body.set("key", json::Value::string("enabled"));
+  body.set("value", json::Value::string("off"));
+  body.set("stamp", json::Value::string(stamp && stamp->is_string() ? stamp->as_string() : std::string()));
+  int status = 500;
+  std::string said;
+  json::Value out = tcr::admin::set_setting(core, body, &status, &said);
+  if (status != 200) return json_reply(status, out);
+  const json::Value* path = view.get("path");
+  say_action(core, "off (config.ini [ui] enabled = off). To turn it on again, set [ui] enabled = on in " +
+                       (path && path->is_string() ? path->as_string() : std::string("config.ini")) +
+                       " and restart the server.");
+  g_state->off = true;
+  server::HttpServer* http = g_state->http;
+  if (!plat::start_thread([http]() {
+        plat::sleep_seconds(0.3);
+        http->stop();
+        server::console_log::stop();
+      })) {
+    say_action(core, "cannot close the listener: the system refused a thread; it closes at the next start");
+  }
+  return ok_reply("the admin page is off");
+}
+
 server::Response route(const server::Request& req) {
   State& s = *g_state;
+  if (s.off) return refused();
   Core& core = *s.core;
   std::string client_ip = req.client_ip, local_ip = req.host;
   int client_port = req.client_port;
   if (s.o.hooks) s.o.hooks->http_client(req.headers, &client_ip, &client_port, &local_ip);
   if (!ubi::trusted(client_ip)) return refused();
+  {
+    const double now = plat::monotonic();
+    if (s.buckets.size() > kMaxBuckets) {
+      for (auto it = s.buckets.begin(); it != s.buckets.end();) {
+        it = now - it->second.at >= kBurst / kRate ? s.buckets.erase(it) : std::next(it);
+      }
+    }
+    auto found = s.buckets.find(client_ip);
+    if (found == s.buckets.end()) found = s.buckets.emplace(client_ip, State::Bucket{kBurst, now}).first;
+    State::Bucket& b = found->second;
+    b.tokens = std::min(kBurst, b.tokens + (now - b.at) * kRate);
+    b.at = now;
+    if (b.tokens < 1.0) {
+      server::Response r = error_reply(429, "too many requests: wait a moment");
+      r.headers.push_back({"Retry-After", "1"});
+      return r;
+    }
+    b.tokens -= 1.0;
+  }
   if (!host_ok(req, s.port, local_ip)) {
     return error_reply(421, "this page answers only as localhost, 127.0.0.1 or this computer's address");
   }
@@ -479,8 +591,11 @@ server::Response route(const server::Request& req) {
       return json_reply(200, tcr::admin::facts(core, f, s.o.relays));
     }
     if (path == "/api/clients") return json_reply(200, tcr::admin::clients(core, s.o.relays));
+    if (path == "/api/players") return json_reply(200, tcr::admin::players(core, s.o.relays));
+    if (path == "/api/player") return player_view(core, query);
     if (path == "/api/names") return json_reply(200, tcr::admin::names(core));
     if (path == "/api/saves") return json_reply(200, tcr::admin::saves(core, s.o.relays));
+    if (path == "/api/settings") return json_reply(200, tcr::admin::settings(core));
     if (path == "/api/log") return log_view(query);
     if (path == "/api/save") return save_view(core, query, false);
     if (path == "/api/save/download") return save_view(core, query, true);
@@ -498,7 +613,20 @@ server::Response route(const server::Request& req) {
   if (path == "/api/link") return link(core, body);
   if (path == "/api/free") return free_name(core, body);
   if (path == "/api/open-folder") return open_folder(core, body);
+  if (path == "/api/settings") {
+    int status = 500;
+    std::string said;
+    json::Value out = tcr::admin::set_setting(core, body, &status, &said);
+    if (!said.empty()) say_action(core, said);
+    return json_reply(status, out);
+  }
   if (path == "/api/logout") return logout(req);
+  if (path == "/api/page-off") return page_off(core);
+  if (path == "/api/restart") {
+    say_action(core, "restart");
+    request_restart();
+    return ok_reply("restarting");
+  }
   if (path == "/api/stop") {
     say_action(core, "stop");
     request_stop();
@@ -561,6 +689,7 @@ void start_admin_page(Core& core, AdminOptions options) {
   }
   if (!ok) return off("Admin page: off (cannot open tcp port " + std::to_string(want) + ": " + err.text + ")");
   g_state->port = http.port();
+  g_state->http = &http;
   g_state->o.facts.admin_port = g_state->port;
   const std::string pw = g_state->password.empty() ? "" : ", password";
   const std::string local_url = "http://127.0.0.1:" + std::to_string(g_state->port) + "/";

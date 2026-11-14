@@ -12,6 +12,9 @@ class SystemFiles final : public Files {
   bool write_atomic(const std::string& path, std::string_view data, bool private_file, int64_t owner_uid,
                     int64_t owner_gid, FileStat* st, OsError* err) override;
   bool stat(const std::string& path, FileStat* st, OsError* err) override;
+  bool lstat(const std::string& path, FileStat* st, OsError* err) override;
+  bool write_atomic_mode(const std::string& path, std::string_view data, uint32_t mode, FileStat* st,
+                         OsError* err) override;
   bool read_stat(const std::string& path, std::string* data, FileStat* st, OsError* err) override;
   bool makedirs(const std::string& path, OsError* err) override;
   bool replace(const std::string& src, const std::string& dst, OsError* err) override;
@@ -22,6 +25,8 @@ class SystemFiles final : public Files {
   bool remove(const std::string& path, OsError* err) override;
   bool copyfile(const std::string& src, const std::string& dst, OsError* err) override;
   bool abspath(const std::string& path, std::string* out, OsError* err) override;
+  bool write_atomic_impl(const std::string& path, std::string_view data, bool private_file, int64_t owner_uid,
+                         int64_t owner_gid, int64_t mode, FileStat* st, OsError* err);
 #if defined(_WIN32)
   int text_code_page() override;
   bool decode_code_page(int code_page, const std::string& data, std::string* out, std::string* error) override;

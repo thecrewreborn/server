@@ -144,6 +144,9 @@ extern const char* const kTextNewline;
 void catch_interrupt();
 bool interrupted();
 
+bool restart_self(const std::vector<std::string>& args, Error* err);
+void wait_restart_parent();
+
 void print_line(const std::string& text);
 void print_error_line(const std::string& text);
 void stream_errors_replace();
