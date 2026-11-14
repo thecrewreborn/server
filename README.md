@@ -9,8 +9,8 @@ https://thecrewreborn.github.io
 
 From the [download page](https://thecrewreborn.github.io/#download) you need:
 
-1. **The server, for everyone:** `TheCrewReborn-Server-<version>.zip`. Unpack it on a computer in your home network and start
-   it: `start-server.bat` on Windows (double-click), `./start-server.sh` on macOS and Linux (in a terminal).
+1. **The server, for everyone:** `TheCrewReborn-Server-<version>-<platform>.zip` for the computer that runs it (see
+   "The server"). Unpack it on a computer in your home network and start `TheCrewReborn-Server`.
 2. **Playing on PS4 / PS5:** `TheCrewReborn-PS4-<version>.zip`. Copy `CUSA00161.xml` to
    `/data/GoldHEN/patches/xml/` on the console and switch the patch on in GoldHEN's patch menu.
 3. **Playing on PC:** `TheCrewReborn-PC-<version>.zip`. Copy `dinput8.dll` and `reborn.ini` into the game folder,
@@ -28,31 +28,86 @@ again in the game. The very first start needs the server running.
   - **PS4:** European version CUSA00161, on a console with GoldHEN, either with update 1.21 installed (the game info
     shows 01.21, with Wild Run) or as the base game without any update (01.00). Tested on a PS4 with firmware 11.50.
     The base game 1.00 is new and experimental: tested from the start of the story to the first tuning shop.
-  - **PC:** Ubisoft Connect or Steam version, `TheCrew.exe` 1.2.0.0 (build 502193). Tested on Windows 11, also Windows 11 on ARM
-    (in a virtual machine).
+  - **PC:** Ubisoft Connect or Steam version, `TheCrew.exe` 1.2.0.0 (build 502193). Tested on Windows 11, also
+    Windows 11 on ARM (in a virtual machine).
 
-  Not tested yet: the PS5. Other PS4 regions and game versions don't work yet; the
-  patch fits only CUSA00161 1.00 and 1.21.
-- A computer on the same network as the console or the gaming PC: Windows, macOS or Linux. The server can also run
-  on the gaming PC itself, or on a computer on the internet (see "Running a server on the internet"). Linux needs
-  Python 3.10 or newer with venv (with apt: `sudo apt install python3 python3-venv`); on Windows and macOS the
-  start script installs Python if it is missing.
+  Not tested yet: the PS5. Other PS4 regions and game versions don't work yet; the patch fits only CUSA00161 1.00
+  and 1.21.
+- A computer on the same network as the console or the gaming PC: Windows 10 or 11, macOS 11 or later, or Linux on
+  an x64 or ARM64 processor. The server is one program and needs nothing else installed. It can also run on the gaming
+  PC itself, or on a computer on the internet (see "Running a server on the internet").
 
 ## The server
 
-The first start sets up the server and takes a minute (macOS asks for your password if it has to install Python).
-Later starts take a few seconds. The server runs until you close the window or press Ctrl+C. Windows asks once
-whether Python may use the network: allow it for private networks.
+Each platform has its own zip:
+
+| Computer | Zip |
+|---|---|
+| Windows PC whose Settings > System > About shows "x64-based processor" | `windows-x64` |
+| Windows PC whose About page shows "ARM-based processor" | `windows-arm64` |
+| Mac, any processor | `macos-universal` |
+| Linux, `uname -m` prints `x86_64` | `linux-x64` |
+| Linux, `uname -m` prints `aarch64` | `linux-arm64` |
+
+Unpack the zip into a folder of its own. The server keeps everything in that folder, so pick one you can find again.
+
+**Windows:** double-click `TheCrewReborn-Server.exe`. The first time, Windows may show "Windows protected your PC",
+because the program has no publisher signature: click "More info", then "Run anyway". Windows then asks whether
+the program may use the network: allow it for private networks.
+
+**macOS:** open Terminal, type `cd ` (with a space), drag the folder into the window and press Return. Then run:
+
+```
+chmod +x TheCrewReborn-Server
+./TheCrewReborn-Server
+```
+
+The program does not come from a registered developer, so macOS refuses it the first time. Close the message, open
+System Settings > Privacy & Security, scroll down to Security and click "Open Anyway" next to the note about
+`TheCrewReborn-Server` (on macOS 12 and older: System Preferences > Security & Privacy > General). Run
+`./TheCrewReborn-Server` again and confirm with "Open Anyway" or "Open". If the macOS firewall is on, macOS asks
+whether the program may accept incoming connections: allow it. You can also add it under System Settings > Network >
+Firewall > Options and set it to allow incoming connections.
+
+**Linux:** in a terminal in the folder:
+
+```
+chmod +x TheCrewReborn-Server
+./TheCrewReborn-Server
+```
+
+The server runs until you close the window or press Ctrl+C. It prints `Server address:` and `Ready.` once it is up.
+`--help` lists the options; `-v` also shows the ports and settings at the start.
 
 The server needs HTTPS: the PS4 sends its login code only over HTTPS. HTTPS is on by default (port 443, or 8443, see
 "Ports"). With `https_port = 0` in `config.ini` no PS4 can log in, and the server warns at start.
 
+**Where the files live**
+
+Everything sits next to the program:
+
+| File or folder | Holds |
+|---|---|
+| `config.ini` | your settings. The first start copies `config.example.ini`, which explains every setting. |
+| `save/` | the saves, the names and their devices (`accounts.json`), the server's id (`server_id`) |
+| `certs/` | the HTTPS certificate and its key, made at the first start |
+| `captures/` | the logs (see "Logs") |
+
+To keep these files elsewhere, set the environment variable `TCREBORN_HOME` to that folder before you start the
+server; `config.ini`, `save`, `certs` and `captures` then live there. `TCREBORN_CONFIG` names another `config.ini`
+on its own. The `accounts` command reads the same variables, so set them the same way when you run it.
+
+**Updating**
+
+Stop the server, unpack the new zip over the old folder and start the server again. The zip holds only the program,
+`config.example.ini`, this guide and the licence texts; your `config.ini`, saves, certificate and logs stay as they are.
+
 ## Ports
 
-TCP 80 and 443, UDP 4000, 4001 and 4100 (4100: the base game 1.00). Nothing has to be opened on the router for play at home. When the system refuses
-port 80 or 443 (another program uses it, or Linux without root) the server takes 8080 and 8443 instead and tells the
-game; it says so when it starts. If the game doesn't find the server, set `Host` in `reborn.ini` (PC) or put the
-server address into `/data/TheCrew/server.txt` on the console (PS4).
+TCP 80 and 443, UDP 4000, 4001 and 4100 (4100: the base game 1.00), and TCP 8090 for the admin page. Nothing has to be opened on the router for play
+at home. When the system refuses port 80 or 443 (another program uses it, or Linux without root) the server takes 8080
+and 8443 instead and tells the game; it says so when it starts. If the game doesn't find the server, set `Host` in
+`reborn.ini` (PC) or put the server address into `/data/TheCrew/server.txt` on the console (PS4).
 
 ## Names and devices
 
@@ -73,10 +128,11 @@ A key file copied to another console, or next to another PC's `reborn.ini`, play
 
 Names compare without case, and every character other than A-Z, a-z, 0-9, `-` and `_` counts as `_`: `Max.Power`,
 `max_power` and `MAX POWER` are one name and one save. A name has at most 32 characters of plain ASCII (letters,
-digits, spaces and signs, no umlauts or accents). The server refuses the name `Player`. A PC whose `Name` and Windows user name give
-fewer than 3 usable characters (letters A-Z, digits, `.`, `_` and `-`; umlauts are spelled out, other letters such as
-Cyrillic or Chinese are dropped) plays as `TheCrewReborn`, an ordinary name like any other. At home, two PCs that fall
-back to it join the same name and share one save, so set your own `Name` in `reborn.ini`. PC names are cut at 15 characters, so a PS4 name of 16 characters cannot be played on the PC.
+digits, spaces and signs, no umlauts or accents). The server refuses the name `Player`. A PC whose `Name` and Windows
+user name give fewer than 3 usable characters (letters A-Z, digits, `.`, `_` and `-`; umlauts are spelled out, other
+letters such as Cyrillic or Chinese are dropped) plays as `TheCrewReborn`, an ordinary name like any other. At home,
+two PCs that fall back to it join the same name and share one save, so set your own `Name` in `reborn.ini`. PC names
+are cut at 15 characters, so a PS4 name of 16 characters cannot be played on the PC.
 
 **One name on several devices (cross-save)**
 
@@ -85,9 +141,9 @@ to your PS4 user name, spelled exactly the same; it works the other way round to
 
 - **At home** it joins by itself. A device that logs in from your home network (addresses 10.x, 172.16-31.x,
   192.168.x, 127.x) becomes one of the name's devices at its first login.
-- **Over the internet** the server's owner opens a link window with `tools/accounts.py link NAME` (see "Looking
-  after names"). For the next 10 minutes the first new device that logs in with that name joins it, and the window
-  closes. After several failed tries, wait 10 minutes before you open a link window.
+- **Over the internet** the server's owner opens a link window with `accounts link NAME` (see "Looking after names").
+  For the next 10 minutes the first new device that logs in with that name joins it, and the window closes. After
+  several failed tries, wait 10 minutes before you open a link window.
 
 A name holds up to 16 devices. With `link_home = off` under `[server]` in `config.ini`, devices at home need a link
 window too. Switch it off when a proxy, a tunnel or a container port forward sits in front of the server: then every
@@ -95,12 +151,17 @@ player arrives from a private address, and anyone could join any name. `link_hom
 multiplayer off (see "Multiplayer"). The server warns at start when `link_home` is on and `[server] ip` is a public
 address.
 
-Instead of a link window a PC can also use a PS4's code. Copy `/data/TheCrew/console_key.txt` from the PS4 and run,
-in a server folder, `.venv/bin/python tools/console_password.py console_key.txt <server address>` (Windows:
-`.venv\Scripts\python tools\console_password.py console_key.txt <server address>`). Give the address exactly as in the
-PS4's `server.txt`, with its port (for example `https://203.0.113.5:8443`); for a console that found the server on
-the LAN, give the `Server address` the server shows at its start. The tool asks the server for its id on UDP port
-4001; when that port cannot be reached, add `--server-id <id>` with the `server_id` from
+Instead of a link window a PC can also use a PS4's code. Copy `/data/TheCrew/console_key.txt` from the PS4 into the
+server folder and run there:
+
+```
+./TheCrewReborn-Server console-password console_key.txt <server address>
+```
+
+(Windows: `.\TheCrewReborn-Server.exe console-password console_key.txt <server address>`.) Give the address exactly
+as in the PS4's `server.txt`, with its port (for example `https://203.0.113.5:8443`); for a console that found the
+server on the LAN, give the `Server address` the server shows at its start. The command asks the server for its id on
+UDP port 4001; when that port cannot be reached, add `--server-id <id>` with the `server_id` from
 `https://<server address>/version`. Set the printed value as `Password = ...` under `[Player]` in `reborn.ini`. It
 works only on that server at that address and HTTPS port.
 
@@ -140,7 +201,7 @@ login, then log in as `<Name>`.
 ## Crew Credits
 
 Every player has 1,000,000 Crew Credits, and buying with them costs nothing: the balance stays where it is. To play
-with a balance of your own, copy `config.example.ini` to `config.ini` next to the server and set under `[player]`:
+with a balance of your own, set under `[player]` in `config.ini`:
 
 ```ini
 crew_credits = 1000000
@@ -153,8 +214,8 @@ a change.
 ## DLC
 
 The DLC is off: the content of the paid add-ons (Wild Run's motorbikes and specs, Calling All Units, the car
-packs) stays locked. If you own the DLC for your copy of the game, switch it on in one place,
-the server. Copy `config.example.ini` to `config.ini` next to the server and set under `[player]`:
+packs) stays locked. If you own the DLC for your copy of the game, switch it on in one place, the server. Set under
+`[player]` in `config.ini`:
 
 ```ini
 dlc = on
@@ -176,8 +237,8 @@ network (`server.txt` on the PS4), the console asks that server on UDP port 4001
   yet (see "Limits").
 - `off` (also `0`, `false`, `no`, or an empty value): everyone plays alone.
 
-Any other word stops the start with a message. A `config.ini` made from the `config.example.ini` of 0.0.3 or older contains `multiplayer = on`. On a server on the
-internet, change it to `lan` or `off`.
+Any other word stops the start with a message. A `config.ini` made from the `config.example.ini` of 0.0.3 or older
+contains `multiplayer = on`. On a server on the internet, change it to `lan` or `off`.
 
 ## Player pictures
 
@@ -189,12 +250,13 @@ first; without either the server shows its logo. The server refuses a picture ov
 
 ## Looking after names
 
-In the server folder (the start script creates `.venv` there; on Windows use `.venv\Scripts\python`):
+The server program has a command for this. In a terminal in the server folder (on Windows type
+`.\TheCrewReborn-Server.exe` instead of `./TheCrewReborn-Server`):
 
 ```
-.venv/bin/python tools/accounts.py list
-.venv/bin/python tools/accounts.py link NAME
-.venv/bin/python tools/accounts.py free NAME
+./TheCrewReborn-Server accounts list
+./TheCrewReborn-Server accounts link NAME
+./TheCrewReborn-Server accounts free NAME
 ```
 
 - `list` shows each name with its platform, the day it was claimed, its number of devices and an open link window.
@@ -203,10 +265,33 @@ In the server folder (the start script creates `.venv` there; on Windows use `.v
 - `free NAME` frees the name with all its devices; its save stays. The next login with that name claims it again.
   Use it for a player who lost every key, or for a name with 16 devices.
 
-The server sees the change at once. Run the tool as the user that runs the server
-(`sudo -u <user> .venv/bin/python tools/accounts.py list`), not with plain `sudo`; started as root, the tool gives
-the file back to its owner, so the server can still read it. To use another accounts file, put `--file PATH` before
-`list`, `link` or `free`.
+The running server sees the change at once. On Linux, run the command as the user that runs the server
+(`sudo -u <user> /opt/thecrewreborn/TheCrewReborn-Server accounts list`), not with plain `sudo`; started as root, the
+command gives the file back to its owner, so the server can still read it. To use another accounts file, put
+`--file PATH` before `list`, `link` or `free`.
+
+## The admin page
+
+The server has a page for you in the browser: the console log with a filter, the connected players, the claimed
+names with their devices, the saves (view, download, open the folder) and the server's settings. From there you can
+open a link window for a name, free a name and stop the server.
+
+When the server starts it names the page's address, for example `Admin page: http://192.168.178.10:8090/ (home
+network)`. Open it on this computer or on any device in your home network, a phone included. The page answers only
+addresses from the home network (10.x, 172.16-31.x, 192.168.x) and this computer itself; everyone else is refused.
+On a computer with a desktop the browser opens the page at the start.
+
+Settings in `config.ini`, section `[ui]`:
+
+- `enabled = off` switches the page off.
+- `open = off` keeps the browser closed at the start.
+- `port` sets the page's port (8090 by default).
+- `password` sets a password for the page. Everyone in your home network who opens the page must enter it first.
+  Set one when others use your network. After five wrong passwords in ten minutes a device has to wait.
+
+A server on the internet (`[server] ip` is a public address, or `link_home = off`) keeps the page on its own computer.
+To use it from elsewhere, forward the port through SSH: `ssh -L 8090:127.0.0.1:8090 user@server`, then open
+`http://127.0.0.1:8090/` on your own computer.
 
 ## Running a server on the internet
 
@@ -230,10 +315,10 @@ crew_credits_refill = off
 ```
 
 - `ip` is the address the server announces to the game, in the discovery answer, the configuration the game fetches
-  at start and the relay; the game connects to it. Set it to the server's public IPv4 address (not a hostname).
-  Behind NAT (a cloud VM, a home router) this is the public address, not the one the machine sees. The server
-  ignores any other value and says so at start. Without it the server announces its address in its own
-  network, which players on the internet cannot reach.
+  at start and the relay; the game connects to it. Set it to the server's public IPv4 address (no hostname).
+  Behind NAT (a cloud VM, a home router) that is the address the internet sees, which differs from the one the
+  machine shows. The server ignores any other value and says so at start. Without it the server announces its
+  address in its own network, which players on the internet cannot reach.
 - `multiplayer`: `lan` or `off` (see "Multiplayer").
 - `crew_credits_refill = off` is recommended. With the default `on` every player always has the full balance and
   every purchase with Crew Credits is free, so anyone can buy everything on the first day.
@@ -256,8 +341,8 @@ crew_credits_refill = off
 The `captures` folder grows while people play: about 50 to 100 KB per minute of play and player. A log file that
 passes 256 MB moves to `<name>.1` (replacing an older `.1`), so each log takes at most about 512 MB. The logs leave
 out tickets, passwords, codes and keys, so players may attach them to bug reports; games that have not logged in
-get only a limited number of entries. The server has no switch to turn the logs off; `--log PATH` after
-`./start-server.sh` (or at the end of `ExecStart=` in the unit) only moves them: the 1.21 relay log goes to PATH,
+get only a limited number of entries. The server has no switch to turn the logs off; `--log PATH` after the
+program's name (or at the end of `ExecStart=` in the unit) only moves them: the 1.21 relay log goes to PATH,
 `requests.jsonl` and `v100.jsonl` into the same folder. The server opens each log for every entry, so you may move or
 delete the files at any time; it starts new ones. To keep the folder smaller, delete old files now and then, or let
 logrotate do it with a file `/etc/logrotate.d/thecrewreborn` (adjust the path and the user):
@@ -280,8 +365,8 @@ Open exactly the ports of "Ports" between the internet and the server. If the se
 
 **Option 1: a Linux server**
 
-Any Linux machine with a public IPv4 address works, rented or your own. The steps below are for a Linux system with apt and systemd;
-the server needs little (see "Load" below).
+Any Linux machine with a public IPv4 address works, rented or your own. The steps below are for a Linux system with
+apt and systemd; the server needs little (see "Load" below).
 
 1. Open the ports above to the server: in the firewall of your hosting provider, if it has one, and on the machine
    itself. With ufw:
@@ -291,34 +376,37 @@ the server needs little (see "Load" below).
    sudo ufw allow 4000,4001,4100/udp
    ```
 
-2. Install the server. Set `VERSION` to the newest version on the download page (0.0.4 or later) and replace
-   `crew` with the user the unit runs as (`User=` in `thecrewreborn.service`, see step 3):
+2. Install the server. Set `VERSION` to the newest version on the download page and replace `crew` with the user
+   the unit runs as (`User=` in `thecrewreborn.service`, see step 3). The `case` line picks the zip for the
+   machine's processor:
 
    ```
-   sudo apt install python3 python3-venv unzip
-   VERSION=0.0.4
-   curl -L -o server.zip https://github.com/thecrewreborn/server/releases/download/v$VERSION/TheCrewReborn-Server-$VERSION.zip
-   unzip server.zip
+   sudo apt install unzip
+   VERSION=0.1.0
+   case "$(uname -m)" in aarch64) PLATFORM=linux-arm64 ;; *) PLATFORM=linux-x64 ;; esac
+   curl -L -o server.zip https://github.com/thecrewreborn/server/releases/download/v$VERSION/TheCrewReborn-Server-$VERSION-$PLATFORM.zip
    sudo mkdir -p /opt/thecrewreborn
-   sudo cp -a TheCrewReborn-Server-$VERSION/. /opt/thecrewreborn/
+   sudo unzip -o -j server.zip -d /opt/thecrewreborn
    sudo chown -R crew: /opt/thecrewreborn
    cd /opt/thecrewreborn
-   sudo -u crew chmod +x start-server.sh
+   sudo -u crew chmod +x TheCrewReborn-Server
    sudo -u crew cp config.example.ini config.ini
    ```
 
    Keep the folder out of `/home`, which the unit hides. Put the settings above into `config.ini` by changing its
-   existing lines. Then, as that user, start `./start-server.sh` once by hand to check that it comes up (it prints
-   `Server address:` with your public address), and stop it with Ctrl+C. Started by hand, it may not bind ports 80
-   and 443: it says so, suggests a `setcap` command and takes 8080 and 8443. That is expected without the unit. The
-   unit in step 3 grants that right (`AmbientCapabilities`), so do not run the `setcap` command: it would apply to
-   the system's Python and every program that runs it.
-3. Install the unit: edit `User=` and the two paths in `thecrewreborn.service` if yours differ (keep the folder out
+   existing lines. Then, as that user, start `./TheCrewReborn-Server` once by hand to check that it comes up (it
+   prints `Server address:` with your public address), and stop it with Ctrl+C. Started by hand, it may not bind
+   ports 80 and 443: it says so, suggests a `setcap` command and takes 8080 and 8443. That is expected without the
+   unit. The unit in step 3 grants that right (`AmbientCapabilities`), so you need no `setcap`.
+3. Install the unit: edit `User=` and the paths in `thecrewreborn.service` if yours differ (keep the folder out
    of `/home`), then `sudo cp thecrewreborn.service /etc/systemd/system/` and
    `sudo systemctl daemon-reload && sudo systemctl enable --now thecrewreborn`.
    Logs: `journalctl -u thecrewreborn -f`. The unit grants the right to bind ports 80 and 443 without root and
    raises the limit of open files to 65536 (`LimitNOFILE`): every connection and log file takes one.
 4. Check from another network: `curl -k https://<public-ip>/version` must answer.
+
+To update, run the lines from `VERSION=` to `sudo chown` of step 2 with the new version, then
+`sudo systemctl restart thecrewreborn`. Your `config.ini`, saves and logs stay.
 
 **Option 2: at home**
 
@@ -330,8 +418,8 @@ address.
 
 **Load**
 
-Measured on 2026-11-12: about 0.02 % of one CPU core per player (a notebook CPU from 2023), 1 to 2 kbit/s on average with
-peaks up to 16 kbit/s, and about 22 KB of save per player. The server process uses about 50 MB of memory.
+Measured on 2026-11-12: 1 to 2 kbit/s per player on average, with peaks up to 16 kbit/s, and about 22 KB of save per
+player.
 
 ## What the server checks
 
@@ -368,8 +456,8 @@ These rules apply to every server, at home and on the internet:
 - At home with `link_home = on`, every device on your home network can join any name.
 - A link window admits the first new device that logs in with the name, from anywhere. Open it only when the player is
   ready to log in.
-- A device code is bound to the server's id, address and HTTPS port, not to its certificate. Play on servers of people
-  you trust, and back up your key files.
+- A device code is bound to the server's id, address and HTTPS port; the certificate plays no part. Play on servers
+  of people you trust, and back up your key files.
 - Only one server can run per IP address and port set.
 - Two devices of one name behind one IP address (for example a PS4 and a PC at home) knock each other out: each login
   ends the session of the other device.
@@ -379,8 +467,8 @@ These rules apply to every server, at home and on the internet:
 - Two consoles behind one IP address that look for the server within the same second may see the DLC as not owned
   for that game run. Restart the game on that console.
 - Anyone who can read a player's network traffic and knows the public relay key can replay that player's login ticket
-  while any game plays with it; the ticket ends at the owner's next login or with `tools/accounts.py free`. Only an
-  attacker on the network path can do this.
+  while any game plays with it; the ticket ends at the owner's next login or with `accounts free`. Only an attacker
+  on the network path can do this.
 - A dropped repeat request (see "What the server checks") should look to the game like a lost connection; this is
   not yet tested on a console.
 
@@ -391,10 +479,11 @@ next to the server holds the logs; attach them, they help a lot.
 
 ## Licence
 
-The server is free software under the GNU General Public License, version 3 or later (see `LICENSE`). The PC patch
-(`dinput8.dll`) and the PS4 patch are free to use and pass on; their licence is the `LICENSE.txt` in their download.
-The Crew is a trademark of Ubisoft. This is a fan project, not affiliated with or endorsed by Ubisoft or Sony; you
-need your own copy of the game.
+The server is free software under the GNU General Public License, version 3 or later (see `LICENSE`). It contains
+third-party code under its own licences, listed in `THIRD-PARTY-NOTICES`. The PC patch (`dinput8.dll`) and the PS4
+patch are free to use and pass on; their licence is the `LICENSE.txt` in their download. The Crew is a trademark of
+Ubisoft. This is a fan project, not affiliated with or endorsed by Ubisoft or Sony; you need your own copy of the
+game.
 
 ---
 
@@ -409,8 +498,8 @@ https://thecrewreborn.github.io
 
 Von der [Download-Seite](https://thecrewreborn.github.io/#download) brauchst du:
 
-1. **Den Server, für alle:** `TheCrewReborn-Server-<Version>.zip`. Entpacke ihn auf einem Rechner in deinem Heimnetz und
-   starte ihn: `start-server.bat` unter Windows (Doppelklick), `./start-server.sh` unter macOS und Linux (im Terminal).
+1. **Den Server, für alle:** `TheCrewReborn-Server-<Version>-<Plattform>.zip` für den Rechner, auf dem er läuft
+   (siehe „Der Server“). Entpacke ihn auf einem Rechner in deinem Heimnetz und starte `TheCrewReborn-Server`.
 2. **Spielen auf PS4 / PS5:** `TheCrewReborn-PS4-<Version>.zip`. Kopiere `CUSA00161.xml` auf der Konsole nach
    `/data/GoldHEN/patches/xml/` und schalte den Patch im Patch-Menü von GoldHEN ein.
 3. **Spielen am PC:** `TheCrewReborn-PC-<Version>.zip`. Kopiere `dinput8.dll` und `reborn.ini` in den Spielordner,
@@ -428,33 +517,95 @@ im Spiel erneut an. Beim allerersten Start muss der Server bereits laufen.
   - **PS4:** europäische Version CUSA00161 auf einer Konsole mit GoldHEN, entweder mit installiertem Update 1.21 (die
     Spielinfo zeigt 01.21, mit Wild Run) oder als Basisspiel ohne Update (01.00). Getestet auf einer PS4 mit Firmware
     11.50. Das Basisspiel 1.00 ist neu und experimentell: getestet vom Beginn der Story bis zum ersten Tuning-Shop.
-  - **PC:** Ubisoft-Connect- oder Steam-Version, `TheCrew.exe` 1.2.0.0 (Build 502193). Getestet unter Windows 11, auch unter Windows 11
-    für ARM (in einer virtuellen Maschine).
+  - **PC:** Ubisoft-Connect- oder Steam-Version, `TheCrew.exe` 1.2.0.0 (Build 502193). Getestet unter Windows 11,
+    auch unter Windows 11 für ARM (in einer virtuellen Maschine).
 
-  Noch nicht getestet: die PS5. Andere PS4-Regionen und Spielversionen werden
-  noch nicht unterstützt; der Patch passt nur auf CUSA00161 1.00 und 1.21.
-- Einen Rechner im selben Netzwerk wie die Konsole oder der Spiele-PC: Windows, macOS oder Linux. Der Server kann
-  auch auf dem Spiele-PC selbst laufen oder auf einem Rechner im Internet (siehe „Einen Server im Internet
-  betreiben“). Linux braucht Python 3.10 oder neuer mit venv (mit apt: `sudo apt install python3 python3-venv`);
-  unter Windows und macOS installiert das Startskript Python bei Bedarf.
+  Noch nicht getestet: die PS5. Andere PS4-Regionen und Spielversionen werden noch nicht unterstützt; der Patch passt
+  nur auf CUSA00161 1.00 und 1.21.
+- Einen Rechner im selben Netzwerk wie die Konsole oder der Spiele-PC: Windows 10 oder 11, macOS 11 oder neuer oder
+  Linux auf einem x64- oder ARM64-Prozessor. Der Server ist ein einzelnes Programm und braucht keine weitere
+  Installation. Er kann auch auf dem Spiele-PC selbst laufen oder auf einem Rechner im Internet (siehe „Einen Server
+  im Internet betreiben“).
 
 ## Der Server
 
-Der erste Start richtet den Server ein und dauert eine Minute (macOS fragt nach deinem Passwort, falls Python
-installiert werden muss). Spätere Starts dauern ein paar Sekunden. Der Server läuft, bis du das Fenster schließt
-oder Strg+C drückst. Windows fragt einmal, ob Python das Netzwerk nutzen darf: Erlaube den Zugriff für private
-Netzwerke.
+Jede Plattform hat ihren eigenen Zip:
+
+| Rechner | Zip |
+|---|---|
+| Windows-PC, dessen Einstellungen > System > Info „x64-basierter Prozessor“ zeigt | `windows-x64` |
+| Windows-PC, dessen Info-Seite „ARM-basierter Prozessor“ zeigt | `windows-arm64` |
+| Mac, jeder Prozessor | `macos-universal` |
+| Linux, `uname -m` gibt `x86_64` aus | `linux-x64` |
+| Linux, `uname -m` gibt `aarch64` aus | `linux-arm64` |
+
+Entpacke den Zip in einen eigenen Ordner. Der Server legt alles in diesem Ordner ab; wähle also einen, den du
+wiederfindest.
+
+**Windows:** Doppelklicke `TheCrewReborn-Server.exe`. Beim ersten Mal zeigt Windows unter Umständen „Der Computer
+wurde durch Windows geschützt“, weil das Programm keine Herausgebersignatur hat: Klicke auf „Weitere Informationen“,
+dann auf „Trotzdem ausführen“. Danach fragt Windows, ob das Programm das Netzwerk nutzen darf: Erlaube den Zugriff
+für private Netzwerke.
+
+**macOS:** Öffne das Terminal, tippe `cd ` (mit Leerzeichen), zieh den Ordner ins Fenster und drücke die
+Eingabetaste. Führe dann aus:
+
+```
+chmod +x TheCrewReborn-Server
+./TheCrewReborn-Server
+```
+
+Das Programm stammt nicht von einem registrierten Entwickler, deshalb blockiert macOS es beim ersten Mal. Schließe
+die Meldung, öffne Systemeinstellungen > Datenschutz & Sicherheit, scrolle zum Abschnitt Sicherheit und klicke neben
+dem Hinweis auf `TheCrewReborn-Server` auf „Dennoch öffnen“ (unter macOS 12 und älter: Systemeinstellungen >
+Sicherheit > Allgemein). Starte `./TheCrewReborn-Server` erneut und bestätige mit „Dennoch öffnen“ oder „Öffnen“. Ist
+die Firewall von macOS an, fragt macOS, ob das Programm eingehende Verbindungen annehmen darf: Erlaube es. Du kannst
+das Programm auch unter Systemeinstellungen > Netzwerk > Firewall > Optionen hinzufügen und eingehende Verbindungen
+erlauben.
+
+**Linux:** Im Terminal im Ordner:
+
+```
+chmod +x TheCrewReborn-Server
+./TheCrewReborn-Server
+```
+
+Der Server läuft, bis du das Fenster schließt oder Strg+C drückst. Sobald er bereit ist, schreibt er
+`Server address:` und `Ready.` `--help` zeigt die Optionen; `-v` zeigt beim Start zusätzlich die Ports und
+Einstellungen.
 
 Der Server braucht HTTPS: Die PS4 sendet ihren Login-Code nur über HTTPS. HTTPS ist standardmäßig an (Port 443 oder
 8443, siehe „Ports“). Mit `https_port = 0` in `config.ini` kann sich keine PS4 anmelden, und der Server warnt beim
 Start.
 
+**Wo die Dateien liegen**
+
+Alles liegt neben dem Programm:
+
+| Datei oder Ordner | Inhalt |
+|---|---|
+| `config.ini` | deine Einstellungen. Der erste Start kopiert `config.example.ini`, die jede Einstellung erklärt. |
+| `save/` | die Spielstände, die Namen und ihre Geräte (`accounts.json`), die Kennung des Servers (`server_id`) |
+| `certs/` | das HTTPS-Zertifikat und sein Schlüssel, beim ersten Start erzeugt |
+| `captures/` | die Logs (siehe „Logs“) |
+
+Um diese Dateien woanders abzulegen, setze vor dem Start die Umgebungsvariable `TCREBORN_HOME` auf diesen Ordner;
+`config.ini`, `save`, `certs` und `captures` liegen dann dort. `TCREBORN_CONFIG` nennt für sich allein eine andere
+`config.ini`. Der Befehl `accounts` liest dieselben Variablen; setze sie also genauso, wenn du ihn ausführst.
+
+**Aktualisieren**
+
+Beende den Server, entpacke den neuen Zip über den alten Ordner und starte den Server wieder. Der Zip enthält nur
+das Programm, `config.example.ini`, diese Anleitung und die Lizenztexte; deine `config.ini`, Spielstände, Zertifikat
+und Logs bleiben unverändert.
+
 ## Ports
 
-TCP 80 und 443, UDP 4000, 4001 und 4100 (4100: das Basisspiel 1.00). Für das Spielen zu Hause muss am Router nichts freigegeben werden. Wenn das
-System Port 80 oder 443 verweigert (ein anderes Programm nutzt ihn, oder Linux ohne root), nimmt der Server 8080 und
-8443 und teilt das dem Spiel mit; beim Start steht der Hinweis im Fenster. Findet das Spiel den Server nicht, trage
-am PC `Host` in `reborn.ini` ein oder auf der PS4 die Serveradresse in `/data/TheCrew/server.txt`.
+TCP 80 und 443, UDP 4000, 4001 und 4100 (4100: das Basisspiel 1.00) sowie TCP 8090 für die Admin-Seite. Für das Spielen zu Hause muss am Router nichts
+freigegeben werden. Wenn das System Port 80 oder 443 verweigert (ein anderes Programm nutzt ihn, oder Linux ohne
+root), nimmt der Server 8080 und 8443 und teilt das dem Spiel mit; beim Start steht der Hinweis im Fenster. Findet
+das Spiel den Server nicht, trage am PC `Host` in `reborn.ini` ein oder auf der PS4 die Serveradresse in
+`/data/TheCrew/server.txt`.
 
 ## Namen und Geräte
 
@@ -484,8 +635,8 @@ lehnt der Server ab. Ein PC, dessen `Name` und dessen Windows-Benutzername wenig
 (Buchstaben A-Z, Ziffern, `.`, `_` und `-`; Umlaute werden ausgeschrieben, andere Buchstaben wie kyrillische oder
 chinesische fallen weg), spielt als `TheCrewReborn`, ein gewöhnlicher Name wie jeder andere. Zu Hause treten zwei PCs,
 die auf ihn zurückfallen, demselben Namen bei und teilen sich einen Spielstand. Trage deshalb einen eigenen `Name` in
-`reborn.ini` ein. PC-Namen werden nach 15 Zeichen
-abgeschnitten; einen PS4-Namen mit 16 Zeichen kannst du am PC also nicht spielen.
+`reborn.ini` ein. PC-Namen werden nach 15 Zeichen abgeschnitten; einen PS4-Namen mit 16 Zeichen kannst du am PC also
+nicht spielen.
 
 **Ein Name auf mehreren Geräten (Cross-Save)**
 
@@ -495,9 +646,10 @@ ebenso. Ein neues Gerät tritt dem Namen einmal bei:
 
 - **Zu Hause** tritt es von selbst bei. Ein Gerät, das sich aus deinem Heimnetz anmeldet (Adressen 10.x,
   172.16-31.x, 192.168.x, 127.x), wird bei seinem ersten Login zu einem Gerät des Namens.
-- **Über das Internet** öffnet der Betreiber des Servers mit `tools/accounts.py link NAME` ein Zeitfenster (siehe
-  „Namen verwalten“). In den nächsten 10 Minuten tritt das erste neue Gerät, das sich mit diesem Namen anmeldet, dem
-  Namen bei, und das Zeitfenster schließt sich. Warte nach mehreren fehlgeschlagenen Versuchen 10 Minuten, bevor du ein Zeitfenster öffnest.
+- **Über das Internet** öffnet der Betreiber des Servers mit `accounts link NAME` ein Zeitfenster (siehe „Namen
+  verwalten“). In den nächsten 10 Minuten tritt das erste neue Gerät, das sich mit diesem Namen anmeldet, dem Namen
+  bei, und das Zeitfenster schließt sich. Warte nach mehreren fehlgeschlagenen Versuchen 10 Minuten, bevor du ein
+  Zeitfenster öffnest.
 
 Ein Name fasst bis zu 16 Geräte. Mit `link_home = off` unter `[server]` in `config.ini` brauchen auch Geräte zu Hause
 ein Zeitfenster. Schalte es aus, wenn ein Proxy, ein Tunnel oder eine Portweiterleitung eines Containers vor dem
@@ -506,10 +658,15 @@ Server sitzt: Dann kommt jeder Spieler von einer privaten Adresse, und jeder kö
 `link_home` an ist und `[server] ip` eine öffentliche Adresse ist.
 
 Statt eines Zeitfensters kann ein PC auch den Code einer PS4 verwenden. Kopiere `/data/TheCrew/console_key.txt` von
-der PS4 und führe in einem Serverordner `.venv/bin/python tools/console_password.py console_key.txt <Serveradresse>`
-aus (Windows: `.venv\Scripts\python tools\console_password.py console_key.txt <Serveradresse>`). Gib die Adresse genau
-so an wie in der `server.txt` der PS4, mit ihrem Port (zum Beispiel `https://203.0.113.5:8443`); für eine Konsole, die
-den Server im LAN gefunden hat, gib die `Server address` an, die der Server beim Start anzeigt. Das Werkzeug fragt den
+der PS4 in den Serverordner und führe dort aus:
+
+```
+./TheCrewReborn-Server console-password console_key.txt <Serveradresse>
+```
+
+(Windows: `.\TheCrewReborn-Server.exe console-password console_key.txt <Serveradresse>`.) Gib die Adresse genau so an
+wie in der `server.txt` der PS4, mit ihrem Port (zum Beispiel `https://203.0.113.5:8443`); für eine Konsole, die den
+Server im LAN gefunden hat, gib die `Server address` an, die der Server beim Start anzeigt. Der Befehl fragt den
 Server über UDP-Port 4001 nach seiner Kennung; ist dieser Port nicht erreichbar, ergänze `--server-id <Kennung>` mit
 der `server_id` aus `https://<Serveradresse>/version`. Trage den ausgegebenen Wert als `Password = ...` unter
 `[Player]` in `reborn.ini` ein. Er gilt nur für diesen Server unter dieser Adresse und diesem HTTPS-Port.
@@ -553,8 +710,7 @@ ihn vor dem ersten Login des Namens in `save/1.21/players/<Name>.json` um und me
 ## Crew Credits
 
 Jeder Spieler hat 1.000.000 Crew Credits, und Käufe damit kosten nichts: Der Kontostand bleibt, wo er ist. Um mit
-einem eigenen Kontostand zu spielen, kopiere `config.example.ini` nach `config.ini` neben dem Server und trage unter
-`[player]` ein:
+einem eigenen Kontostand zu spielen, trage in `config.ini` unter `[player]` ein:
 
 ```ini
 crew_credits = 1000000
@@ -566,10 +722,9 @@ einer Änderung neu.
 
 ## DLC
 
-Die DLCs sind aus: Die Inhalte der kostenpflichtigen Add-ons (die Motorräder und Specs von Wild
-Run, Calling All Units, die Autopakete) bleiben gesperrt. Wenn du die DLCs für deine Kopie des Spiels besitzt, schalte sie
-an einer Stelle ein, im Server. Kopiere `config.example.ini` nach `config.ini` neben dem Server und trage unter
-`[player]` ein:
+Die DLCs sind aus: Die Inhalte der kostenpflichtigen Add-ons (die Motorräder und Specs von Wild Run, Calling All
+Units, die Autopakete) bleiben gesperrt. Wenn du die DLCs für deine Kopie des Spiels besitzt, schalte sie an einer
+Stelle ein, im Server. Trage in `config.ini` unter `[player]` ein:
 
 ```ini
 dlc = on
@@ -592,8 +747,8 @@ Bei einem Server in einem anderen Netzwerk (`server.txt` auf der PS4) fragt die 
   nicht (siehe „Grenzen“).
 - `off` (auch `0`, `false`, `no` oder ein leerer Wert): Alle spielen allein.
 
-Jedes andere Wort beendet den Start mit einer Meldung. Eine aus der `config.example.ini` von 0.0.3 oder älter erstellte `config.ini` enthält `multiplayer = on`. Ändere den
-Wert auf einem Server im Internet auf `lan` oder `off`.
+Jedes andere Wort beendet den Start mit einer Meldung. Eine aus der `config.example.ini` von 0.0.3 oder älter
+erstellte `config.ini` enthält `multiplayer = on`. Ändere den Wert auf einem Server im Internet auf `lan` oder `off`.
 
 ## Spielerbilder
 
@@ -605,12 +760,13 @@ als 1024 x 1024 Pixel ab.
 
 ## Namen verwalten
 
-Im Serverordner (das Startskript legt dort `.venv` an; unter Windows nimm `.venv\Scripts\python`):
+Das Serverprogramm hat dafür einen eigenen Befehl. Im Terminal im Serverordner (unter Windows tippe
+`.\TheCrewReborn-Server.exe` statt `./TheCrewReborn-Server`):
 
 ```
-.venv/bin/python tools/accounts.py list
-.venv/bin/python tools/accounts.py link NAME
-.venv/bin/python tools/accounts.py free NAME
+./TheCrewReborn-Server accounts list
+./TheCrewReborn-Server accounts link NAME
+./TheCrewReborn-Server accounts free NAME
 ```
 
 - `list` zeigt jeden Namen mit seiner Plattform, dem Tag der Reservierung, der Zahl seiner Geräte und einem offenen
@@ -621,10 +777,33 @@ Im Serverordner (das Startskript legt dort `.venv` an; unter Windows nimm `.venv
   reserviert ihn neu. Nutze das für einen Spieler, der jeden Schlüssel verloren hat, oder für einen Namen mit 16
   Geräten.
 
-Der Server übernimmt die Änderung sofort. Führe das Werkzeug als der Benutzer aus, der den Server ausführt
-(`sudo -u <Benutzer> .venv/bin/python tools/accounts.py list`), nicht mit einfachem `sudo`; als root gestartet, gibt
-das Werkzeug die Datei ihrem Eigentümer zurück, damit der Server sie weiter lesen kann. Für eine andere
-Accounts-Datei schreibe `--file PFAD` vor `list`, `link` oder `free`.
+Der laufende Server übernimmt die Änderung sofort. Führe den Befehl unter Linux als der Benutzer aus, der den Server
+ausführt (`sudo -u <Benutzer> /opt/thecrewreborn/TheCrewReborn-Server accounts list`), nicht mit einfachem `sudo`;
+als root gestartet, gibt der Befehl die Datei ihrem Eigentümer zurück, damit der Server sie weiter lesen kann. Für
+eine andere Accounts-Datei schreibe `--file PFAD` vor `list`, `link` oder `free`.
+
+## Die Admin-Seite
+
+Der Server hat eine Seite für dich im Browser: das Konsolenprotokoll mit Filter, die verbundenen Spieler, die
+vergebenen Namen mit ihren Geräten, die Spielstände (anzeigen, herunterladen, Ordner öffnen) und die Einstellungen
+des Servers. Dort kannst du ein Zeitfenster für einen Namen öffnen, einen Namen freigeben und den Server beenden.
+
+Beim Start nennt der Server die Adresse der Seite, zum Beispiel `Admin page: http://192.168.178.10:8090/ (home
+network)`. Öffne sie auf diesem Computer oder auf jedem Gerät in deinem Heimnetz, auch auf dem Handy. Die Seite
+antwortet nur Adressen aus dem Heimnetz (10.x, 172.16-31.x, 192.168.x) und diesem Computer selbst; alle anderen
+werden abgewiesen. Auf einem Computer mit Desktop öffnet der Browser die Seite beim Start.
+
+Einstellungen in der `config.ini`, Abschnitt `[ui]`:
+
+- `enabled = off` schaltet die Seite ab.
+- `open = off` lässt den Browser beim Start geschlossen.
+- `port` legt den Port der Seite fest (Standard 8090).
+- `password` legt ein Passwort für die Seite fest. Wer die Seite in deinem Heimnetz öffnet, muss es zuerst eingeben.
+  Setze eines, wenn andere dein Netz nutzen. Nach fünf falschen Passwörtern in zehn Minuten muss ein Gerät warten.
+
+Ein Server im Internet (`[server] ip` ist eine öffentliche Adresse, oder `link_home = off`) hält die Seite auf seinem
+eigenen Computer. Um sie von woanders zu nutzen, leite den Port über SSH weiter:
+`ssh -L 8090:127.0.0.1:8090 benutzer@server`, dann öffne `http://127.0.0.1:8090/` auf deinem eigenen Computer.
 
 ## Einen Server im Internet betreiben
 
@@ -651,9 +830,9 @@ crew_credits_refill = off
 - `ip` ist die Adresse, die der Server dem Spiel mitteilt: in der Antwort der Serversuche, in der
   Dienstkonfiguration, die das Spiel beim Start abruft, und im Relay; mit ihr verbindet sich das Spiel. Trage die
   öffentliche IPv4-Adresse des Servers ein (keinen Hostnamen). Hinter NAT (eine Cloud-VM, ein Router zu Hause) ist
-  das die öffentliche Adresse, nicht die, die der Rechner selbst sieht. Jeden anderen Wert ignoriert der Server und meldet das
-  beim Start. Ohne diese Zeile teilt der Server seine Adresse im eigenen Netzwerk mit, die Spieler im Internet nicht
-  erreichen.
+  das die Adresse, die das Internet sieht; sie weicht von der ab, die der Rechner selbst anzeigt. Jeden anderen Wert
+  ignoriert der Server und meldet das beim Start. Ohne diese Zeile teilt der Server seine Adresse im eigenen Netzwerk
+  mit, die Spieler im Internet nicht erreichen.
 - `multiplayer`: `lan` oder `off` (siehe „Mehrspieler“).
 - `crew_credits_refill = off` wird empfohlen. Mit dem Standard `on` hat jeder Spieler immer den vollen Kontostand,
   und jeder Kauf mit Crew Credits ist kostenlos; jeder kann also am ersten Tag alles kaufen.
@@ -669,8 +848,8 @@ crew_credits_refill = off
   Konsole muss den Server außerdem über UDP-Port 4001 erreichen: Dort erfährt sie die Kennung des Servers, ohne sie
   wird die Anmeldung abgelehnt.
 - PC: Setze `Host` unter `[Server]` in `reborn.ini`; dort ist eine Adresse oder ein Hostname möglich. Nutzt der
-  Server 8443, setze außerdem `HttpsPort = 8443`. Ein Hostname, dessen Adresse sich ändert (dynamisches DNS), gibt dem PC bei
-  jeder Änderung einen neuen Code.
+  Server 8443, setze außerdem `HttpsPort = 8443`. Ein Hostname, dessen Adresse sich ändert (dynamisches DNS), gibt
+  dem PC bei jeder Änderung einen neuen Code.
 - Der erste Login reserviert den Namen. Für ein zweites Gerät bittet der Spieler den Betreiber um ein Zeitfenster.
 
 **Logs**
@@ -679,10 +858,10 @@ Der Ordner `captures` wächst, während gespielt wird: etwa 50 bis 100 KB pro Sp
 eine Log-Datei 256 MB, benennt der Server sie in `<Name>.1` um (eine ältere `.1` wird ersetzt); jedes Log belegt
 also höchstens etwa 512 MB. Die Logs enthalten keine Tickets, Passwörter, Codes und Schlüssel; Spieler können sie
 deshalb an Fehlermeldungen anhängen. Von Spielen, die sich noch nicht angemeldet haben, schreibt der Server nur eine
-begrenzte Zahl von Einträgen. Der Server hat keinen Schalter, der die Logs abschaltet; `--log PFAD` hinter
-`./start-server.sh` (oder am Ende von `ExecStart=` in der Unit) verschiebt sie nur: Das Relay-Log von 1.21 landet in
-PFAD, `requests.jsonl` und `v100.jsonl` im selben Ordner. Der Server öffnet jedes Log für jeden Eintrag neu; du kannst
-die Dateien also jederzeit verschieben oder löschen, er legt neue an. Damit der Ordner kleiner bleibt, lösche alte
+begrenzte Zahl von Einträgen. Der Server hat keinen Schalter, der die Logs abschaltet; `--log PFAD` hinter dem
+Programmnamen (oder am Ende von `ExecStart=` in der Unit) verschiebt sie nur: Das Relay-Log von 1.21 landet in PFAD,
+`requests.jsonl` und `v100.jsonl` im selben Ordner. Der Server öffnet jedes Log für jeden Eintrag neu; du kannst die
+Dateien also jederzeit verschieben oder löschen, er legt neue an. Damit der Ordner kleiner bleibt, lösche alte
 Dateien ab und zu oder überlasse das logrotate mit einer Datei `/etc/logrotate.d/thecrewreborn` (passe Pfad und
 Benutzer an):
 
@@ -715,36 +894,39 @@ für ein Linux-System mit apt und systemd; der Server braucht wenig (siehe „La
    sudo ufw allow 4000,4001,4100/udp
    ```
 
-2. Installiere den Server. Setze `VERSION` auf die neueste Version der Download-Seite (0.0.4 oder neuer) und
-   ersetze `crew` durch den Benutzer, unter dem die Unit läuft (`User=` in `thecrewreborn.service`, siehe
-   Schritt 3):
+2. Installiere den Server. Setze `VERSION` auf die neueste Version der Download-Seite und ersetze `crew` durch den
+   Benutzer, unter dem die Unit läuft (`User=` in `thecrewreborn.service`, siehe Schritt 3). Die Zeile mit `case`
+   wählt den Zip für den Prozessor des Rechners:
 
    ```
-   sudo apt install python3 python3-venv unzip
-   VERSION=0.0.4
-   curl -L -o server.zip https://github.com/thecrewreborn/server/releases/download/v$VERSION/TheCrewReborn-Server-$VERSION.zip
-   unzip server.zip
+   sudo apt install unzip
+   VERSION=0.1.0
+   case "$(uname -m)" in aarch64) PLATFORM=linux-arm64 ;; *) PLATFORM=linux-x64 ;; esac
+   curl -L -o server.zip https://github.com/thecrewreborn/server/releases/download/v$VERSION/TheCrewReborn-Server-$VERSION-$PLATFORM.zip
    sudo mkdir -p /opt/thecrewreborn
-   sudo cp -a TheCrewReborn-Server-$VERSION/. /opt/thecrewreborn/
+   sudo unzip -o -j server.zip -d /opt/thecrewreborn
    sudo chown -R crew: /opt/thecrewreborn
    cd /opt/thecrewreborn
-   sudo -u crew chmod +x start-server.sh
+   sudo -u crew chmod +x TheCrewReborn-Server
    sudo -u crew cp config.example.ini config.ini
    ```
 
    Lege den Ordner nicht unter `/home`, das die Unit ausblendet. Trage die Einstellungen von oben in `config.ini`
    ein, indem du die vorhandenen Zeilen änderst. Starte dann als dieser Benutzer einmal von Hand
-   `./start-server.sh`, um zu prüfen, ob er hochfährt (er schreibt `Server address:` mit deiner öffentlichen
+   `./TheCrewReborn-Server`, um zu prüfen, ob er hochfährt (er schreibt `Server address:` mit deiner öffentlichen
    Adresse), und beende ihn mit Strg+C. Von Hand gestartet darf er die Ports 80 und 443 unter Umständen nicht
    belegen: Er meldet das, schlägt einen `setcap`-Befehl vor und nimmt 8080 und 8443. Ohne die Unit ist das zu
-   erwarten. Die Unit aus Schritt 3 erteilt dieses Recht (`AmbientCapabilities`); führe den `setcap`-Befehl deshalb
-   nicht aus: Er gälte für das Python des Systems und jedes Programm, das es nutzt.
-3. Installiere die Unit: Passe `User=` und die beiden Pfade in `thecrewreborn.service` an, falls deine abweichen
-   (lege den Ordner nicht unter `/home`), dann `sudo cp thecrewreborn.service /etc/systemd/system/` und
+   erwarten. Die Unit aus Schritt 3 erteilt dieses Recht (`AmbientCapabilities`); `setcap` brauchst du deshalb
+   nicht.
+3. Installiere die Unit: Passe `User=` und die Pfade in `thecrewreborn.service` an, falls deine abweichen (lege den
+   Ordner nicht unter `/home`), dann `sudo cp thecrewreborn.service /etc/systemd/system/` und
    `sudo systemctl daemon-reload && sudo systemctl enable --now thecrewreborn`.
    Logs: `journalctl -u thecrewreborn -f`. Die Unit erlaubt das Belegen der Ports 80 und 443 ohne root und hebt
    die Grenze für offene Dateien auf 65536 an (`LimitNOFILE`): Jede Verbindung und jede Log-Datei belegt eine.
 4. Prüfe aus einem anderen Netzwerk: `curl -k https://<öffentliche-IP>/version` muss antworten.
+
+Zum Aktualisieren führe die Zeilen von `VERSION=` bis `sudo chown` aus Schritt 2 mit der neuen Version aus, dann
+`sudo systemctl restart thecrewreborn`. Deine `config.ini`, Spielstände und Logs bleiben.
 
 **Variante 2: zu Hause**
 
@@ -756,8 +938,8 @@ Adressen der Spieler bei, `link_home` kann also an bleiben. Ändert dein Anbiete
 
 **Last**
 
-Gemessen am 12.11.2026: etwa 0,02 % eines CPU-Kerns pro Spieler (ein Notebook-Prozessor von 2023), 1 bis 2 kbit/s im Durchschnitt mit
-Spitzen bis 16 kbit/s und etwa 22 KB Spielstand pro Spieler. Der Serverprozess belegt etwa 50 MB Arbeitsspeicher.
+Gemessen am 12.11.2026: 1 bis 2 kbit/s pro Spieler im Durchschnitt mit Spitzen bis 16 kbit/s und etwa 22 KB
+Spielstand pro Spieler.
 
 ## Was der Server prüft
 
@@ -797,8 +979,8 @@ Diese Regeln gelten für jeden Server, zu Hause und im Internet:
 - Zu Hause kann mit `link_home = on` jedes Gerät in deinem Heimnetz jedem Namen beitreten.
 - Ein Zeitfenster nimmt das erste neue Gerät auf, das sich mit dem Namen anmeldet, von überall her. Öffne es erst,
   wenn der Spieler bereit ist, sich anzumelden.
-- Ein Gerätecode ist an die ID, die Adresse und den HTTPS-Port des Servers gebunden, nicht an sein Zertifikat. Spiele
-  nur auf Servern von Personen, denen du vertraust, und sichere deine Schlüsseldateien.
+- Ein Gerätecode ist an die ID, die Adresse und den HTTPS-Port des Servers gebunden; das Zertifikat spielt dabei
+  keine Rolle. Spiele nur auf Servern von Personen, denen du vertraust, und sichere deine Schlüsseldateien.
 - Pro IP-Adresse und Portsatz kann nur ein Server laufen.
 - Zwei Geräte eines Namens hinter einer IP-Adresse (zum Beispiel eine PS4 und ein PC zu Hause) werfen sich
   gegenseitig hinaus: Jeder Login beendet die Sitzung des anderen Geräts.
@@ -809,7 +991,7 @@ Diese Regeln gelten für jeden Server, zu Hause und im Internet:
   Umständen für diesen Spielstart als nicht gekauft. Starte das Spiel auf dieser Konsole neu.
 - Wer den Netzwerkverkehr eines Spielers mitlesen kann und den öffentlichen Relay-Schlüssel kennt, kann das
   Login-Ticket dieses Spielers wiederverwenden, solange irgendein Spiel mit ihm spielt; das Ticket endet beim nächsten
-  Login des Besitzers oder mit `tools/accounts.py free`. Das kann nur ein Angreifer auf dem Netzwerkpfad.
+  Login des Besitzers oder mit `accounts free`. Das kann nur ein Angreifer auf dem Netzwerkpfad.
 - Eine verworfene wiederholte Anfrage (siehe „Was der Server prüft“) sollte das Spiel wie eine verlorene Verbindung
   behandeln; das ist auf einer Konsole noch nicht getestet.
 
@@ -820,7 +1002,8 @@ Ordner `captures` neben dem Server enthält die Logs; hänge sie bitte an, sie h
 
 ## Lizenz
 
-Der Server ist freie Software unter der GNU General Public License, Version 3 oder später (siehe `LICENSE`). Der
-PC-Patch (`dinput8.dll`) und der PS4-Patch dürfen kostenlos genutzt und weitergegeben werden; ihre Lizenz ist die
-`LICENSE.txt` in ihrem Download. The Crew ist eine Marke von Ubisoft. Dies ist ein Fanprojekt ohne Verbindung zu
-Ubisoft oder Sony; du brauchst dein eigenes Exemplar des Spiels.
+Der Server ist freie Software unter der GNU General Public License, Version 3 oder später (siehe `LICENSE`). Er
+enthält Code Dritter unter deren eigenen Lizenzen, aufgeführt in `THIRD-PARTY-NOTICES`. Der PC-Patch (`dinput8.dll`)
+und der PS4-Patch dürfen kostenlos genutzt und weitergegeben werden; ihre Lizenz ist die `LICENSE.txt` in ihrem
+Download. The Crew ist eine Marke von Ubisoft. Dies ist ein Fanprojekt ohne Verbindung zu Ubisoft oder Sony; du
+brauchst dein eigenes Exemplar des Spiels.

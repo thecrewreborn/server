@@ -1,0 +1,119 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<link rel="icon" href="data:,">
+<title>The Crew Reborn server</title>
+<style>
+:root {
+  --bg: #f6f7f9;
+  --panel: #ffffff;
+  --text: #1c2026;
+  --muted: #5d6673;
+  --line: #dde1e7;
+  --accent: #1f6feb;
+  --accent-text: #ffffff;
+  --error-text: #b3261e;
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #15181d;
+    --panel: #1d2128;
+    --text: #e4e7ec;
+    --muted: #9aa3af;
+    --line: #2f3540;
+    --accent: #4c8dff;
+    --accent-text: #0b0d10;
+    --error-text: #ff8a80;
+  }
+}
+* { box-sizing: border-box; }
+html, body { margin: 0; padding: 0; }
+body {
+  background: var(--bg);
+  color: var(--text);
+  font: 16px/1.45 system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+}
+main {
+  max-width: 380px;
+  margin: 12vh auto 0;
+  padding: 24px 20px;
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+}
+h1 { font-size: 18px; margin: 0 0 16px; font-weight: 600; }
+label { display: block; margin-bottom: 6px; color: var(--muted); }
+input {
+  width: 100%;
+  font: inherit;
+  padding: 10px 12px;
+  border-radius: 6px;
+  border: 1px solid var(--line);
+  background: var(--panel);
+  color: var(--text);
+  margin-bottom: 16px;
+}
+button {
+  width: 100%;
+  min-height: 44px;
+  font: inherit;
+  border-radius: 6px;
+  border: 1px solid var(--accent);
+  background: var(--accent);
+  color: var(--accent-text);
+  cursor: pointer;
+}
+.error { color: var(--error-text); margin: 0 0 16px; }
+.error:empty { display: none; }
+@media (max-width: 420px) {
+  main { margin: 16px 12px 0; }
+}
+</style>
+</head>
+<body>
+<main>
+  <h1 data-t="title">The Crew Reborn server</h1>
+  <p class="error" id="error" data-error="{{ERROR}}"></p>
+  <form method="post" action="/login">
+    <label for="password" data-t="password">Password of the admin page</label>
+    <input id="password" name="password" type="password" autocomplete="current-password" required autofocus>
+    <button type="submit" data-t="login">Log in</button>
+  </form>
+</main>
+<script>
+"use strict";
+(function () {
+  const TEXT = {
+    en: {
+      title: "The Crew Reborn server",
+      password: "Password of the admin page",
+      login: "Log in",
+      wrong: "Wrong password.",
+      wait: "Too many wrong passwords. Try again in a few minutes."
+    },
+    de: {
+      title: "The Crew Reborn Server",
+      password: "Passwort der Admin-Seite",
+      login: "Anmelden",
+      wrong: "Falsches Passwort.",
+      wait: "Zu viele falsche Passwörter. Versuche es in ein paar Minuten erneut."
+    }
+  };
+  let lang = null;
+  try { lang = window.localStorage.getItem("tcr-admin-lang"); } catch (e) { }
+  if (lang !== "en" && lang !== "de") {
+    lang = (navigator.language || "").toLowerCase().indexOf("de") === 0 ? "de" : "en";
+  }
+  const words = TEXT[lang];
+  document.documentElement.lang = lang;
+  document.title = words.title;
+  document.querySelectorAll("[data-t]").forEach((e) => { e.textContent = words[e.getAttribute("data-t")]; });
+  const error = document.getElementById("error");
+  const key = error.getAttribute("data-error");
+  error.textContent = words[key] || "";
+})();
+</script>
+</body>
+</html>

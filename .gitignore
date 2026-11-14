@@ -1,8 +1,11 @@
-__pycache__/
-*.pyc
-.venv/
 .DS_Store
 config.ini
 save/
 captures/
 certs/
+native/build/
+native/build-*/
+native/dist/
+/TheCrewReborn-Server
+/TheCrewReborn-Server.exe
+!native/cmake/*.cmake

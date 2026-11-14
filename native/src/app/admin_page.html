@@ -1,0 +1,854 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="admin-token" content="{{TOKEN}}">
+<meta name="admin-run" content="{{RUN}}">
+<meta name="admin-auth" content="{{AUTH}}">
+<link rel="icon" href="data:,">
+<title>The Crew Reborn server</title>
+<style>
+:root {
+  --bg: #f6f7f9;
+  --panel: #ffffff;
+  --text: #1c2026;
+  --muted: #5d6673;
+  --line: #dde1e7;
+  --accent: #1f6feb;
+  --accent-text: #ffffff;
+  --danger: #c62828;
+  --ok: #2e7d32;
+  --code: #f0f2f5;
+  --error-text: #b3261e;
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #15181d;
+    --panel: #1d2128;
+    --text: #e4e7ec;
+    --muted: #9aa3af;
+    --line: #2f3540;
+    --accent: #4c8dff;
+    --accent-text: #0b0d10;
+    --danger: #ef5350;
+    --ok: #66bb6a;
+    --code: #12151a;
+    --error-text: #ff8a80;
+  }
+}
+* { box-sizing: border-box; }
+html, body { margin: 0; padding: 0; }
+body {
+  background: var(--bg);
+  color: var(--text);
+  font: 15px/1.45 system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+}
+header {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 12px;
+  padding: 14px 20px;
+  background: var(--panel);
+  border-bottom: 1px solid var(--line);
+}
+h1 { font-size: 18px; margin: 0; font-weight: 600; }
+h2 { font-size: 16px; margin: 0 0 10px; font-weight: 600; }
+.status { font-size: 13px; color: var(--muted); }
+.status.live::before { content: ""; display: inline-block; width: 8px; height: 8px; border-radius: 50%; background: var(--ok); margin-right: 6px; }
+.status.down::before { content: ""; display: inline-block; width: 8px; height: 8px; border-radius: 50%; background: var(--danger); margin-right: 6px; }
+.tools { margin-left: auto; display: flex; gap: 8px; }
+nav {
+  display: flex;
+  gap: 4px;
+  padding: 0 20px;
+  background: var(--panel);
+  border-bottom: 1px solid var(--line);
+  overflow-x: auto;
+}
+nav a {
+  padding: 10px 14px;
+  color: var(--muted);
+  text-decoration: none;
+  border-bottom: 2px solid transparent;
+  white-space: nowrap;
+}
+nav a[aria-current="page"] { color: var(--text); border-bottom-color: var(--accent); }
+main { padding: 20px; max-width: 1200px; }
+section[hidden] { display: none; }
+.panel { background: var(--panel); border: 1px solid var(--line); border-radius: 8px; padding: 16px; margin-bottom: 16px; }
+.hint { color: var(--muted); margin: 0 0 12px; max-width: 70ch; }
+button, .button {
+  font: inherit;
+  font-size: 14px;
+  padding: 6px 12px;
+  border-radius: 6px;
+  border: 1px solid var(--line);
+  background: var(--panel);
+  color: var(--text);
+  cursor: pointer;
+  text-decoration: none;
+  display: inline-block;
+}
+button:hover, .button:hover { border-color: var(--accent); }
+button.primary { background: var(--accent); border-color: var(--accent); color: var(--accent-text); }
+button.danger { color: var(--danger); border-color: var(--danger); }
+button:disabled { opacity: 0.5; cursor: default; }
+input[type="text"], input[type="search"], input[type="number"] {
+  font: inherit;
+  font-size: 14px;
+  padding: 6px 8px;
+  border-radius: 6px;
+  border: 1px solid var(--line);
+  background: var(--panel);
+  color: var(--text);
+}
+input[type="number"] { width: 6em; }
+.scroll { overflow-x: auto; max-width: 100%; }
+table { width: 100%; border-collapse: collapse; }
+th, td { text-align: left; padding: 7px 10px; border-bottom: 1px solid var(--line); vertical-align: top; }
+th { font-size: 13px; color: var(--muted); font-weight: 600; }
+td.actions { white-space: nowrap; text-align: right; }
+td.actions > * { margin-left: 6px; }
+.empty { color: var(--muted); padding: 8px 0; }
+dl.facts { display: grid; grid-template-columns: max-content 1fr; gap: 6px 20px; margin: 0; }
+dl.facts dt { color: var(--muted); }
+dl.facts dd { margin: 0; overflow-wrap: anywhere; }
+code, pre, .mono { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, "Liberation Mono", monospace; font-size: 13px; }
+.row { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; margin-bottom: 12px; }
+.row label { display: inline-flex; align-items: center; gap: 6px; }
+.folder { color: var(--muted); overflow-wrap: anywhere; }
+#log-lines {
+  background: var(--code);
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  padding: 8px 10px;
+  height: 60vh;
+  overflow: auto;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+#log-lines .error { color: var(--error-text); }
+#viewer pre {
+  background: var(--code);
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  padding: 10px;
+  max-height: 65vh;
+  overflow: auto;
+  margin: 10px 0 0;
+}
+#notice {
+  position: fixed;
+  right: 20px;
+  bottom: 20px;
+  max-width: 480px;
+  padding: 10px 14px;
+  border-radius: 6px;
+  background: var(--panel);
+  border: 1px solid var(--line);
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.15);
+}
+#notice[hidden] { display: none; }
+#notice.error { border-color: var(--danger); color: var(--error-text); }
+#stopped, #restarted { padding: 12px 20px; background: var(--danger); color: #fff; }
+#stopped[hidden], #restarted[hidden] { display: none; }
+#restarted button { margin-left: 12px; }
+.devices { color: var(--muted); font-size: 13px; }
+@media (max-width: 640px) {
+  header, nav { padding-left: 12px; padding-right: 12px; }
+  main { padding: 12px; }
+  .tools { margin-left: 0; flex-wrap: wrap; }
+  nav { flex-wrap: wrap; overflow-x: visible; }
+  nav a { padding: 10px 10px; }
+  dl.facts { grid-template-columns: 1fr; gap: 0; }
+  dl.facts dd { margin-bottom: 8px; }
+  button, .button { min-height: 44px; padding: 10px 14px; font-size: 15px; }
+  .cards table, .cards tbody, .cards tr, .cards td { display: block; width: 100%; }
+  .cards thead { display: none; }
+  .cards tr { border: 1px solid var(--line); border-radius: 8px; padding: 8px 12px; margin-bottom: 10px; }
+  .cards td { border: none; padding: 4px 0; overflow-wrap: anywhere; }
+  .cards td[data-label]::before { content: attr(data-label); display: block; font-size: 12px; color: var(--muted); }
+  .cards td.actions { display: flex; flex-wrap: wrap; gap: 8px; text-align: left; white-space: normal; padding-top: 8px; }
+  .cards td.actions > * { margin-left: 0; flex: 1 1 auto; text-align: center; }
+  #viewer pre { white-space: pre-wrap; overflow-wrap: anywhere; }
+  #log-lines { height: 55vh; }
+}
+</style>
+</head>
+<body>
+<header>
+  <h1 data-t="title">The Crew Reborn server</h1>
+  <span id="status" class="status"></span>
+  <div class="tools">
+    <button id="lang" type="button" lang="de">Deutsch</button>
+    <button id="logout" type="button" data-t="logout" hidden>Log out</button>
+    <button id="stop" class="danger" type="button" data-t="stop">Stop server</button>
+  </div>
+</header>
+<div id="stopped" hidden data-t="stopped">The server is stopped. Start it again to use this page.</div>
+<div id="restarted" hidden><span data-t="restarted">The server was restarted. Reload the page to go on.</span><button type="button" id="reload" data-t="reload">Reload</button></div>
+<nav>
+  <a href="#overview" data-tab="overview" data-t="tab_overview">Overview</a>
+  <a href="#clients" data-tab="clients"><span data-t="tab_clients">Clients</span> <span id="client-count"></span></a>
+  <a href="#names" data-tab="names" data-t="tab_names">Names</a>
+  <a href="#saves" data-tab="saves" data-t="tab_saves">Saves</a>
+  <a href="#log" data-tab="log" data-t="tab_log">Log</a>
+</nav>
+<main>
+  <section id="tab-overview">
+    <div class="panel">
+      <h2 data-t="facts">Server</h2>
+      <dl class="facts" id="facts"></dl>
+    </div>
+  </section>
+
+  <section id="tab-clients" hidden>
+    <div class="panel">
+      <h2 data-t="clients_title">Connected clients</h2>
+      <p class="hint" data-t="clients_hint">Every game that holds a connection to the server. A client that stops sending is removed after 2 minutes, a logged-in player after 15.</p>
+      <div id="clients"></div>
+    </div>
+  </section>
+
+  <section id="tab-names" hidden>
+    <div class="panel">
+      <h2 data-t="names_title">Claimed names</h2>
+      <p class="hint" data-t="names_hint">A claimed name belongs to the devices that logged in with it. To add another device, open a link window and log in with that device while the window is open.</p>
+      <div class="row">
+        <label><span data-t="link_minutes">Link window length (minutes)</span> <input id="link-minutes" type="number" min="1" max="10080" step="1" value="10"></label>
+      </div>
+      <div id="names"></div>
+    </div>
+  </section>
+
+  <section id="tab-saves" hidden>
+    <div id="saves"></div>
+    <div class="panel" id="viewer" hidden>
+      <div class="row">
+        <h2 id="viewer-title" style="margin: 0"></h2>
+        <span style="margin-left: auto"></span>
+        <a class="button" id="viewer-download" href="#" data-t="download">Download</a>
+        <button type="button" id="viewer-close" data-t="close">Close</button>
+      </div>
+      <p class="hint" id="viewer-raw" hidden data-t="not_json">The file is not valid JSON. It is shown as it is.</p>
+      <pre id="viewer-text"></pre>
+    </div>
+  </section>
+
+  <section id="tab-log" hidden>
+    <div class="panel">
+      <div class="row">
+        <input id="log-filter" type="search" data-tp="filter" placeholder="Filter" aria-label="Filter">
+        <label><input id="log-errors" type="checkbox"> <span data-t="errors_only">Errors only</span></label>
+        <label><input id="log-follow" type="checkbox" checked> <span data-t="follow">Scroll with new lines</span></label>
+        <span id="log-count" class="status"></span>
+      </div>
+      <div id="log-lines" class="mono" role="log" aria-live="off"></div>
+    </div>
+  </section>
+</main>
+<div id="notice" role="status" hidden></div>
+<script>
+"use strict";
+(function () {
+  const TEXT = {
+    en: {
+      title: "The Crew Reborn server",
+      stop: "Stop server",
+      logout: "Log out",
+      stopped: "The server is stopped. Start it again to use this page.",
+      restarted: "The server was restarted. Reload the page to go on.",
+      reload: "Reload",
+      all_addresses: "all addresses, port {port}",
+      confirm_stop: "Stop the server? Every connected player loses the connection.",
+      live: "Live",
+      offline: "No connection to the server",
+      tab_overview: "Overview",
+      tab_clients: "Clients",
+      tab_names: "Names",
+      tab_saves: "Saves",
+      tab_log: "Log",
+      facts: "Server",
+      f_version: "Version",
+      f_address: "Server address",
+      f_lan_ip: "LAN address",
+      f_http: "HTTP port",
+      f_https: "HTTPS port",
+      f_discovery: "Discovery port (UDP)",
+      f_relay: "Relay {v} (UDP)",
+      f_admin: "Admin page port",
+      f_server_id: "Server ID",
+      f_multiplayer: "Multiplayer",
+      f_dlc: "DLC",
+      f_public: "Public server",
+      f_bots: "Freeride bots",
+      f_afk: "Idle kick",
+      f_home: "Server folder",
+      f_started: "Started",
+      f_uptime: "Running for",
+      on: "on",
+      off: "off",
+      lan: "local network only",
+      not_running: "not running",
+      clients_title: "Connected clients",
+      clients_hint: "Every game that holds a connection to the server. A client that stops sending is removed after 2 minutes, a logged-in player after 15.",
+      c_name: "Name",
+      c_platform: "Platform",
+      c_version: "Game version",
+      c_address: "Address",
+      c_since: "Since",
+      c_seen: "Last seen",
+      not_logged_in: "not logged in yet",
+      no_clients: "No client is connected.",
+      names_title: "Claimed names",
+      names_hint: "A claimed name belongs to the devices that logged in with it. To add another device, open a link window and log in with that device while the window is open.",
+      link_minutes: "Link window length (minutes)",
+      n_name: "Name",
+      n_platform: "Platform",
+      n_added: "Claimed on",
+      n_devices: "Devices",
+      n_link: "Link window",
+      link_open: "open until {time}",
+      link_closed: "closed",
+      open_link: "Open link window",
+      free: "Free name",
+      confirm_free: "Free the name {name}? Any device can claim it again at its next login. The save stays.",
+      linked: "The link window for {name} is open for {minutes} minutes. Log in with the new device now.",
+      freed: "The name {name} is free.",
+      no_names: "No name is claimed yet.",
+      saves_title: "Game version {v}",
+      open_folder: "Open folder",
+      folder_opened: "The folder opens in the file manager.",
+      outside: "This save folder lies outside the server folder, so the page does not open it.",
+      s_file: "File",
+      s_size: "Size",
+      s_changed: "Changed",
+      view: "View",
+      download: "Download",
+      close: "Close",
+      not_json: "The file is not valid JSON. It is shown as it is.",
+      no_saves: "No save yet.",
+      filter: "Filter",
+      errors_only: "Errors only",
+      follow: "Scroll with new lines",
+      lines: "{shown} of {total} lines",
+      error: "Error: {text}"
+    },
+    de: {
+      title: "The Crew Reborn Server",
+      stop: "Server beenden",
+      logout: "Abmelden",
+      stopped: "Der Server ist beendet. Starte ihn neu, um diese Seite zu nutzen.",
+      restarted: "Der Server wurde neu gestartet. Lade die Seite neu, um weiterzumachen.",
+      reload: "Neu laden",
+      all_addresses: "alle Adressen, Port {port}",
+      confirm_stop: "Server beenden? Alle verbundenen Spieler verlieren die Verbindung.",
+      live: "Live",
+      offline: "Keine Verbindung zum Server",
+      tab_overview: "Übersicht",
+      tab_clients: "Clients",
+      tab_names: "Namen",
+      tab_saves: "Spielstände",
+      tab_log: "Protokoll",
+      facts: "Server",
+      f_version: "Version",
+      f_address: "Serveradresse",
+      f_lan_ip: "LAN-Adresse",
+      f_http: "HTTP-Port",
+      f_https: "HTTPS-Port",
+      f_discovery: "Discovery-Port (UDP)",
+      f_relay: "Relay {v} (UDP)",
+      f_admin: "Port der Admin-Seite",
+      f_server_id: "Server-ID",
+      f_multiplayer: "Mehrspieler",
+      f_dlc: "DLC",
+      f_public: "Öffentlicher Server",
+      f_bots: "Freeride-Bots",
+      f_afk: "Kick bei Inaktivität",
+      f_home: "Serverordner",
+      f_started: "Gestartet",
+      f_uptime: "Läuft seit",
+      on: "an",
+      off: "aus",
+      lan: "nur im lokalen Netzwerk",
+      not_running: "läuft nicht",
+      clients_title: "Verbundene Clients",
+      clients_hint: "Jedes Spiel, das mit dem Server verbunden ist. Ein Client, der nichts mehr sendet, wird nach 2 Minuten entfernt, ein angemeldeter Spieler nach 15 Minuten.",
+      c_name: "Name",
+      c_platform: "Plattform",
+      c_version: "Spielversion",
+      c_address: "Adresse",
+      c_since: "Seit",
+      c_seen: "Zuletzt aktiv",
+      not_logged_in: "noch nicht angemeldet",
+      no_clients: "Kein Client ist verbunden.",
+      names_title: "Vergebene Namen",
+      names_hint: "Ein vergebener Name gehört den Geräten, die sich damit angemeldet haben. Um ein weiteres Gerät hinzuzufügen, öffne ein Zeitfenster und melde dich mit diesem Gerät an, solange es offen ist.",
+      link_minutes: "Dauer des Zeitfensters (Minuten)",
+      n_name: "Name",
+      n_platform: "Plattform",
+      n_added: "Vergeben am",
+      n_devices: "Geräte",
+      n_link: "Zeitfenster",
+      link_open: "offen bis {time}",
+      link_closed: "geschlossen",
+      open_link: "Zeitfenster öffnen",
+      free: "Namen freigeben",
+      confirm_free: "Namen {name} freigeben? Jedes Gerät kann ihn bei seiner nächsten Anmeldung neu beanspruchen. Der Spielstand bleibt erhalten.",
+      linked: "Das Zeitfenster für {name} ist {minutes} Minuten lang offen. Melde dich jetzt mit dem neuen Gerät an.",
+      freed: "Der Name {name} ist freigegeben.",
+      no_names: "Noch ist kein Name vergeben.",
+      saves_title: "Spielversion {v}",
+      open_folder: "Ordner öffnen",
+      folder_opened: "Der Ordner öffnet sich im Dateimanager.",
+      outside: "Dieser Spielstandordner liegt außerhalb des Serverordners, deshalb öffnet die Seite ihn nicht.",
+      s_file: "Datei",
+      s_size: "Größe",
+      s_changed: "Geändert",
+      view: "Anzeigen",
+      download: "Herunterladen",
+      close: "Schließen",
+      not_json: "Die Datei ist kein gültiges JSON und wird unverändert angezeigt.",
+      no_saves: "Noch kein Spielstand vorhanden.",
+      filter: "Filtern",
+      errors_only: "Nur Fehler",
+      follow: "Bei neuen Zeilen mitscrollen",
+      lines: "{shown} von {total} Zeilen",
+      error: "Fehler: {text}"
+    }
+  };
+  const TOKEN = document.querySelector('meta[name="admin-token"]').content;
+  const RUN = document.querySelector('meta[name="admin-run"]').content;
+  const MAX_LOG = 5000;
+  const $ = (id) => document.getElementById(id);
+
+  function stored(key) {
+    try { return window.localStorage.getItem(key); } catch (e) { return null; }
+  }
+  function store(key, value) {
+    try { window.localStorage.setItem(key, value); } catch (e) { }
+  }
+
+  let lang = stored("tcr-admin-lang");
+  if (lang !== "en" && lang !== "de") {
+    lang = (navigator.language || "").toLowerCase().indexOf("de") === 0 ? "de" : "en";
+  }
+  let tab = "overview";
+  let stopped = false;
+  let restarted = false;
+  let facts = null, clients = [], names = [], saves = [];
+  let logLines = [], logLast = 0;
+  let viewing = null;
+
+  function t(key, vars) {
+    let s = (TEXT[lang] && TEXT[lang][key]) || TEXT.en[key] || key;
+    if (!vars) return s;
+    return s.replace(/\{(\w+)\}/g, (m, k) => (Object.prototype.hasOwnProperty.call(vars, k) ? String(vars[k]) : m));
+  }
+  function locale() { return lang === "de" ? "de-DE" : "en-GB"; }
+  function when(sec) {
+    if (sec === null || sec === undefined) return "";
+    return new Date(sec * 1000).toLocaleString(locale());
+  }
+  function dayAndTime(sec) {
+    if (sec === null || sec === undefined) return "";
+    return new Date(sec * 1000).toLocaleString(locale(), { dateStyle: "medium", timeStyle: "short" });
+  }
+  function day(sec) {
+    if (sec === null || sec === undefined) return "";
+    return new Date(sec * 1000).toLocaleDateString(locale());
+  }
+  function deviceList(list) {
+    if (!list || !list.length) return null;
+    const parts = list.map((d) => platform(d.platform) + (d.added ? " " + day(d.added) : ""));
+    return el("div", { class: "devices", text: parts.join(", ") });
+  }
+  function duration(sec) {
+    sec = Math.max(0, Math.floor(sec));
+    const d = Math.floor(sec / 86400), h = Math.floor(sec % 86400 / 3600), m = Math.floor(sec % 3600 / 60), s = sec % 60;
+    const parts = [];
+    if (d) parts.push(d + " d");
+    if (d || h) parts.push(h + " h");
+    if (d || h || m) parts.push(m + " min");
+    parts.push(s + " s");
+    return parts.join(" ");
+  }
+  function size(bytes) {
+    if (bytes < 1024) return bytes + " B";
+    const n = bytes / 1024;
+    return (n < 1024 ? n.toLocaleString(locale(), { maximumFractionDigits: 1 }) + " KB"
+      : (n / 1024).toLocaleString(locale(), { maximumFractionDigits: 1 }) + " MB");
+  }
+  function platform(p) {
+    if (p === "psn" || p === "PS4") return "PS4";
+    if (p === "uplay" || p === "PC") return "PC";
+    return p === null || p === undefined ? "" : String(p);
+  }
+  function el(tag, attrs, children) {
+    const e = document.createElement(tag);
+    if (attrs) {
+      Object.keys(attrs).forEach((k) => {
+        if (k === "text") e.textContent = attrs[k];
+        else if (k === "onclick") e.addEventListener("click", attrs[k]);
+        else e.setAttribute(k, attrs[k]);
+      });
+    }
+    (children || []).forEach((c) => { if (c) e.appendChild(c); });
+    return e;
+  }
+  function table(headers, rows) {
+    const head = el("tr", null, headers.map((h) => el("th", { text: h })));
+    rows.forEach((row) => {
+      Array.prototype.forEach.call(row.children, (cell, i) => { if (headers[i]) cell.setAttribute("data-label", headers[i]); });
+    });
+    return el("div", { class: "scroll cards" }, [el("table", null, [el("thead", null, [head]), el("tbody", null, rows)])]);
+  }
+  function replace(node, child) {
+    node.textContent = "";
+    if (child) node.appendChild(child);
+  }
+
+  let noticeTimer = null;
+  function notice(text, isError) {
+    const n = $("notice");
+    n.textContent = isError ? t("error", { text: text }) : text;
+    n.className = isError ? "error" : "";
+    n.hidden = false;
+    clearTimeout(noticeTimer);
+    noticeTimer = setTimeout(() => { n.hidden = true; }, isError ? 9000 : 5000);
+  }
+
+  async function get(path) {
+    const r = await fetch(path, { cache: "no-store" });
+    const body = await r.json().catch(() => ({}));
+    if (r.status === 401 && body.login === true) {
+      window.location.reload();
+      throw new Error(body.error);
+    }
+    if (!r.ok) throw new Error(body.error || String(r.status));
+    return body;
+  }
+  async function post(path, data) {
+    const r = await fetch(path, {
+      method: "POST",
+      cache: "no-store",
+      headers: { "Content-Type": "application/json", "X-Admin-Token": TOKEN },
+      body: JSON.stringify(data || {})
+    });
+    const body = await r.json().catch(() => ({}));
+    if (r.status === 403 && body.stale_token === true) {
+      showRestarted();
+      throw new Error(t("restarted"));
+    }
+    if (!r.ok) throw new Error(body.error || String(r.status));
+    return body;
+  }
+
+  function showRestarted() {
+    if (restarted) return;
+    restarted = true;
+    $("restarted").hidden = false;
+    $("stop").disabled = true;
+    setStatus(false);
+  }
+
+  function translateStatic() {
+    document.documentElement.lang = lang;
+    document.title = t("title");
+    document.querySelectorAll("[data-t]").forEach((e) => { e.textContent = t(e.getAttribute("data-t")); });
+    document.querySelectorAll("[data-tp]").forEach((e) => {
+      e.setAttribute("placeholder", t(e.getAttribute("data-tp")));
+      e.setAttribute("aria-label", t(e.getAttribute("data-tp")));
+    });
+    const other = lang === "de" ? "en" : "de";
+    $("lang").textContent = other === "de" ? "Deutsch" : "English";
+    $("lang").setAttribute("lang", other);
+  }
+
+  function setStatus(ok) {
+    const s = $("status");
+    if (stopped) { s.className = "status down"; s.textContent = t("stopped"); return; }
+    if (restarted) { s.className = "status down"; s.textContent = ""; return; }
+    s.className = ok ? "status live" : "status down";
+    s.textContent = ok ? t("live") : t("offline");
+  }
+
+  function renderFacts() {
+    const dl = $("facts");
+    dl.textContent = "";
+    if (!facts) return;
+    const onoff = (v) => (v === null || v === undefined ? "?" : v ? t("on") : t("off"));
+    const rows = [
+      ["f_version", facts.version],
+      ["f_address", facts.address],
+      ["f_lan_ip", facts.lan_ip],
+      ["f_http", facts.ports.http],
+      ["f_https", facts.ports.https ? facts.ports.https : t("off")],
+      ["f_discovery", facts.ports.discovery]
+    ];
+    facts.relays.forEach((r) => {
+      const where = facts.relay_ip === "0.0.0.0" || facts.relay_ip === "" ? t("all_addresses", { port: r.port })
+        : facts.relay_ip + ":" + r.port;
+      rows.push([t("f_relay", { v: r.version }), where + (r.running ? "" : " (" + t("not_running") + ")"), true]);
+    });
+    rows.push(["f_admin", facts.ports.admin]);
+    rows.push(["f_server_id", facts.server_id]);
+    const mp = facts.multiplayer;
+    rows.push(["f_multiplayer", mp === "on" ? t("on") : mp === "off" ? t("off") : mp === "lan" ? t("lan") : String(mp)]);
+    rows.push(["f_dlc", facts.dlc === "all" ? t("on") : facts.dlc === "none" ? t("off") : String(facts.dlc)]);
+    rows.push(["f_public", onoff(facts.public)]);
+    rows.push(["f_bots", onoff(facts.bots)]);
+    rows.push(["f_afk", onoff(facts.afk_kick)]);
+    rows.push(["f_home", facts.home]);
+    rows.push(["f_started", when(facts.started)]);
+    rows.push(["f_uptime", duration(facts.uptime)]);
+    rows.forEach((row) => {
+      dl.appendChild(el("dt", { text: row[2] ? row[0] : t(row[0]) }));
+      dl.appendChild(el("dd", { text: String(row[1]), class: row[0] === "f_server_id" ? "mono" : "" }));
+    });
+  }
+
+  function renderClients() {
+    $("client-count").textContent = clients.length ? "(" + clients.length + ")" : "";
+    if (!clients.length) { replace($("clients"), el("p", { class: "empty", text: t("no_clients") })); return; }
+    const rows = clients.map((c) => el("tr", null, [
+      el("td", { text: c.name === null ? t("not_logged_in") : c.name }),
+      el("td", { text: platform(c.platform) }),
+      el("td", { text: c.version }),
+      el("td", { text: c.address, class: "mono" }),
+      el("td", { text: when(c.since) }),
+      el("td", { text: when(c.last_seen) })
+    ]));
+    replace($("clients"), table([t("c_name"), t("c_platform"), t("c_version"), t("c_address"), t("c_since"), t("c_seen")], rows));
+  }
+
+  function linkMinutes() {
+    const v = Number($("link-minutes").value);
+    return v > 0 ? v : 10;
+  }
+
+  function renderNames() {
+    if (names && names.error) { replace($("names"), el("p", { class: "empty", text: t("error", { text: names.error }) })); return; }
+    if (!names.length) { replace($("names"), el("p", { class: "empty", text: t("no_names") })); return; }
+    const rows = names.map((n) => el("tr", null, [
+      el("td", { text: n.name === null ? n.key : n.name }),
+      el("td", { text: platform(n.platform) }),
+      el("td", { text: day(n.added) }),
+      el("td", null, [el("div", { text: String(n.devices) }), deviceList(n.device_list)]),
+      el("td", { text: n.link_until ? t("link_open", { time: dayAndTime(n.link_until) }) : t("link_closed") }),
+      el("td", { class: "actions" }, [
+        el("button", { type: "button", text: t("open_link"), onclick: () => openLink(n) }),
+        el("button", { type: "button", class: "danger", text: t("free"), onclick: () => freeName(n) })
+      ])
+    ]));
+    replace($("names"), table([t("n_name"), t("n_platform"), t("n_added"), t("n_devices"), t("n_link"), ""], rows));
+  }
+
+  function downloadUrl(version, file) {
+    return "/api/save/download?version=" + encodeURIComponent(version) + "&file=" + encodeURIComponent(file);
+  }
+
+  function renderSaves() {
+    const box = $("saves");
+    box.textContent = "";
+    saves.forEach((group) => {
+      const head = el("div", { class: "row" }, [
+        el("h2", { text: t("saves_title", { v: group.version }), style: "margin: 0" }),
+        el("span", { style: "margin-left: auto" }),
+        group.inside ? el("button", { type: "button", text: t("open_folder"), onclick: () => openFolder(group.version) }) : null
+      ]);
+      const parts = [head, el("p", { class: "folder mono", text: group.folder })];
+      if (!group.inside && group.folder) parts.push(el("p", { class: "hint", text: t("outside") }));
+      if (!group.files.length) {
+        parts.push(el("p", { class: "empty", text: t("no_saves") }));
+      } else {
+        const rows = group.files.map((f) => el("tr", null, [
+          el("td", { text: f.file, class: "mono" }),
+          el("td", { text: size(f.bytes) }),
+          el("td", { text: when(f.modified) }),
+          el("td", { class: "actions" }, [
+            el("button", { type: "button", text: t("view"), onclick: () => view(group.version, f.file) }),
+            el("a", { class: "button", href: downloadUrl(group.version, f.file), download: f.file, text: t("download") })
+          ])
+        ]));
+        parts.push(table([t("s_file"), t("s_size"), t("s_changed"), ""], rows));
+      }
+      box.appendChild(el("div", { class: "panel" }, parts));
+    });
+  }
+
+  async function view(version, file) {
+    try {
+      const s = await get("/api/save?version=" + encodeURIComponent(version) + "&file=" + encodeURIComponent(file));
+      viewing = { version: version, file: file };
+      $("viewer-title").textContent = version + " / " + file;
+      $("viewer-download").setAttribute("href", downloadUrl(version, file));
+      $("viewer-download").setAttribute("download", file);
+      $("viewer-raw").hidden = s.formatted;
+      $("viewer-text").textContent = s.text;
+      $("viewer").hidden = false;
+      $("viewer").scrollIntoView({ behavior: "smooth", block: "start" });
+    } catch (e) {
+      notice(e.message, true);
+    }
+  }
+
+  function logShown(line) {
+    if ($("log-errors").checked && !line.error) return false;
+    const f = $("log-filter").value.trim().toLowerCase();
+    return !f || line.text.toLowerCase().indexOf(f) >= 0;
+  }
+  function logRow(line) {
+    return el("div", { class: line.error ? "error" : "", text: line.text === "" ? " " : line.text });
+  }
+  function renderLog(appended) {
+    const box = $("log-lines");
+    const follow = $("log-follow").checked;
+    if (appended) {
+      appended.filter(logShown).forEach((l) => box.appendChild(logRow(l)));
+      while (box.childNodes.length > MAX_LOG) box.removeChild(box.firstChild);
+    } else {
+      box.textContent = "";
+      const frag = document.createDocumentFragment();
+      logLines.filter(logShown).forEach((l) => frag.appendChild(logRow(l)));
+      box.appendChild(frag);
+    }
+    $("log-count").textContent = t("lines", { shown: box.childNodes.length, total: logLines.length });
+    if (follow) box.scrollTop = box.scrollHeight;
+  }
+
+  async function openLink(n) {
+    try {
+      const r = await post("/api/link", { name: n.name === null ? n.key : n.name, minutes: linkMinutes() });
+      notice(t("linked", { name: r.name, minutes: Number(r.minutes).toLocaleString(locale()) }), false);
+      await refreshNames();
+    } catch (e) { notice(e.message, true); }
+  }
+  async function freeName(n) {
+    const name = n.name === null ? n.key : n.name;
+    if (!window.confirm(t("confirm_free", { name: name }))) return;
+    try {
+      await post("/api/free", { name: name });
+      notice(t("freed", { name: name }), false);
+      await refreshNames();
+    } catch (e) { notice(e.message, true); }
+  }
+  async function openFolder(version) {
+    try {
+      await post("/api/open-folder", { version: version });
+      notice(t("folder_opened"), false);
+    } catch (e) { notice(e.message, true); }
+  }
+  async function stopServer() {
+    if (!window.confirm(t("confirm_stop"))) return;
+    try {
+      await post("/api/stop", {});
+      stopped = true;
+      $("stopped").hidden = false;
+      $("stop").disabled = true;
+      setStatus(false);
+    } catch (e) { notice(e.message, true); }
+  }
+
+  const seen = {};
+  function changed(key, value) {
+    const text = JSON.stringify(value);
+    if (seen[key] === text) return false;
+    seen[key] = text;
+    return true;
+  }
+  async function refreshNames() {
+    const v = await get("/api/names");
+    if (changed("names", v)) { names = v; renderNames(); }
+  }
+  async function refreshSaves() {
+    const v = await get("/api/saves");
+    if (changed("saves", v)) { saves = v; renderSaves(); }
+  }
+
+  let polling = false;
+  async function poll() {
+    if (stopped || restarted || polling) return;
+    polling = true;
+    try {
+      const log = await get("/api/log?after=" + logLast);
+      if (log.run !== RUN) {
+        showRestarted();
+        return;
+      }
+      if (log.lines.length) {
+        if (log.lines[0].n !== logLast + 1 && logLast) {
+          logLines = logLines.concat(log.lines).slice(-MAX_LOG);
+          renderLog(null);
+        } else {
+          logLines = logLines.concat(log.lines);
+          const cut = logLines.length - MAX_LOG;
+          if (cut > 0) logLines = logLines.slice(cut);
+          renderLog(log.lines);
+        }
+        logLast = log.lines[log.lines.length - 1].n;
+      } else if (log.last < logLast) {
+        logLast = 0;
+      }
+      const c = await get("/api/clients");
+      if (changed("clients", c)) { clients = c; renderClients(); }
+      if (tab === "overview") { facts = await get("/api/facts"); renderFacts(); }
+      if (tab === "names") await refreshNames();
+      if (tab === "saves") await refreshSaves();
+      setStatus(true);
+    } catch (e) {
+      setStatus(false);
+    } finally {
+      polling = false;
+    }
+  }
+
+  function showTab(name) {
+    if (["overview", "clients", "names", "saves", "log"].indexOf(name) < 0) name = "overview";
+    tab = name;
+    document.querySelectorAll("nav a").forEach((a) => {
+      if (a.getAttribute("data-tab") === name) a.setAttribute("aria-current", "page");
+      else a.removeAttribute("aria-current");
+    });
+    document.querySelectorAll("main > section").forEach((s) => { s.hidden = s.id !== "tab-" + name; });
+    poll();
+  }
+
+  function renderAll() {
+    translateStatic();
+    renderFacts();
+    renderClients();
+    renderNames();
+    renderSaves();
+    renderLog(null);
+    setStatus(!stopped && !restarted);
+  }
+
+  $("lang").addEventListener("click", () => {
+    lang = lang === "de" ? "en" : "de";
+    store("tcr-admin-lang", lang);
+    renderAll();
+  });
+  $("stop").addEventListener("click", stopServer);
+  if (document.querySelector('meta[name="admin-auth"]').content === "1") {
+    $("logout").hidden = false;
+    $("logout").addEventListener("click", async () => {
+      try { await post("/api/logout", {}); } catch (e) { }
+      window.location.reload();
+    });
+  }
+  $("reload").addEventListener("click", () => { window.location.reload(); });
+  $("viewer-close").addEventListener("click", () => { $("viewer").hidden = true; viewing = null; });
+  $("log-filter").addEventListener("input", () => renderLog(null));
+  $("log-errors").addEventListener("change", () => renderLog(null));
+  window.addEventListener("hashchange", () => showTab(location.hash.slice(1)));
+
+  translateStatic();
+  showTab(location.hash.slice(1));
+  setInterval(poll, 1500);
+})();
+</script>
+</body>
+</html>
