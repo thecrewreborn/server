@@ -274,9 +274,21 @@ command gives the file back to its owner, so the server can still read it. To us
 
 The server has a page for you in the browser: the console log with a filter, the connected players, the claimed
 names with their devices, the saves (view, download, open the folder) and the server's settings. From there you can
-open a link window for a name, free a name and stop the server.
+open a link window for a name, free a name, restart the server and stop it.
 
-When the server starts it names the page's address, for example `Admin page: http://192.168.178.10:8090/ (home
+- **Players:** for each connected player the page shows platform, address, game version, level, XP, bucks, crew
+  credits, the current car, the garage, missions done, perks, collectibles, faction, crew and the last position with
+  its region. A saved player shows the same from the save file. The page only reads saves; it never writes one.
+- **Settings:** every setting of `config.ini`, with its current value and whether it comes from `config.ini` or is the
+  default. Saving changes only the lines you changed and keeps your comments, so you can still edit the file by
+  hand. If the file changed on disk after you opened the page, the page refuses to save and asks you to reload.
+  Settings marked "needs a restart" count after a restart.
+- **Restart:** the button stops the server like Ctrl+C and starts it again in the same window. The game stays
+  connected.
+- **Turn this page off:** writes `enabled = off` into `[ui]` and closes the page; the server keeps running. To turn
+  the page on again, set `enabled = on` and restart the server.
+
+When the server starts it names the page's address, for example `Admin page: http://192.168.1.20:8090/ (home
 network)`. Open it on this computer or on any device in your home network, a phone included. The page answers only
 addresses from the home network (10.x, 172.16-31.x, 192.168.x) and this computer itself; everyone else is refused.
 On a computer with a desktop the browser opens the page at the start.
@@ -786,9 +798,24 @@ eine andere Accounts-Datei schreibe `--file PFAD` vor `list`, `link` oder `free`
 
 Der Server hat eine Seite für dich im Browser: das Konsolenprotokoll mit Filter, die verbundenen Spieler, die
 vergebenen Namen mit ihren Geräten, die Spielstände (anzeigen, herunterladen, Ordner öffnen) und die Einstellungen
-des Servers. Dort kannst du ein Zeitfenster für einen Namen öffnen, einen Namen freigeben und den Server beenden.
+des Servers. Dort kannst du ein Zeitfenster für einen Namen öffnen, einen Namen freigeben, den Server neu starten und
+ihn beenden.
 
-Beim Start nennt der Server die Adresse der Seite, zum Beispiel `Admin page: http://192.168.178.10:8090/ (home
+- **Spieler:** Für jeden verbundenen Spieler zeigt die Seite Plattform, Adresse, Spielversion, Level, XP, Bucks, Crew
+  Credits, das aktuelle Auto, die Garage, erledigte Missionen, Perks, Sammelobjekte, Fraktion, Crew und die letzte
+  Position mit ihrer Region. Ein gespeicherter Spieler zeigt dasselbe aus seinem Spielstand. Die Seite liest
+  Spielstände nur, sie schreibt nie einen.
+- **Einstellungen:** jede Einstellung der `config.ini` mit ihrem aktuellen Wert und der Angabe, ob er aus der
+  `config.ini` stammt oder der Standard ist. Beim Speichern ändert die Seite nur die Zeilen, die du geändert hast,
+  und behält deine Kommentare. Du kannst die Datei also weiter von Hand bearbeiten. Hat sich die Datei geändert,
+  nachdem du die Seite geöffnet hast, speichert die Seite nicht und bittet dich, sie neu zu laden. Einstellungen mit
+  dem Hinweis „erfordert einen Neustart“ gelten nach einem Neustart.
+- **Neu starten:** Der Knopf beendet den Server wie Strg+C und startet ihn im selben Fenster neu. Das Spiel bleibt
+  verbunden.
+- **Seite ausschalten:** schreibt `enabled = off` in den Abschnitt `[ui]` und schließt die Seite; der Server läuft
+  weiter. Um die Seite wieder einzuschalten, setze `enabled = on` und starte den Server neu.
+
+Beim Start nennt der Server die Adresse der Seite, zum Beispiel `Admin page: http://192.168.1.20:8090/ (home
 network)`. Öffne sie auf diesem Computer oder auf jedem Gerät in deinem Heimnetz, auch auf dem Handy. Die Seite
 antwortet nur Adressen aus dem Heimnetz (10.x, 172.16-31.x, 192.168.x) und diesem Computer selbst; alle anderen
 werden abgewiesen. Auf einem Computer mit Desktop öffnet der Browser die Seite beim Start.
