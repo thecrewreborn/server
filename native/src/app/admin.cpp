@@ -62,10 +62,6 @@ struct State {
 State* g_state = nullptr;
 
 bool desktop() {
-#if defined(TCR_TEST_HOOKS)
-  std::string forced = plat::env_var("TCREBORN_TEST_DESKTOP");
-  if (forced == "0" || forced == "1") return forced == "1";
-#endif
   return plat::desktop_session();
 }
 

@@ -38,7 +38,7 @@ build() {
   dir="$NATIVE/build-$target"
   exe=TheCrewReborn-Server
   mkdir -p "$dir"
-  set -- -S "$NATIVE" -B "$dir" -DCMAKE_BUILD_TYPE=Release -DTCR_BUILD_TESTS=OFF
+  set -- -S "$NATIVE" -B "$dir" -DCMAKE_BUILD_TYPE=Release
   case "$target" in
     macos-universal)
       set -- "$@" "-DCMAKE_OSX_ARCHITECTURES=arm64;x86_64" -DCMAKE_OSX_DEPLOYMENT_TARGET=11.0

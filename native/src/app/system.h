@@ -38,10 +38,6 @@ class SystemEnv final : public Env {
   std::optional<std::string> config_path() override { return config_path_; }
   void hash_unlocked(void (*fn)(void*), void* arg) override;
 
-#if defined(TCR_TEST_HOOKS)
-  void set_clock(double now);
-  void set_deterministic(uint64_t counter);
-#endif
   bool deterministic() const { return deterministic_; }
 
  private:

@@ -133,18 +133,6 @@ std::optional<std::string> SystemEnv::config_read() {
 
 void SystemEnv::hash_unlocked(void (*fn)(void*), void* arg) { server::run_hash_unlocked(fn, arg); }
 
-#if defined(TCR_TEST_HOOKS)
-void SystemEnv::set_clock(double now) {
-  fixed_clock_ = true;
-  clock_ = now;
-}
-
-void SystemEnv::set_deterministic(uint64_t counter) {
-  deterministic_ = true;
-  counter_ = counter;
-}
-#endif
-
 bool SystemRoute::local_ip_for(const std::string& peer, std::string* ip, std::string* error) {
   plat::Error err;
   if (plat::route_ip(peer, 9, ip, &err)) return true;

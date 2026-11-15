@@ -668,9 +668,6 @@ int run_server(const std::vector<std::string>& argv) {
     ao.facts.server_id = py::hex(settings.server_id);
     ao.facts.started_wall = started_wall;
     ao.facts.started_mono = started_mono;
-#if defined(TCR_TEST_HOOKS)
-    ao.test_mode = true;
-#endif
     ao.hooks = hooks;
     start_admin_page(core, std::move(ao));
   }
