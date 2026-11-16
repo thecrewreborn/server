@@ -18,6 +18,7 @@ struct Overrides {
   std::optional<bool> link_home;
   bool reward_tables = true;
   bool car_catalog = true;
+  std::string skill_part_announce;
 };
 
 namespace ubi {

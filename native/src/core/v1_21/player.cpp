@@ -315,6 +315,7 @@ std::optional<Player> Player::load(Files& files, const std::string& path, std::o
   if (const V* f = data.get("gifts_paid")) p.gifts_paid = *f;
   if (const V* f = data.get("club_cc_paid")) p.club_cc_paid = *f;
   if (const V* f = data.get("club_actions")) p.club_actions = *f;
+  if (const V* f = data.get("skill_medals")) p.skill_medals = *f;
   if (const V* blob = data.get("save_blob")) {
     std::optional<Bytes> b = py.fromhex(*blob);
     if (!b) return failed();
@@ -438,6 +439,7 @@ std::string Player::save_text() const {
   if (obj::truthy(gifts_paid)) d.set("gifts_paid", gifts_paid);
   if (obj::truthy(club_cc_paid)) d.set("club_cc_paid", club_cc_paid);
   if (obj::truthy(club_actions)) d.set("club_actions", club_actions);
+  if (obj::truthy(skill_medals)) d.set("skill_medals", skill_medals);
   d.set("save_blob", V::string(py::hex(save_blob)));
   return json::dumps(d);
 }

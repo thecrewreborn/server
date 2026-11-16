@@ -15,6 +15,8 @@ namespace replies {
 std::optional<Bytes> fill(const Ctx& ctx, const Bytes& body,
                           const std::vector<std::pair<size_t, std::string>>& fields, Raised* raised);
 
+Bytes skill_part_tail(uint64_t part_id, const std::string& variant);
+
 const std::map<std::pair<std::string, int>, std::string>& service_by_addr();
 
 }

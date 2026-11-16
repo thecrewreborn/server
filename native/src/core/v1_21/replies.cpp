@@ -6,6 +6,7 @@
 #include "core/core.h"
 #include "core/v1_21/gamedata.h"
 #include "core/v1_21/mission.h"
+#include "core/v1_21/physparts.h"
 #include "core/v1_21/pack.h"
 #include "core/v1_21/rewards.h"
 #include "core/v1_21/scores.h"
@@ -41,6 +42,38 @@ HandlerResult reply_of(uint32_t type, pack::Packer& pk) {
   return HandlerResult::reply(type, std::move(pk.out()));
 }
 
+constexpr size_t kSkillCarAt = 0x28;
+constexpr uint64_t kNoCar = 0xFFFFFFFFFFFFFFFFull;
+
+bool skill_part(Ctx& ctx, const Bytes& request, uint64_t activity, std::optional<int64_t> medal,
+                std::optional<int64_t>* part, Raised* raised) {
+  part->reset();
+  if (!medal || request.size() < kSkillCarAt + 0x10) return true;
+  uint64_t model = wire::get_u64(request.data() + kSkillCarAt);
+  uint64_t spec = wire::get_u64(request.data() + kSkillCarAt + 8);
+  if (model == kNoCar || spec == kNoCar) return true;
+  return physparts::skill_part(ctx.player, activity, *medal, model, spec, ctx.player_id, *ctx.core, part, raised);
+}
+
+}
+
+Bytes skill_part_tail(uint64_t part_id, const std::string& variant) {
+  const Bytes arr = wire::u64_array({part_id});
+  const Bytes empty = wire::empty_array();
+  Bytes out;
+  const Bytes& arr1 = variant == "arr1" ? arr : empty;
+  const Bytes& arr3 = variant == "arr1" ? empty : arr;
+  out.insert(out.end(), arr1.begin(), arr1.end());
+  out.insert(out.end(), empty.begin(), empty.end());
+  out.push_back(0);
+  out.push_back(0);
+  out.insert(out.end(), arr3.begin(), arr3.end());
+  for (int i = 0; i < 4; i++) out.push_back(0);
+  return out;
+}
+
+namespace {
+
 HandlerResult activity_end(Ctx& ctx, const Bytes& request, const Registered& self) {
   const auto* t = static_cast<const gamedata::ReplyTemplate*>(self.data);
   Raised r;
@@ -51,7 +84,10 @@ HandlerResult activity_end(Ctx& ctx, const Bytes& request, const Registered& sel
   obj::Py py;
   p.complete_activity(py, activity);
   if (py.failed()) return HandlerResult::fail(py.raised());
+  std::optional<int64_t> part;
   if (const rewards::Tables* tables = rewards::tables(*ctx.core)) {
+    std::optional<int64_t> medal;
+    if (!rewards::activity_medal(*tables, activity, value, p.level, &medal, &r)) return HandlerResult::fail(r);
     std::optional<std::pair<int64_t, int64_t>> reward = rewards::activity_reward(*tables, activity, value, p.level, &r);
     if (!reward) return HandlerResult::fail(r);
     *reward = rewards::boosted(*ctx.core, p, ctx.now_us(), reward->first, reward->second, std::nullopt);
@@ -59,12 +95,19 @@ HandlerResult activity_end(Ctx& ctx, const Bytes& request, const Registered& sel
         rewards::allow(py, *ctx.core, p, ctx.now_us(), obj::I(reward->first), obj::I(reward->second));
     rewards::apply(py, *tables, p, allowed.first, allowed.second, ctx.core->module_random());
     if (py.failed()) return HandlerResult::fail(py.raised());
+    if (!skill_part(ctx, request, activity, medal, &part, &r)) return HandlerResult::fail(r);
   }
   if (std::optional<Raised> f = p.save()) return HandlerResult::fail(*f);
   scores::record(*ctx.core, activity, ctx.player_id, value, ctx.now_us());
   pack::Packer pk;
   pk.B(1).Q(activity).I(p.level).I(p.xp).I(p.bucks).I(p.perk_points);
-  if (t->body.size() > 25) pk.raw(Bytes(t->body.begin() + 25, t->body.end()));
+  const std::string announce = physparts::announce_variant(ctx.core->overrides().skill_part_announce);
+  const physparts::Table* parts = physparts::table();
+  if (part && !announce.empty() && parts && static_cast<size_t>(*part) < parts->ids.size()) {
+    pk.raw(skill_part_tail(parts->ids[static_cast<size_t>(*part)], announce));
+  } else if (t->body.size() > 25) {
+    pk.raw(Bytes(t->body.begin() + 25, t->body.end()));
+  }
   return reply_of(t->type, pk);
 }
 

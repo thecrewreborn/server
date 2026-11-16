@@ -90,6 +90,7 @@ struct Player {
   V gifts_paid = V::array();
   V club_cc_paid = obj::B(false);
   V club_actions = V::array();
+  V skill_medals = V::object();
   V save_ids = obj::list_of_u64(std::vector<uint64_t>(6, NO_ID));
   V update_charge = obj::I(0);
   V chase_racer_car = obj::U(NO_ID);

@@ -219,7 +219,8 @@ const std::vector<std::string>* layout_121(uint32_t reply_id, uint32_t req121) {
 
 HandleResult translated(Ctx& ctx, uint32_t id, uint32_t req121, const Bytes& body) {
   const Auto& a = *auto_of(id);
-  HandleResult inner = v1_21::handle(ctx, req121, body);
+  const size_t cut = id == 0x8711A3A7 ? 0x28 : body.size();
+  HandleResult inner = v1_21::handle(ctx, req121, cut < body.size() ? slice(body, 0, cut) : body);
   if (inner.kind != HandleResult::kFrame) return inner;
   uint32_t rid121 = u32(inner.frame, 4);
   if (rid121 == a.reply) return inner;

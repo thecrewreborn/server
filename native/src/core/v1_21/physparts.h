@@ -22,6 +22,7 @@ constexpr int64_t NO_BONUS = -1, ALL_BONUSES = 4;
 constexpr bool REWARD_PARTS = true;
 constexpr bool ANNOUNCE_PART = false;
 extern const char REWARD_PART[];
+std::string announce_variant(const std::string& value);
 
 struct Mission {
   int64_t slot = 0;
@@ -34,6 +35,7 @@ struct Table {
   std::vector<std::array<int64_t, 4>> parts;
   std::vector<uint64_t> ids;
   std::map<std::string, Mission> missions;
+  std::map<std::string, Mission> skills;
   size_t slot_count = 0;
 };
 
@@ -46,8 +48,13 @@ std::optional<Bytes> fit(const Bytes& cfg, int64_t part, int64_t slot, Raised* r
 bool give(Player& p, uint64_t model, uint64_t spec, const std::vector<int64_t>& parts, bool mount, bool* given,
           Raised* raised);
 bool has_ability(obj::Py& py, const Player& p, const std::string& name, const Core& core);
+bool reward_part(Player& p, const Mission& entry, int64_t medal, uint64_t model, uint64_t spec, Random& rng,
+                 const Core& core, std::optional<int64_t>* part, Raised* raised);
 bool mission_part(Player& p, uint64_t mission, int64_t medal, uint64_t model, uint64_t spec, Random& rng,
                   const Core& core, std::optional<int64_t>* part, Raised* raised);
+Bytes skill_seed(uint64_t player_id, uint64_t skill, int64_t medal);
+bool skill_part(Player& p, uint64_t skill, int64_t medal, uint64_t model, uint64_t spec, uint64_t player_id,
+                const Core& core, std::optional<int64_t>* part, Raised* raised);
 
 constexpr int64_t PACK_PARTS = 3;
 bool pack_parts(Player& p, uint64_t model, uint64_t spec, int64_t quality, int64_t level, Random& rng,

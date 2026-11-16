@@ -39,8 +39,9 @@ const Table* embedded() {
         out->parts.push_back(e);
       }
     }
-    if (const json::Value* missions = d->get("missions")) {
-      for (const json::Member& m : missions->members()) {
+    auto items = [](const json::Value* d, std::map<std::string, Mission>* to) {
+      if (!d) return;
+      for (const json::Member& m : d->members()) {
         Mission mi;
         mi.slot = int_of(m.value.get("slot"));
         mi.level = int_of(m.value.get("level"));
@@ -52,9 +53,11 @@ const Table* embedded() {
             mi.bonus.push_back(x.is_float() ? x.as_float() : static_cast<double>(int_of(&x)));
           }
         }
-        out->missions[m.key] = std::move(mi);
+        (*to)[m.key] = std::move(mi);
       }
-    }
+    };
+    items(d->get("missions"), &out->missions);
+    items(d->get("skills"), &out->skills);
     return out;
   }();
   return t.get();
@@ -193,16 +196,11 @@ bool has_ability(obj::Py& py, const Player& p, const std::string& name, const Co
   return !py.failed() && obj::eq(set, obj::I(1));
 }
 
-bool mission_part(Player& p, uint64_t mission, int64_t medal, uint64_t model, uint64_t spec, Random& rng,
-                  const Core& core, std::optional<int64_t>* part, Raised* raised) {
+bool reward_part(Player& p, const Mission& entry, int64_t medal, uint64_t model, uint64_t spec, Random& rng,
+                 const Core& core, std::optional<int64_t>* part, Raised* raised) {
   part->reset();
   const Table* t = table();
-  const Mission* m = nullptr;
-  if (t) {
-    auto it = t->missions.find(gamedata::hex_key(mission));
-    if (it != t->missions.end()) m = &it->second;
-  }
-  if (!REWARD_PARTS || !m || !(0 <= medal && medal < 4)) return true;
+  if (!REWARD_PARTS || !(0 <= medal && medal < 4)) return true;
   obj::Py py;
   bool able = has_ability(py, p, REWARD_PART, core);
   if (py.failed()) {
@@ -211,19 +209,19 @@ bool mission_part(Player& p, uint64_t mission, int64_t medal, uint64_t model, ui
   }
   if (!able) return true;
   size_t qi = static_cast<size_t>(std::min<int64_t>(medal, 2));
-  if (qi >= m->quality.size()) {
+  if (qi >= entry.quality.size()) {
     *raised = Raised{"IndexError", "list index out of range"};
     return false;
   }
-  int64_t quality = m->quality[qi];
+  int64_t quality = entry.quality[qi];
   if (quality < 0) return true;
   int64_t bonus = NO_BONUS;
   if (quality != BRONZE && quality != CAU_PLATINUM) {
-    if (m->bonus.size() != 4) {
+    if (entry.bonus.size() != 4) {
       *raised = Raised{"ValueError", "The number of weights does not match the population"};
       return false;
     }
-    double total = ((m->bonus[0] + m->bonus[1]) + m->bonus[2]) + m->bonus[3] + 0.0;
+    double total = ((entry.bonus[0] + entry.bonus[1]) + entry.bonus[2]) + entry.bonus[3] + 0.0;
     if (total <= 0.0) {
       *raised = Raised{"ValueError", "Total of weights must be greater than zero"};
       return false;
@@ -232,14 +230,68 @@ bool mission_part(Player& p, uint64_t mission, int64_t medal, uint64_t model, ui
       *raised = Raised{"ValueError", "Total of weights must be finite"};
       return false;
     }
-    std::optional<size_t> i = rng.choices_index(m->bonus.data(), m->bonus.size());
+    std::optional<size_t> i = rng.choices_index(entry.bonus.data(), entry.bonus.size());
     bonus = i ? static_cast<int64_t>(*i) : 0;
   }
-  std::optional<int64_t> found = find(*t, m->slot, quality, m->level, bonus);
+  std::optional<int64_t> found = find(*t, entry.slot, quality, entry.level, bonus);
   if (!found) return true;
   bool given = false;
   if (!give(p, model, spec, {*found}, false, &given, raised)) return false;
   if (given) *part = found;
+  return true;
+}
+
+bool mission_part(Player& p, uint64_t mission, int64_t medal, uint64_t model, uint64_t spec, Random& rng,
+                  const Core& core, std::optional<int64_t>* part, Raised* raised) {
+  part->reset();
+  const Table* t = table();
+  if (!t) return true;
+  auto it = t->missions.find(gamedata::hex_key(mission));
+  if (it == t->missions.end()) return true;
+  return reward_part(p, it->second, medal, model, spec, rng, core, part, raised);
+}
+
+std::string announce_variant(const std::string& value) {
+  return value == "arr1" || value == "arr3" ? value : std::string();
+}
+
+Bytes skill_seed(uint64_t player_id, uint64_t skill, int64_t medal) {
+  Bytes le(17, 0);
+  le[0] = static_cast<uint8_t>(medal);
+  for (int i = 0; i < 8; i++) {
+    le[1 + i] = static_cast<uint8_t>(skill >> (8 * i));
+    le[9 + i] = static_cast<uint8_t>(player_id >> (8 * i));
+  }
+  return le;
+}
+
+bool skill_part(Player& p, uint64_t skill, int64_t medal, uint64_t model, uint64_t spec, uint64_t player_id,
+                const Core& core, std::optional<int64_t>* part, Raised* raised) {
+  part->reset();
+  const Table* t = table();
+  if (!t) return true;
+  const std::string key = gamedata::hex_key(skill);
+  auto it = t->skills.find(key);
+  if (it == t->skills.end()) return true;
+  V medals = p.skill_medals.is_object() ? p.skill_medals : V::object();
+  if (const V* best = medals.get(key)) {
+    if (best->is_int()) {
+      obj::Py py;
+      bool not_better = py.le(obj::I(medal), *best);
+      if (py.failed()) {
+        *raised = py.raised();
+        return false;
+      }
+      if (not_better) return true;
+    }
+  }
+  Bytes seed = skill_seed(player_id, skill, medal);
+  Random rng = Random::from_le_bytes(seed.data(), seed.size());
+  if (!reward_part(p, it->second, medal, model, spec, rng, core, part, raised)) return false;
+  if (*part) {
+    medals.set(key, obj::I(medal));
+    p.skill_medals = medals;
+  }
   return true;
 }
 

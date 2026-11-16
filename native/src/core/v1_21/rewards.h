@@ -120,6 +120,8 @@ int64_t boosted_reputation(const Core& core, const Player& p, int64_t now_us, in
 
 constexpr int64_t ZONE_LEVEL_CAP = 50;
 double zone_fade(const Tables& t, const Region& zone, int64_t level);
+bool activity_medal(const Tables& t, uint64_t activity, int64_t value, int64_t level, std::optional<int64_t>* medal,
+                    Raised* raised);
 std::optional<std::pair<int64_t, int64_t>> activity_reward(const Tables& t, uint64_t activity, int64_t value,
                                                            int64_t level, Raised* raised);
 constexpr double IC_DISTANCE_CAP = 20000.0, IC_KM = 0.001;

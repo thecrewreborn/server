@@ -328,6 +328,27 @@ int64_t boosted_reputation(const Core& core, const Player& p, int64_t now_us, in
   return boosted(core, p, now_us, 0, rep, PERK_REPUTATION_BOOST).second;
 }
 
+bool activity_medal(const Tables& t, uint64_t activity, int64_t value, int64_t level, std::optional<int64_t>* medal,
+                    Raised* raised) {
+  medal->reset();
+  auto a = t.activities.find(activity);
+  if (a == t.activities.end()) return true;
+  const std::vector<int64_t>& th = a->second.thresholds;
+  for (int64_t i : {3, 2, 1, 0}) {
+    size_t k = 0;
+    if (!py_index(i, th.size(), &k)) {
+      *raised = index_error();
+      return false;
+    }
+    if (th[k] <= value) {
+      *medal = i;
+      break;
+    }
+  }
+  if (*medal && **medal == 3 && level < t.max_level()) *medal = 2;
+  return true;
+}
+
 std::optional<std::pair<int64_t, int64_t>> activity_reward(const Tables& t, uint64_t activity, int64_t value,
                                                            int64_t level, Raised* raised) {
   auto a = t.activities.find(activity);
@@ -335,22 +356,10 @@ std::optional<std::pair<int64_t, int64_t>> activity_reward(const Tables& t, uint
   auto region = t.regions.find(a->second.region);
   auto family = t.families.find(a->second.family);
   if (region == t.regions.end() || family == t.families.end()) return std::make_pair(int64_t(0), int64_t(0));
-  const std::vector<int64_t>& th = a->second.thresholds;
   std::optional<int64_t> md;
-  for (int64_t i : {3, 2, 1, 0}) {
-    size_t k = 0;
-    if (!py_index(i, th.size(), &k)) {
-      *raised = index_error();
-      return std::nullopt;
-    }
-    if (th[k] <= value) {
-      md = i;
-      break;
-    }
-  }
+  if (!activity_medal(t, activity, value, level, &md, raised)) return std::nullopt;
   if (!md) return std::make_pair(int64_t(0), int64_t(0));
-  int64_t m = *md;
-  if (m == 3 && level < t.max_level()) m = 2;
+  const int64_t m = *md;
   const Region& r = region->second;
   const std::vector<double>& fam = family->second;
   if (fam.size() < 2) {
@@ -406,22 +415,10 @@ std::optional<std::pair<int64_t, int64_t>> summit_skill_reward(const Tables& t, 
   if (a == t.activities.end()) return none;
   auto family = t.families.find(a->second.family);
   if (family == t.families.end()) return none;
-  const std::vector<int64_t>& th = a->second.thresholds;
   std::optional<int64_t> md;
-  for (int64_t i : {3, 2, 1, 0}) {
-    size_t k = 0;
-    if (!py_index(i, th.size(), &k)) {
-      *raised = index_error();
-      return std::nullopt;
-    }
-    if (th[k] <= value) {
-      md = i;
-      break;
-    }
-  }
+  if (!activity_medal(t, activity, value, level, &md, raised)) return std::nullopt;
   if (!md) return none;
-  int64_t m = *md;
-  if (m == 3 && level < t.max_level()) m = 2;
+  const int64_t m = *md;
   const std::vector<double>& fam = family->second;
   if (fam.size() < 2) {
     *raised = index_error();
