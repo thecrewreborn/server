@@ -22,6 +22,7 @@
 #include "core/util.h"
 #include "core/v1_00/relay.h"
 #include "core/v1_21/factions.h"
+#include "core/v1_21/scores.h"
 #include "core/v1_21/relay.h"
 #include "core/version.h"
 #include "platform/files.h"
@@ -309,6 +310,7 @@ int run_server(const std::vector<std::string>& argv) {
   Core& core = *new Core(env, home, "");
   core.set_files(&files);
   v1_21::factions::path(core);
+  v1_21::scores::path(core);
 
   {
     std::string target = first_config_file(home);

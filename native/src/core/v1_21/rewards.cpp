@@ -133,6 +133,9 @@ std::unique_ptr<Tables> load() {
       t->coop[py::int_text_to_i64(py::parse_int(e.key).value_or("0")).value_or(0)] = std::move(f);
     }
   }
+  if (const json::Value* lower = d->get("lower_better")) {
+    for (const json::Value& x : lower->items()) t->lower_better.insert(gamedata::hex_id(str_of(&x)));
+  }
   if (const json::Value* boosts = d->get("perk_boosts")) {
     for (const json::Member& e : boosts->members()) {
       std::vector<double> f;

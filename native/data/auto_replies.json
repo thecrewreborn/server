@@ -303,14 +303,6 @@
   ],
   "reply": "0x8386FE97"
  },
- "0xB40DCDA8": {
-  "layout": [
-   "u8",
-   "u32",
-   "arr"
-  ],
-  "reply": "0x09D47633"
- },
  "0xBF4BC4BC": {
   "layout": [
    "u64*438",

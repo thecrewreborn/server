@@ -32,6 +32,7 @@ struct ModuleState {
   std::map<std::string, std::vector<Earned>> earned;
   std::map<std::string, std::vector<std::pair<int64_t, int64_t>>> rep_earned;
   std::optional<std::string> factions_path;
+  std::optional<std::string> scores_path;
   std::vector<InstantEnd> pending_instant;
 };
 

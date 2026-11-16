@@ -99,6 +99,7 @@ void register_notify(std::vector<Registered>& out);
 void register_police(std::vector<Registered>& out);
 void register_presence(std::vector<Registered>& out);
 void register_progress(std::vector<Registered>& out);
+void register_scores(std::vector<Registered>& out);
 void register_session(std::vector<Registered>& out);
 void register_skill(std::vector<Registered>& out);
 void register_stats(std::vector<Registered>& out);

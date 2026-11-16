@@ -13,6 +13,7 @@
 #include "core/v1_21/pack.h"
 #include "core/v1_21/physparts.h"
 #include "core/v1_21/rewards.h"
+#include "core/v1_21/scores.h"
 #include "core/wire.h"
 
 namespace tcr {
@@ -723,6 +724,7 @@ HandlerResult mission_end(Ctx& ctx, const Bytes& body, const Registered&) {
     if (!owned_dealer_car(ctx, p, body, &car, &r)) return failed(r);
   }
   if (std::optional<Raised> f = p.save()) return failed(*f);
+  scores::record(*ctx.core, mission, ctx.player_id, score, ctx.now_us());
   if (!car) car = no_car();
   Bytes granted = wire::empty_array();
   if (part && physparts::ANNOUNCE_PART) {

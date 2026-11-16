@@ -17,6 +17,7 @@
 #include "core/v1_21/pack.h"
 #include "core/v1_21/replies.h"
 #include "core/v1_21/rewards.h"
+#include "core/v1_21/scores.h"
 #include "core/v1_21/summit.h"
 #include "core/wire.h"
 
@@ -164,6 +165,7 @@ HandlerResult summit_event(Ctx& ctx, const Bytes& request, const Registered&) {
     if (has_car) s->set("car", obj::list_of_u64({be64(body, CAR_AT), be64(body, CAR_AT + 8)}));
     if (std::optional<Raised> failed = p.save()) return HandlerResult::fail(*failed);
   }
+  if (ok) scores::record(*ctx.core, mission, ctx.player_id, score, ctx.now_us());
   int64_t now = ctx.now_us();
   Packer pk;
   Raised r;

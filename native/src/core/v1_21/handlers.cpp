@@ -48,6 +48,7 @@ std::vector<Registered> build() {
   register_police(order);
   register_presence(order);
   register_progress(order);
+  register_scores(order);
   register_session(order);
   register_skill(order);
   register_stats(order);

@@ -8,6 +8,7 @@
 #include "core/v1_21/mission.h"
 #include "core/v1_21/pack.h"
 #include "core/v1_21/rewards.h"
+#include "core/v1_21/scores.h"
 #include "core/v1_21/summit.h"
 #include "core/wire.h"
 
@@ -60,6 +61,7 @@ HandlerResult activity_end(Ctx& ctx, const Bytes& request, const Registered& sel
     if (py.failed()) return HandlerResult::fail(py.raised());
   }
   if (std::optional<Raised> f = p.save()) return HandlerResult::fail(*f);
+  scores::record(*ctx.core, activity, ctx.player_id, value, ctx.now_us());
   pack::Packer pk;
   pk.B(1).Q(activity).I(p.level).I(p.xp).I(p.bucks).I(p.perk_points);
   if (t->body.size() > 25) pk.raw(Bytes(t->body.begin() + 25, t->body.end()));
@@ -79,6 +81,7 @@ HandlerResult mission_result(Ctx& ctx, const Bytes& request, const Registered& s
     }
   }
   if (std::optional<Raised> f = p.save()) return HandlerResult::fail(*f);
+  if (mission) scores::record(*ctx.core, mission, ctx.player_id, score, ctx.now_us());
   pack::Packer pk;
   pk.H(0).I(p.level).I(p.xp).I(p.bucks).H(p.perk_points);
   pk.raw(wire::empty_array()).I(0).Q(mission);

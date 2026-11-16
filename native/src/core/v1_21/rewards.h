@@ -80,6 +80,7 @@ struct Tables {
   Chase chase;
   std::map<int64_t, std::vector<double>> coop;
   std::vector<double> instant_xp, instant_bucks;
+  std::set<uint64_t> lower_better;
 
   std::optional<double> f(int64_t i, Raised* raised) const;
   int64_t max_level() const { return table.size() > MAX_LEVEL ? table[MAX_LEVEL] : 0; }
