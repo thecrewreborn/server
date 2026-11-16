@@ -170,7 +170,7 @@ HandlerResult summit_event(Ctx& ctx, const Bytes& request, const Registered&) {
   if (!head(pk, py, ok ? 0 : 1, p, &r) || !block(pk, ctx, now, &r)) return HandlerResult::fail(r);
   pk.B(0).I(0x113).B(1).I(0x1E48C);
   if (ok) {
-    pk.raw(wire::u64_array({NO_ID})).I(0).I(0).I(0x65);
+    pk.raw(wire::empty_array()).I(0).I(0).I(0x65);
   } else {
     pk.raw(wire::empty_array()).I(0).I(0xFFFFFFFF).I(0x65);
   }

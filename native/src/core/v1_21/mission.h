@@ -16,9 +16,11 @@ constexpr int64_t NO_SCORE = -1;
 constexpr size_t FACTION_CAR_AT = 0x14, PRACTICE_CAR_AT = 0x2B;
 bool pay_faction_mission(Core& core, Player& p, const Bytes& body, int64_t now_us, int64_t group, Raised* raised);
 std::optional<bool> pay_gifts(Core& core, Player& p, Raised* raised);
+constexpr int64_t PRACTICE = 10;
+bool drop_practice_runs(Core& core, Player& p);
 bool finish_mission(Core& core, Player& p, uint64_t mission, int64_t score, int64_t now_us, bool paid,
                     Raised* raised, int64_t group = 1, const Bytes* body = nullptr, size_t car_at = 0x28,
-                    std::optional<int64_t>* part = nullptr);
+                    std::optional<int64_t>* part = nullptr, bool complete = true);
 
 struct InstantEnd;
 constexpr size_t IC_SEEN = 64;

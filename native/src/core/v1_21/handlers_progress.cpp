@@ -829,11 +829,36 @@ std::optional<bool> pay_gifts(Core& core, Player& p, Raised* raised) {
   return got;
 }
 
+bool drop_practice_runs(Core& core, Player& p) {
+  const rewards::Tables* t = rewards::tables(core);
+  if (!t || !p.missions_done.is_array()) return false;
+  const std::vector<V> done = p.missions_done.items();
+  V keep = V::array();
+  size_t kept = 0;
+  for (const V& mission : done) {
+    bool practice = false;
+    if (mission.is_int()) {
+      if (std::optional<uint64_t> id = mission.as_u64()) {
+        auto m = t->missions.find(*id);
+        practice = m != t->missions.end() && m->second.online == PRACTICE;
+      }
+    }
+    if (!practice) {
+      keep.push(mission);
+      kept++;
+    }
+  }
+  if (kept == done.size()) return false;
+  p.missions_done = keep;
+  return true;
+}
+
 bool finish_mission(Core& core, Player& p, uint64_t mission, int64_t score, int64_t now_us, bool paid,
-                    Raised* raised, int64_t group, const Bytes* body, size_t car_at, std::optional<int64_t>* part) {
+                    Raised* raised, int64_t group, const Bytes* body, size_t car_at, std::optional<int64_t>* part,
+                    bool complete) {
   if (part) part->reset();
   Py py;
-  p.complete_mission(py, mission);
+  if (complete) p.complete_mission(py, mission);
   if (py.failed()) {
     *raised = py.raised();
     return false;

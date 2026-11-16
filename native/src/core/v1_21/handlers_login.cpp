@@ -189,10 +189,11 @@ HandlerResult get_player(Ctx& ctx, const Bytes&, const Registered&) {
   auto failed = [&]() { return HandlerResult::fail(py.raised()); };
   p.update_charge = obj::I(0);
   {
+    const bool dropped = drop_practice_runs(*ctx.core, p);
     Raised r;
     std::optional<bool> gift = pay_gifts(*ctx.core, p, &r);
     if (!gift) return HandlerResult::fail(r);
-    if (*gift) {
+    if (*gift || dropped) {
       if (std::optional<Raised> f = p.save()) return HandlerResult::fail(*f);
     }
   }

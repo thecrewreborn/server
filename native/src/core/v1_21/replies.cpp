@@ -74,14 +74,14 @@ HandlerResult mission_result(Ctx& ctx, const Bytes& request, const Registered& s
   Player& p = ctx.player;
   if (mission) {
     if (!finish_mission(*ctx.core, p, mission, score, ctx.now_us(), true, &r, ctx.group_size, &request,
-                        PRACTICE_CAR_AT)) {
+                        PRACTICE_CAR_AT, nullptr, false)) {
       return HandlerResult::fail(r);
     }
   }
   if (std::optional<Raised> f = p.save()) return HandlerResult::fail(*f);
   pack::Packer pk;
   pk.H(0).I(p.level).I(p.xp).I(p.bucks).H(p.perk_points);
-  pk.raw(wire::u64_array({0xFFFFFFFFFFFFFFFFull})).I(0).Q(uint64_t(0));
+  pk.raw(wire::empty_array()).I(0).Q(uint64_t(0));
   return reply_of(t->type, pk);
 }
 
