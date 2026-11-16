@@ -3,6 +3,7 @@
 #include "core/json.h"
 #include "core/util.h"
 
+#include <algorithm>
 #include <string>
 #include <vector>
 
@@ -281,6 +282,10 @@ std::string log_body(std::string_view path, std::string_view raw) {
   std::string_view base = path.substr(0, path.find('?'));
   if (base.size() >= 5 && base.substr(base.size() - 5) == ".rgba") {
     return "<rgba " + std::to_string(raw.size()) + " bytes>";
+  }
+  if (base.substr(0, 9) == "/storage/") {
+    return "<blob " + std::to_string(raw.size()) + " bytes: " +
+           py::hex(reinterpret_cast<const uint8_t*>(raw.data()), std::min<size_t>(raw.size(), 64)) + ">";
   }
   std::string text;
   py::DecodeError err;

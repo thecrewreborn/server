@@ -849,7 +849,7 @@ void write_one(std::string& out, const Value& v, std::vector<Open>& stack) {
   }
 }
 
-void write(std::string& out, const Value& root, int indent) {
+void write(std::string& out, const Value& root, int indent, bool compact = false) {
   std::vector<Open> stack;
   write_one(out, root, stack);
   while (!stack.empty()) {
@@ -869,11 +869,11 @@ void write(std::string& out, const Value& root, int indent) {
       if (k) out += ',';
       newline(out, indent, level);
     } else if (k) {
-      out += ", ";
+      out += compact ? "," : ", ";
     }
     if (obj) {
       write_string(out, v.members()[k].key);
-      out += ": ";
+      out += compact ? ":" : ": ";
       write_one(out, v.members()[k].value, stack);
     } else {
       write_one(out, v.items()[k], stack);
@@ -886,6 +886,12 @@ void write(std::string& out, const Value& root, int indent) {
 std::string dumps(const Value& v, int indent) {
   std::string out;
   write(out, v, indent);
+  return out;
+}
+
+std::string dumps_compact(const Value& v) {
+  std::string out;
+  write(out, v, -1, true);
   return out;
 }
 

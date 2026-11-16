@@ -19,6 +19,10 @@
 namespace tcr {
 
 class Core;
+namespace entities {
+struct Entry;
+struct File;
+}
 
 namespace ubi {
 
@@ -118,6 +122,21 @@ class Ubi {
   json::Value club_actions(const std::string& name);
   json::Value complete_actions(const std::string& name, const json::Value& body);
   std::set<int64_t> completed_actions(const std::string& name);
+  std::optional<std::string> entity_owner(const std::string& auth, Raised* raised);
+  bool own_profile(const std::string& owner, const json::Value* profile);
+  std::optional<json::Value> entity_reply(const std::string& key, const std::string& name, const entities::Entry& e,
+                                          const std::string& host, const std::string* space, Raised* raised,
+                                          bool owner = false);
+  entities::Entry keyed(const std::string& stem, const std::string& owner, entities::File& data,
+                        const std::string& name);
+  Reply search_entities(bool profiles, const std::string& profile, const std::string& query, const std::string& auth,
+                        const std::string& host);
+  Reply write_entity(const std::optional<std::string>& eid, const json::Value& body, const std::string& auth,
+                     const std::string& host);
+  Reply delete_entity(const std::string& eid, const json::Value& body, const std::string& auth);
+  Reply get_entity(const std::string& eid, const std::string& auth, const std::string& host);
+  Reply ghost_storage(const std::string& method, const std::string& eid, const std::string& raw,
+                      const std::string& query);
 
   Core& core_;
   std::unique_ptr<AccountStore> accounts_;

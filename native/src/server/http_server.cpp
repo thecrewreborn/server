@@ -33,6 +33,8 @@ bool ends_with(std::string_view s, std::string_view tail) {
   return s.size() >= tail.size() && s.substr(s.size() - tail.size()) == tail;
 }
 
+bool storage_path(std::string_view path) { return path.substr(0, path.find('?')).substr(0, 9) == "/storage/"; }
+
 enum class Flow { kOk, kTimeout, kFail };
 
 }
@@ -215,7 +217,8 @@ class Handler {
     f = parse_request(line, &ok);
     reader_.arm(lim_.body_timeout);
     if (f != Flow::kOk || !ok) return f;
-    if (command_ != "GET" && command_ != "POST" && command_ != "PUT" && command_ != "DELETE") {
+    if (command_ != "GET" && command_ != "POST" && command_ != "PUT" && command_ != "DELETE" &&
+        !(command_ == "HEAD" && storage_path(path_))) {
       return send_error(501, "Unsupported method (" + tcr::repr_latin1(command_) + ")");
     }
     return serve();
@@ -533,7 +536,8 @@ class Handler {
     if (!srv_.log_path.empty()) {
       std::string reply_json = resp.log_reply;
       if (resp.binary) {
-        reply_json = tcr::json_quote_utf8("<png " + std::to_string(resp.payload.size()) + " bytes>");
+        reply_json = tcr::json_quote_utf8((storage_path(path_) ? "<blob " : "<png ") +
+                                          std::to_string(resp.payload.size()) + " bytes>");
       } else if (reply_json.empty()) {
         reply_json = resp.payload;
       }
@@ -548,7 +552,7 @@ class Handler {
       if (!ok) capture::log_failed(srv_.log_path, why);
     }
     send_response(resp.status);
-    std::string kind = ends_with(path_, ".rgba") ? "application/octet-stream" : "image/png";
+    std::string kind = ends_with(path_, ".rgba") || storage_path(path_) ? "application/octet-stream" : "image/png";
     if (!resp.content_type.empty()) {
       send_header("Content-Type", resp.content_type);
     } else {
@@ -558,6 +562,7 @@ class Handler {
     for (const auto& h : resp.headers) send_header(h.first, h.second);
     f = end_headers();
     if (f != Flow::kOk) return f;
+    if (command_ == "HEAD") return Flow::kOk;
     return write(resp.payload);
   }
 

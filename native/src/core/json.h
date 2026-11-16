@@ -108,6 +108,7 @@ inline std::optional<Value> loads_utf8(std::string_view data, size_t max_depth =
 }
 
 std::string dumps(const Value& v, int indent = -1);
+std::string dumps_compact(const Value& v);
 
 }
 }

@@ -58,6 +58,8 @@ class Core {
 
   v1_21::ModuleState& v1_21_state();
 
+  std::optional<std::string>& entities_folder() { return entities_folder_; }
+
  private:
   Env* env_;
   std::string home_;
@@ -72,6 +74,7 @@ class Core {
   std::unique_ptr<v1_21::peers::Peers> peers_;
   std::unique_ptr<config::Config> config_;
   std::optional<std::string> config_stamp_;
+  std::optional<std::string> entities_folder_;
 };
 
 }

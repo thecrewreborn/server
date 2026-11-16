@@ -5,6 +5,7 @@
 #include <cstdio>
 
 #include "core/core.h"
+#include "core/entities.h"
 #include "core/logtext.h"
 #include "core/util.h"
 #include "core/v1_21/gamedata.h"
@@ -443,13 +444,39 @@ std::pair<std::string, std::string> login_name(const json::Value& body, const st
   return {name.empty() ? std::string(kDefaultName) : name, platform};
 }
 
-json::Value loggable(const json::Value& reply) {
-  if (!reply.is_object() || (!reply.contains("ticket") && !reply.contains("token"))) return reply;
-  json::Value out = json::Value::object();
-  for (const json::Member& m : reply.members()) {
-    out.set(m.key, m.key == "ticket" || m.key == "token" ? json::Value::string("***") : m.value);
+namespace {
+
+json::Value hide_upload_key(const json::Value& entity) {
+  const json::Value* storage = entity.is_object() ? entity.get("extendedStorage") : nullptr;
+  if (!storage || !storage->is_object()) return entity;
+  json::Value urls = json::Value::object();
+  for (const json::Member& m : storage->members()) {
+    urls.set(m.key, m.value.is_string() ? json::Value::string(log_path(m.value.as_string())) : m.value);
   }
+  json::Value out = entity;
+  out.set("extendedStorage", std::move(urls));
   return out;
+}
+
+}
+
+json::Value loggable(const json::Value& reply) {
+  if (reply.is_object() && (reply.contains("ticket") || reply.contains("token"))) {
+    json::Value out = json::Value::object();
+    for (const json::Member& m : reply.members()) {
+      out.set(m.key, m.key == "ticket" || m.key == "token" ? json::Value::string("***") : m.value);
+    }
+    return out;
+  }
+  const json::Value* list = reply.is_object() ? reply.get("entities") : nullptr;
+  if (list && list->is_array()) {
+    json::Value hidden = json::Value::array();
+    for (const json::Value& e : list->items()) hidden.push(hide_upload_key(e));
+    json::Value out = reply;
+    out.set("entities", std::move(hidden));
+    return out;
+  }
+  return hide_upload_key(reply);
 }
 
 Ubi::Ubi(Core& core) : core_(core) {
@@ -1069,6 +1096,346 @@ static bool match_club(const std::string& path, std::string* profile, std::strin
   return true;
 }
 
+namespace {
+
+constexpr size_t kMaxBody = 300000;
+const char kNotOwner[] = "only the profile's own player may change its entities";
+
+Reply json_reply(int status, Value v) {
+  Reply r;
+  r.status = status;
+  r.json = std::move(v);
+  return r;
+}
+
+Reply refusal(int status, const std::string& why) { return json_reply(status, error_reply(why)); }
+
+Reply raised_reply(const Raised& why) {
+  Reply r;
+  r.raised = true;
+  r.exception = why;
+  return r;
+}
+
+Value no_entities() { return obj({{"entities", Value::array()}}); }
+
+size_t version_prefix(const std::string& p) {
+  if (p.size() < 4 || p.compare(0, 2, "/v") != 0) return 0;
+  size_t i = 2;
+  while (i < p.size() && p[i] >= '0' && p[i] <= '9') i++;
+  if (i == 2 || i >= p.size() || p[i] != '/') return 0;
+  return i + 1;
+}
+
+bool match_entity_path(const std::string& path, std::optional<std::string>* eid) {
+  size_t at = version_prefix(path);
+  if (!at) return false;
+  std::string rest = path.substr(at);
+  const std::string head = "profiles/entities";
+  if (rest == head) {
+    eid->reset();
+    return true;
+  }
+  if (rest.size() <= head.size() + 1 || rest.compare(0, head.size() + 1, head + "/") != 0) return false;
+  std::string id = rest.substr(head.size() + 1);
+  if (id.find('/') != std::string::npos) return false;
+  *eid = id;
+  return true;
+}
+
+bool match_entity_search(const std::string& path, std::string* kind, std::string* id) {
+  size_t at = version_prefix(path);
+  if (!at) return false;
+  std::string rest = path.substr(at);
+  for (const char* k : {"profiles", "spaces"}) {
+    std::string head = std::string(k) + "/";
+    const std::string tail = "/entities";
+    if (rest.size() > head.size() + tail.size() && rest.compare(0, head.size(), head) == 0 &&
+        rest.compare(rest.size() - tail.size(), tail.size(), tail) == 0) {
+      std::string mid = rest.substr(head.size(), rest.size() - head.size() - tail.size());
+      if (!mid.empty() && mid.find('/') == std::string::npos) {
+        *kind = k;
+        *id = mid;
+        return true;
+      }
+    }
+  }
+  if (rest == "spaces/entities") {
+    kind->clear();
+    id->clear();
+    return true;
+  }
+  return false;
+}
+
+bool match_storage(const std::string& path, std::string* eid) {
+  const std::string head = "/storage/";
+  if (path.size() != head.size() + 36 || path.compare(0, head.size(), head) != 0) return false;
+  std::string id = path.substr(head.size());
+  for (size_t i = 0; i < id.size(); i++) {
+    char c = id[i];
+    if (i == 8 || i == 13 || i == 18 || i == 23) {
+      if (c != '-') return false;
+    } else if (!((c >= '0' && c <= '9') || (c >= 'a' && c <= 'f'))) {
+      return false;
+    }
+  }
+  *eid = id;
+  return true;
+}
+
+std::string lower_text(std::string s) { return ascii_lower(std::move(s)); }
+
+}
+
+std::optional<std::string> Ubi::entity_owner(const std::string& auth, Raised* raised) {
+  std::optional<AuthTicket> t = auth_ticket(auth);
+  if (!t) return std::nullopt;
+  std::optional<std::pair<std::string, std::string>> owner =
+      ticket_owner(std::string(strip_ws_latin1(t->ticket)), false, raised);
+  if (!raised->type.empty() || !owner) return std::nullopt;
+  return owner->first;
+}
+
+bool Ubi::own_profile(const std::string& owner, const json::Value* profile) {
+  if (!profile || !profile->is_string()) return false;
+  const std::pair<std::string, std::string>* known = profiles_.get(profile->as_string());
+  return known && account_key(known->first) == account_key(owner);
+}
+
+std::optional<json::Value> Ubi::entity_reply(const std::string& key, const std::string& name, const entities::Entry& e,
+                                             const std::string& host, const std::string* space, Raised* raised,
+                                             bool owner) {
+  const std::string eid = entities::entity_id(key, name);
+  std::string space_id = e.space ? *e.space : space && entities::guid_ok(*space) ? *space : std::string(kSpaceId);
+  Value out = obj({{"entityId", str(eid)},
+                   {"name", str(name)},
+                   {"type", str(e.type)},
+                   {"tags", e.tags},
+                   {"obj", e.obj},
+                   {"spaceId", str(space_id)},
+                   {"revision", num(e.revision)},
+                   {"lastModified", str(e.last_modified)}});
+  if (entities::is_ghost(name)) {
+    config::Result<std::optional<std::string>> advertised = core_.config().advertised_ip();
+    if (!advertised.ok()) {
+      *raised = config_raised(advertised.error);
+      return std::nullopt;
+    }
+    std::string where = *advertised.value ? **advertised.value : host;
+    if (http_port_ != 80) where += ":" + std::to_string(http_port_);
+    Value url = str("http://" + where + "/storage/" + eid);
+    Value change = owner && e.upload_key ? str(url.as_string() + "?key=" + *e.upload_key) : url;
+    out.set("extendedStorage", obj({{"provider", str("s3")},
+                                    {"getURL", url},
+                                    {"headURL", url},
+                                    {"putURL", change},
+                                    {"deleteURL", change}}));
+  }
+  return out;
+}
+
+entities::Entry Ubi::keyed(const std::string& stem, const std::string& owner, entities::File& data,
+                           const std::string& name) {
+  entities::Entry& e = data.entities.at(name);
+  if (!entities::is_ghost(name) || e.upload_key) return e;
+  e.upload_key = entities::new_upload_key(core_);
+  OsError oserr;
+  if (!entities::save(core_, stem, owner, data.profile ? *data.profile : stable_id("profile", owner), data.entities,
+                      &oserr)) {
+    e.upload_key.reset();
+  }
+  return e;
+}
+
+Reply Ubi::search_entities(bool profiles, const std::string& profile, const std::string& query,
+                           const std::string& auth, const std::string& host) {
+  if (!profiles) return json_reply(200, no_entities());
+  Raised err;
+  std::optional<std::string> owner = entity_owner(auth, &err);
+  if (!err.type.empty()) return raised_reply(err);
+  std::optional<std::string> name, type, space;
+  for (const auto& kv : parse_qsl(query)) {
+    if (kv.first == "name") name = kv.second;
+    if (kv.first == "type") type = kv.second;
+    if (kv.first == "spaceId") space = kv.second;
+  }
+  Value pid = str(profile);
+  if (!owner || !own_profile(*owner, &pid) || !entities::accepted(core_, name ? *name : std::string())) {
+    return json_reply(200, no_entities());
+  }
+  const std::string stem = save_name(*owner);
+  entities::File f = entities::load(core_, stem);
+  auto it = f.entities.find(*name);
+  if (it == f.entities.end() || (type && *type != it->second.type)) return json_reply(200, no_entities());
+  std::optional<Value> e = entity_reply(account_key(*owner), *name, keyed(stem, *owner, f, *name), host,
+                                        space ? &*space : nullptr, &err, true);
+  if (!e) return raised_reply(err);
+  Value list = Value::array();
+  list.push(std::move(*e));
+  return json_reply(200, obj({{"entities", list}}));
+}
+
+Reply Ubi::write_entity(const std::optional<std::string>& eid, const json::Value& body, const std::string& auth,
+                        const std::string& host) {
+  Raised err;
+  std::optional<std::string> owner = entity_owner(auth, &err);
+  if (!err.type.empty()) return raised_reply(err);
+  const Value* body_pid = body.get("profileId");
+  if (!owner || (body_pid && !own_profile(*owner, body_pid))) return refusal(403, kNotOwner);
+  const std::string stem = save_name(*owner);
+  entities::File data = entities::load(core_, stem);
+  std::string name;
+  if (!eid) {
+    const Value* n = body.get("name");
+    if (!n || !n->is_string() || !entities::accepted(core_, n->as_string())) {
+      return refusal(400, "this entity name is not stored by this server");
+    }
+    name = n->as_string();
+  } else {
+    std::optional<std::string> found = entities::find(stem, data, *eid);
+    if (!found) return refusal(404, "no such entity");
+    name = *found;
+  }
+  auto it = data.entities.find(name);
+  const entities::Entry* old = it == data.entities.end() ? nullptr : &it->second;
+  const bool ghost = entities::is_ghost(name);
+  Value kind = body.get("type") ? *body.get("type") : old ? str(old->type) : str(ghost ? "ghost" : name);
+  if (!kind.is_string() || (ghost && kind.as_string() != "ghost")) return refusal(400, "invalid type");
+  Value objv = body.get("obj") ? *body.get("obj") : old ? old->obj : Value::object();
+  if (!entities::obj_ok(&objv)) {
+    return refusal(400, "obj must be a JSON object of at most " + std::to_string(entities::kObjMax) + " bytes");
+  }
+  Value tags = body.get("tags") ? *body.get("tags") : old ? old->tags : Value::array();
+  if (!entities::tags_ok(&tags)) {
+    return refusal(400, "tags must be a list of at most " + std::to_string(entities::kTagsMax) + " short strings");
+  }
+  entities::Entry entry;
+  entry.type = kind.as_string();
+  if (entities::guid_ok(body.get("spaceId"))) {
+    entry.space = body.get("spaceId")->as_string();
+  } else if (old && old->space) {
+    entry.space = old->space;
+  }
+  entry.tags = tags;
+  entry.obj = objv;
+  entry.revision = old ? std::min(old->revision + 1, entities::kRevisionMax) : 1;
+  int64_t sec = 0;
+  int us = 0;
+  if (!core_.env().now_utc(&sec, &us)) {
+    return raised_reply(Raised{"OverflowError", "timestamp out of range for platform time_t"});
+  }
+  entry.last_modified = ubi_time(civil_utc(sec, us));
+  if (ghost) {
+    entry.upload_key = old && old->upload_key ? *old->upload_key : entities::new_upload_key(core_);
+  }
+  data.entities[name] = entry;
+  std::string profile = body_pid ? body_pid->as_string() : data.profile ? *data.profile : stable_id("profile", *owner);
+  OsError oserr;
+  if (!entities::save(core_, stem, *owner, profile, data.entities, &oserr)) {
+    return refusal(500, "cannot store the entity");
+  }
+  std::optional<Value> e = entity_reply(account_key(*owner), name, entry, host, nullptr, &err, true);
+  if (!e) return raised_reply(err);
+  return json_reply(200, std::move(*e));
+}
+
+Reply Ubi::delete_entity(const std::string& eid, const json::Value& body, const std::string& auth) {
+  Raised err;
+  std::optional<std::string> owner = entity_owner(auth, &err);
+  if (!err.type.empty()) return raised_reply(err);
+  const Value* body_pid = body.get("profileId");
+  if (!owner || (body_pid && !own_profile(*owner, body_pid))) return refusal(403, kNotOwner);
+  const std::string stem = save_name(*owner);
+  entities::File data = entities::load(core_, stem);
+  std::optional<std::string> name = entities::find(stem, data, eid);
+  if (!name) return refusal(404, "no such entity");
+  data.entities.erase(*name);
+  OsError oserr;
+  if (!entities::save(core_, stem, *owner, data.profile ? *data.profile : stable_id("profile", *owner),
+                      data.entities, &oserr)) {
+    return refusal(500, "cannot store the entity");
+  }
+  if (Files* files = core_.files()) files->remove(entities::blob_path(core_, stem, eid), &oserr);
+  return json_reply(200, Value::object());
+}
+
+Reply Ubi::get_entity(const std::string& eid, const std::string& auth, const std::string& host) {
+  Raised err;
+  std::optional<std::string> owner = entity_owner(auth, &err);
+  if (!err.type.empty()) return raised_reply(err);
+  std::optional<entities::Located> found = entities::locate(core_, eid);
+  if (found) {
+    const bool own = owner && account_key(*owner) == lower_text(found->stem);
+    if (own || entities::is_ghost(found->name)) {
+      std::optional<Value> e =
+          own ? entity_reply(lower_text(found->stem), found->name, keyed(found->stem, *owner, found->file, found->name),
+                             host, nullptr, &err, true)
+              : entity_reply(lower_text(found->stem), found->name, found->file.entities.at(found->name), host, nullptr,
+                             &err);
+      if (!e) return raised_reply(err);
+      return json_reply(200, std::move(*e));
+    }
+  }
+  return refusal(404, "no such entity");
+}
+
+namespace {
+
+bool key_matches(const std::string& query, const std::optional<std::string>& stored) {
+  std::string given;
+  for (const auto& kv : parse_qsl(query)) {
+    if (kv.first == "key") given = kv.second;
+  }
+  if (!stored) return false;
+  for (char c : given) {
+    if (static_cast<unsigned char>(c) >= 0x80) return false;
+  }
+  if (given.size() != stored->size()) return false;
+  unsigned char diff = 0;
+  for (size_t i = 0; i < given.size(); i++) diff |= static_cast<unsigned char>(given[i] ^ (*stored)[i]);
+  return diff == 0;
+}
+
+}
+
+Reply Ubi::ghost_storage(const std::string& method, const std::string& eid, const std::string& raw,
+                         const std::string& query) {
+  std::optional<entities::Located> found = entities::locate(core_, eid);
+  const bool ghost = found && entities::is_ghost(found->name);
+  Files* files = core_.files();
+  if (method == "GET" || method == "HEAD") {
+    if (ghost && files) {
+      std::string data;
+      OsError oserr;
+      if (files->read(entities::blob_path(core_, found->stem, eid), &data, &oserr)) {
+        Reply r;
+        r.binary = true;
+        r.bytes = std::move(data);
+        return r;
+      }
+    }
+    return refusal(404, "no such ghost");
+  }
+  if (method != "PUT" && method != "POST" && method != "DELETE") return refusal(405, "method not allowed");
+  if (!ghost || !key_matches(query, found->file.entities.at(found->name).upload_key)) {
+    return refusal(403, "only the ghost's own player may change its data");
+  }
+  Reply ok;
+  ok.binary = true;
+  OsError oserr;
+  if (method == "DELETE") {
+    if (files) files->remove(entities::blob_path(core_, found->stem, eid), &oserr);
+    return ok;
+  }
+  if (raw.size() > kMaxBody) return refusal(413, "body larger than " + std::to_string(kMaxBody) + " bytes");
+  FileStat st;
+  if (!files || !files->write_atomic(entities::blob_path(core_, found->stem, eid), raw, false, -1, -1, &st, &oserr)) {
+    return refusal(500, "cannot store the ghost");
+  }
+  return ok;
+}
+
 Reply Ubi::route(const std::string& method, const std::string& full_path, const json::Value& body,
                  const std::string& host, const std::string& client_ip, int client_port, const std::string& auth,
                  const std::string& raw) {
@@ -1155,6 +1522,8 @@ Reply Ubi::route(const std::string& method, const std::string& full_path, const 
     if (!err.type.empty()) return raising(err);
     return r;
   }
+  std::string storage_id;
+  if (match_storage(path, &storage_id)) return ghost_storage(method, storage_id, raw, query);
   if (ends_with(path, "/profiles/sessions")) {
     if (method == "DELETE") {
       logout(client_ip);
@@ -1243,6 +1612,16 @@ Reply Ubi::route(const std::string& method, const std::string& full_path, const 
   if (ends_with(path, "/traversal")) {
     r.json = obj({{"status", str("ok")}, {"traversalPort", num(4000)}, {"relayPort", num(4000)}});
     return r;
+  }
+  std::optional<std::string> entity;
+  if (match_entity_path(path, &entity)) {
+    if (method == "GET") return entity ? get_entity(*entity, auth, host) : json_reply(200, no_entities());
+    if (method == "POST" || method == "PUT") return write_entity(entity, body, auth, host);
+    if (method == "DELETE" && entity) return delete_entity(*entity, body, auth);
+  }
+  std::string search_kind, search_id;
+  if (match_entity_search(path, &search_kind, &search_id) && method == "GET") {
+    return search_entities(search_kind == "profiles", search_id, query, auth, host);
   }
   std::string club_what;
   if (match_club(path, &name, &club_what) && (method == "GET" || (method == "PUT" && club_what == "actions"))) {
