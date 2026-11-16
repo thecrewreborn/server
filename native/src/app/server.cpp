@@ -619,7 +619,10 @@ int run_server(const std::vector<std::string>& argv) {
     o.port = rp->port;
     if (g.port_offset == 0) {
       std::pair<Bytes, Bytes> proxy_key;
+      bool club = true;
+      if (!setting(core.config().club_rewards(), &club, &code)) return code;
       if (!setting(core.config().proxy_key(), &proxy_key, &code)) return code;
+      o.club = club;
       o.log_path = log;
       o.save_path = save;
       o.abilities = abilities;

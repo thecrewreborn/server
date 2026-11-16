@@ -470,6 +470,7 @@ Result<std::string> Config::crew_credits() const {
 }
 
 Result<bool> Config::crew_credits_refill() const { return switch_on("player", "crew_credits_refill", "on"); }
+Result<bool> Config::club_rewards() const { return switch_on("player", "club_rewards", "on"); }
 
 Result<std::string> Config::dlc() const {
   Result<std::string> r = get("player", "dlc", "off");

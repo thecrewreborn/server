@@ -693,6 +693,7 @@ HandleResult delete_player(Ctx& ctx, const Bytes&) {
   fresh.max_bucks = p.max_bucks;
   fresh.unlocks = p.unlocks;
   fresh.dlc = p.dlc;
+  fresh.dlc_on = p.dlc_on;
   fresh.free_roam = p.free_roam;
   p = std::move(fresh);
   Raised r;

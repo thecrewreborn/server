@@ -91,6 +91,7 @@ class Config {
   Result<std::string> crew_credits() const;
   Result<bool> crew_credits_refill() const;
   Result<std::string> dlc() const;
+  Result<bool> club_rewards() const;
   Result<std::string> unlocks() const;
   Result<bool> bots() const;
   Result<std::string> multiplayer() const;

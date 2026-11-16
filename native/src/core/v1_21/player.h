@@ -34,8 +34,14 @@ extern const uint64_t ALL_ABILITIES[2];
 
 using FieldBytes = std::map<int, Bytes>;
 
+FieldBytes merge_fields(const FieldBytes& a, const FieldBytes& b);
+FieldBytes owned_fields(const std::string& dlc, bool club);
 FieldBytes dlc_fields(const std::string& owned);
+std::vector<uint64_t> owned_ids(const FieldBytes& fields);
 FieldBytes unlock_fields(const std::string& names);
+
+struct Player;
+bool complete_club_action(obj::Py& py, Player& p, int64_t action);
 
 bool set_bit(obj::Py& py, V& words, uint64_t n);
 
@@ -55,6 +61,7 @@ struct Player {
   V abilities = V::array();
   FieldBytes unlocks;
   FieldBytes dlc = dlc_fields("all");
+  bool dlc_on = true;
   V progress = V::array();
   V bucks = obj::I(0);
   int64_t level = 1;
@@ -81,6 +88,8 @@ struct Player {
   V faction = V::object();
   V ic_seen = V::array();
   V gifts_paid = V::array();
+  V club_cc_paid = obj::B(false);
+  V club_actions = V::array();
   V save_ids = obj::list_of_u64(std::vector<uint64_t>(6, NO_ID));
   V update_charge = obj::I(0);
   V chase_racer_car = obj::U(NO_ID);

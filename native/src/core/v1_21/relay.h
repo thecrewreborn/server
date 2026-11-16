@@ -75,6 +75,8 @@ struct RelayOptions {
   std::string abilities = "none";
   std::string unlocks = "none";
   std::string dlc = "all";
+  bool club = true;
+  bool club_saves = true;
   Bytes proxy_key;
   Bytes proxy_iv;
 };
@@ -122,6 +124,7 @@ class Relay {
   std::vector<std::pair<Addr, const Session*>> sessions() const;
   int64_t group_size(const Ctx& ctx) const;
   virtual void pay_instant_challenges();
+  virtual void store_club_actions();
   const std::string& save_path() const { return o_.save_path; }
 
  protected:

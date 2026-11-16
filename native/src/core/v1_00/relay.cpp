@@ -73,6 +73,8 @@ const std::vector<Bytes>* cached_reply(const OrderedMap<std::vector<Bytes>>& rep
 
 v1_21::RelayOptions with_dlc_none(v1_21::RelayOptions o) {
   o.dlc = "none";
+  o.club = false;
+  o.club_saves = false;
   return o;
 }
 

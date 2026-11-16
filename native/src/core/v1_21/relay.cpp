@@ -193,6 +193,7 @@ Relay::Relay(Core& core, RelayOptions options, RelayHost* host)
       return;
     }
     store_.reset(new session::SessionStore(files, files.join(files.dirname(abs), session::STORE_NAME)));
+    if (o_.club_saves) core.v1_21_state().club_saves = files.join(files.dirname(abs), "players");
   }
   say_window_ = clock();
   log_window_ = clock();
@@ -514,7 +515,8 @@ bool Relay::new_ctx(const std::string& name, const std::string& path, std::share
     }
   }
   ctx->player.unlocks = unlock_fields(o_.unlocks);
-  ctx->player.dlc = dlc_fields(o_.dlc);
+  ctx->player.dlc = owned_fields(o_.dlc, o_.club);
+  ctx->player.dlc_on = py::strip(o_.dlc) != "none";
   if (!start_crew_credits(core_, ctx->player, fresh, raised)) return false;
   *out = std::move(ctx);
   return true;
@@ -793,6 +795,35 @@ void Relay::pay_instant_challenges() {
   }
 }
 
+void Relay::store_club_actions() {
+  std::vector<std::pair<std::string, int64_t>>& pending = core_.v1_21_state().pending_actions;
+  if (pending.empty()) return;
+  std::map<std::string, std::shared_ptr<Ctx>> players;
+  for (const auto& e : sessions_) {
+    const Session* s = e.second.sess.get();
+    if (!s || !s->name || s->odd_name || s->name->empty() || !s->ctx) continue;
+    players.emplace(account_key(*s->name), s->ctx);
+  }
+  std::vector<std::pair<std::string, int64_t>> mine, rest;
+  for (auto& e : pending) (players.count(account_key(e.first)) ? mine : rest).push_back(std::move(e));
+  pending = std::move(rest);
+  for (const auto& e : mine) {
+    std::shared_ptr<Ctx> ctx = players[account_key(e.first)];
+    obj::Py py;
+    const bool added = complete_club_action(py, ctx->player, e.second);
+    std::optional<Raised> failed = py.failed() ? std::optional<Raised>(py.raised()) : std::nullopt;
+    if (!failed && added) failed = ctx->player.save();
+    if (failed) {
+      json::Value entry = json::Value::object();
+      entry.set("kind", str("club_action"));
+      entry.set("player", str(e.first));
+      entry.set("action", json::Value::integer(e.second));
+      entry.set("error", str(failed->line()));
+      log(std::move(entry));
+    }
+  }
+}
+
 int64_t Relay::group_size(const Ctx& ctx) const {
   const uint64_t g = ctx.crew_group;
   if (!g || g >> 63) return 1;
@@ -850,6 +881,7 @@ DatagramResult Relay::handle_datagram(const Bytes& data, const Addr& addr) {
   double now = clock();
   expire(now);
   pay_instant_challenges();
+  store_club_actions();
   bool handshake = data.size() == 6 && header[4] == 0 && (header[5] == 0 || header[5] == 1);
   if (handshake && !handshakes_.allow(addr.ip, now)) return r;
   if (guests_.contains(addr.key())) guest_active(addr);

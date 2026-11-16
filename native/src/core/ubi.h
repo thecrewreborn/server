@@ -4,6 +4,7 @@
 #include <map>
 #include <memory>
 #include <optional>
+#include <set>
 #include <string>
 #include <vector>
 
@@ -112,6 +113,11 @@ class Ubi {
   void instant_events(const std::string& profile, const json::Value& body, const std::string& auth, Raised* raised);
   json::Value version_reply();
   bool link_home(Raised* raised);
+  std::optional<std::string> club_owner(const std::string& profile, const std::string& auth, Raised* raised);
+  std::optional<json::Value> club_rewards(Raised* raised);
+  json::Value club_actions(const std::string& name);
+  json::Value complete_actions(const std::string& name, const json::Value& body);
+  std::set<int64_t> completed_actions(const std::string& name);
 
   Core& core_;
   std::unique_ptr<AccountStore> accounts_;

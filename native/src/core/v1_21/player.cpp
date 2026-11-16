@@ -4,6 +4,7 @@
 #include <cmath>
 
 #include "core/v1_21/gamedata.h"
+#include "core/wire.h"
 
 namespace tcr {
 namespace v1_21 {
@@ -95,10 +96,74 @@ std::optional<Raised> clamp_values(Player& p, const V* cc, const V* xp, const V*
 
 int64_t fit(int64_t x, int64_t hi) { return std::min(std::max(x, int64_t(0)), hi); }
 
-FieldBytes dlc_fields(const std::string& owned) {
-  if (py::strip(owned) == "none") return {};
+namespace {
+
+std::pair<uint32_t, Bytes> array_items(const Bytes& field) {
+  if (field.size() < 20) return {0, Bytes()};
+  uint32_t n = (uint32_t(field[16]) << 24) | (uint32_t(field[17]) << 16) | (uint32_t(field[18]) << 8) | field[19];
+  return {n, Bytes(field.begin() + 20, field.end())};
+}
+
+uint64_t be64(const Bytes& b, size_t at) {
+  uint64_t v = 0;
+  for (size_t i = 0; i < 8; i++) v = (v << 8) | (at + i < b.size() ? b[at + i] : 0);
+  return v;
+}
+
+Bytes array_field(uint32_t count, const Bytes& items) {
+  Bytes payload;
+  wire::put_u32(payload, count);
+  payload.insert(payload.end(), items.begin(), items.end());
+  return wire::blob(wire::frame(wire::T_ARRAY, payload));
+}
+
+}
+
+FieldBytes merge_fields(const FieldBytes& a, const FieldBytes& b) {
+  FieldBytes out = a;
+  for (const auto& f : b) {
+    auto it = out.find(f.first);
+    if (it == out.end()) {
+      out[f.first] = f.second;
+      continue;
+    }
+    std::pair<uint32_t, Bytes> x = array_items(it->second), y = array_items(f.second);
+    if (f.first == 73) {
+      Bytes words;
+      for (uint32_t i = 0; i < std::max(x.first, y.first); i++) {
+        wire::put_u64(words, (i < x.first ? be64(x.second, 8 * i) : 0) | (i < y.first ? be64(y.second, 8 * i) : 0));
+      }
+      it->second = array_field(std::max(x.first, y.first), words);
+    } else {
+      Bytes items = x.second;
+      items.insert(items.end(), y.second.begin(), y.second.end());
+      it->second = array_field(x.first + y.first, items);
+    }
+  }
+  return out;
+}
+
+FieldBytes owned_fields(const std::string& dlc, bool club) {
   FieldBytes out;
-  for (const auto& f : gamedata::dlc_fields()) out[f.first] = f.second;
+  if (py::strip(dlc) != "none") {
+    for (const auto& f : gamedata::dlc_fields()) out[f.first] = f.second;
+  }
+  if (club) {
+    FieldBytes c;
+    for (const auto& f : gamedata::club_fields()) c[f.first] = f.second;
+    out = merge_fields(out, c);
+  }
+  return out;
+}
+
+FieldBytes dlc_fields(const std::string& owned) { return owned_fields(owned, py::strip(owned) != "none"); }
+
+std::vector<uint64_t> owned_ids(const FieldBytes& fields) {
+  std::vector<uint64_t> out;
+  auto it = fields.find(37);
+  if (it == fields.end()) return out;
+  std::pair<uint32_t, Bytes> x = array_items(it->second);
+  for (uint32_t i = 0; i < x.first && 8 * (i + 1) <= x.second.size(); i++) out.push_back(be64(x.second, 8 * i));
   return out;
 }
 
@@ -248,6 +313,8 @@ std::optional<Player> Player::load(Files& files, const std::string& path, std::o
   if (const V* f = data.get("faction")) p.faction = *f;
   if (const V* f = data.get("ic_seen")) p.ic_seen = *f;
   if (const V* f = data.get("gifts_paid")) p.gifts_paid = *f;
+  if (const V* f = data.get("club_cc_paid")) p.club_cc_paid = *f;
+  if (const V* f = data.get("club_actions")) p.club_actions = *f;
   if (const V* blob = data.get("save_blob")) {
     std::optional<Bytes> b = py.fromhex(*blob);
     if (!b) return failed();
@@ -369,6 +436,8 @@ std::string Player::save_text() const {
   if (obj::truthy(faction)) d.set("faction", faction);
   if (obj::truthy(ic_seen)) d.set("ic_seen", ic_seen);
   if (obj::truthy(gifts_paid)) d.set("gifts_paid", gifts_paid);
+  if (obj::truthy(club_cc_paid)) d.set("club_cc_paid", club_cc_paid);
+  if (obj::truthy(club_actions)) d.set("club_actions", club_actions);
   d.set("save_blob", V::string(py::hex(save_blob)));
   return json::dumps(d);
 }
@@ -382,6 +451,15 @@ std::optional<Raised> Player::save() {
     return raise(err.code == 2 ? "FileNotFoundError" : "OSError", err.text());
   }
   return std::nullopt;
+}
+
+bool complete_club_action(Py& py, Player& p, int64_t action) {
+  V done = p.club_actions.is_array() ? p.club_actions : V::array();
+  const bool had = py.contains(done, I(action));
+  if (py.failed() || had) return false;
+  done.push(I(action));
+  p.club_actions = done;
+  return true;
 }
 
 bool Player::prologue_done(Py& py) const { return py.contains(missions_done, U(PROLOGUE_DONE)); }

@@ -144,20 +144,55 @@ const ReplyTemplate* reply_template(uint32_t request) {
   return nullptr;
 }
 
+namespace {
+
+std::vector<std::pair<int, Bytes>> fields_of(const char* name) {
+  std::vector<std::pair<int, Bytes>> out;
+  const json::Value* t = table(name);
+  const json::Value* fields = t ? t->get("fields") : nullptr;
+  if (!fields || !fields->is_object()) return out;
+  for (const json::Member& m : fields->members()) {
+    std::optional<Bytes> b = py::fromhex(str_of(&m.value));
+    std::optional<int64_t> k = py::int_text_to_i64(py::parse_int(m.key).value_or("0"));
+    out.emplace_back(static_cast<int>(k.value_or(0)), b.value_or(Bytes()));
+  }
+  return out;
+}
+
+}
+
 const std::vector<std::pair<int, Bytes>>& dlc_fields() {
-  static const std::vector<std::pair<int, Bytes>> list = [] {
-    std::vector<std::pair<int, Bytes>> out;
-    const json::Value* t = table("dlc.json");
-    const json::Value* fields = t ? t->get("fields") : nullptr;
-    if (!fields || !fields->is_object()) return out;
-    for (const json::Member& m : fields->members()) {
-      std::optional<Bytes> b = py::fromhex(str_of(&m.value));
-      std::optional<int64_t> k = py::int_text_to_i64(py::parse_int(m.key).value_or("0"));
-      out.emplace_back(static_cast<int>(k.value_or(0)), b.value_or(Bytes()));
-    }
-    return out;
-  }();
+  static const std::vector<std::pair<int, Bytes>> list = fields_of("dlc.json");
   return list;
+}
+
+const std::vector<std::pair<int, Bytes>>& club_fields() {
+  static const std::vector<std::pair<int, Bytes>> list = fields_of("club.json");
+  return list;
+}
+
+const Club& club() {
+  static const Club data = [] {
+    Club c;
+    const json::Value* t = table("club.json");
+    if (!t) return c;
+    if (const json::Value* rewards = t->get("rewards")) {
+      for (const json::Value& r : rewards->items()) {
+        c.rewards.push_back({str_of(r.get("id")), str_of(r.get("name")), str_of(r.get("description"))});
+      }
+    }
+    if (const json::Value* actions = t->get("actions")) {
+      for (const json::Value& a : actions->items()) {
+        c.actions.push_back({int_of(a.get("id")), str_of(a.get("name")), str_of(a.get("description"))});
+      }
+    }
+    if (const json::Value* cc = t->get("crew_credits")) {
+      c.cc_pack = hex_of(cc->get("pack"));
+      c.cc_amount = int_of(cc->get("amount"));
+    }
+    return c;
+  }();
+  return data;
 }
 
 const Summit* summit() {

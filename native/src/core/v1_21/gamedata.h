@@ -32,6 +32,22 @@ const std::vector<ReplyTemplate>& reply_templates();
 const ReplyTemplate* reply_template(uint32_t request);
 
 const std::vector<std::pair<int, Bytes>>& dlc_fields();
+const std::vector<std::pair<int, Bytes>>& club_fields();
+
+struct ClubReward {
+  std::string id, name, description;
+};
+struct ClubAction {
+  int64_t id = 0;
+  std::string name, description;
+};
+struct Club {
+  std::vector<ClubReward> rewards;
+  std::vector<ClubAction> actions;
+  uint64_t cc_pack = 0;
+  int64_t cc_amount = 0;
+};
+const Club& club();
 
 struct SummitRecord {
   std::array<int64_t, 4> start{};

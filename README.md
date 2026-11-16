@@ -224,6 +224,20 @@ are gone. It unlocks the DLC for everyone who plays on it, so switch it on only 
 the PC game take the setting from the server; nothing changes on the console or the PC. With a server in another
 network (`server.txt` on the PS4), the console asks that server on UDP port 4001. The base game 1.00 has no DLC.
 
+## Ubisoft Club rewards
+
+Every player owns the Ubisoft Club rewards of the original game: the Electrified paint, the Old School rims, an
+interior, the Rust Bucket and beta stickers, the Dodge Viper SRT-10 and the Alfa Romeo 8C Competizione, and 50,000
+Crew Credits. The Club was free in the original game, so these rewards do not depend on the DLC setting. The Crew
+Credits arrive once per save at the next login, unless `crew_credits_refill` is on. To switch the rewards off, set
+under `[player]` in `config.ini`:
+
+```ini
+club_rewards = off
+```
+
+Restart the server after a change. Game version 1.21 and PC only.
+
 ## Multiplayer
 
 `multiplayer` under `[world]` in `config.ini`:

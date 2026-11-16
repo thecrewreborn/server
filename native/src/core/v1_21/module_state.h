@@ -34,6 +34,8 @@ struct ModuleState {
   std::optional<std::string> factions_path;
   std::optional<std::string> scores_path;
   std::vector<InstantEnd> pending_instant;
+  std::vector<std::pair<std::string, int64_t>> pending_actions;
+  std::optional<std::string> club_saves;
 };
 
 }

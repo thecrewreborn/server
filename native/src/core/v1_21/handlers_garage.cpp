@@ -69,7 +69,7 @@ bool garage_full(const cars::Garage& garage, const std::vector<Bytes>* configs) 
 }
 
 bool dlc_only(const cars::Catalog& c, const cars::Variant& v, const Player& p) {
-  return p.dlc.empty() && c.special(v.spec);
+  return !p.dlc_on && c.special(v.spec);
 }
 
 V car_price(Py& py, int64_t price, const V& perk_level) {

@@ -1,6 +1,8 @@
+#include <algorithm>
 #include <map>
 
 #include "core/v1_21/cars.h"
+#include "core/v1_21/gamedata.h"
 #include "core/v1_21/handlers.h"
 #include "core/v1_21/mission.h"
 #include "core/v1_21/pack.h"
@@ -173,6 +175,16 @@ std::optional<Bytes> bytes_of(obj::Py& py, const V& x) {
   return out;
 }
 
+bool pay_club_cc(Player& p) {
+  const gamedata::Club& c = gamedata::club();
+  if (!c.cc_amount || p.cc_fixed || obj::truthy(p.club_cc_paid)) return false;
+  std::vector<uint64_t> ids = owned_ids(p.dlc);
+  if (std::find(ids.begin(), ids.end(), c.cc_pack) == ids.end()) return false;
+  p.crew_credits += c.cc_amount;
+  p.club_cc_paid = obj::B(true);
+  return true;
+}
+
 HandlerResult get_player(Ctx& ctx, const Bytes&, const Registered&) {
   std::map<int64_t, Val> values;
   for (int k : {0, 6, 7, 38, 55, 77}) values[k] = Val::u(1);
@@ -195,7 +207,8 @@ HandlerResult get_player(Ctx& ctx, const Bytes&, const Registered&) {
     Raised r;
     std::optional<bool> gift = pay_gifts(*ctx.core, p, &r);
     if (!gift) return HandlerResult::fail(r);
-    if (*gift || repaired) {
+    const bool club = pay_club_cc(p);
+    if (*gift || club || repaired) {
       if (std::optional<Raised> f = p.save()) return HandlerResult::fail(*f);
     }
   }

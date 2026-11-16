@@ -7,7 +7,10 @@
 #include "core/core.h"
 #include "core/logtext.h"
 #include "core/util.h"
+#include "core/v1_21/gamedata.h"
+#include "core/v1_21/handlers.h"
 #include "core/v1_21/module_state.h"
+#include "core/v1_21/player.h"
 #include "core/version.h"
 #include "core/wire.h"
 #include "mbedtls/md.h"
@@ -945,6 +948,127 @@ void Ubi::instant_events(const std::string& profile, const json::Value& body, co
   if (pending.size() > kPendingMax) pending.erase(pending.begin(), pending.end() - kPendingMax);
 }
 
+std::optional<std::string> Ubi::club_owner(const std::string& profile, const std::string& auth, Raised* raised) {
+  std::optional<AuthTicket> t = auth_ticket(auth);
+  std::optional<std::pair<std::string, std::string>> owner;
+  if (t) {
+    owner = ticket_owner(std::string(strip_ws_latin1(t->ticket)), false, raised);
+    if (!raised->type.empty()) return std::nullopt;
+  }
+  const std::pair<std::string, std::string>* known = profiles_.get(profile);
+  if (!owner || !known || account_key(owner->first) != account_key(known->first)) return std::nullopt;
+  return known->first;
+}
+
+std::optional<json::Value> Ubi::club_rewards(Raised* raised) {
+  config::Result<bool> on = core_.config().club_rewards();
+  if (!on.ok()) {
+    *raised = config_raised(on.error);
+    return std::nullopt;
+  }
+  const bool owned = *on.value;
+  Value list = Value::array();
+  for (const v1_21::gamedata::ClubReward& r : v1_21::gamedata::club().rewards) {
+    list.push(obj({{"id", str(r.id)},
+                   {"name", str(r.name)},
+                   {"description", str(r.description)},
+                   {"value", num(0)},
+                   {"isOwned", Value::boolean(owned)},
+                   {"quantityPurchased", num(owned ? 1 : 0)},
+                   {"quantityLimit", num(1)}}));
+  }
+  return obj({{"rewards", list}});
+}
+
+namespace {
+
+Value club_action(const v1_21::gamedata::ClubAction& a, bool done) {
+  return obj({{"id", str(std::to_string(a.id))},
+              {"name", str(a.name)},
+              {"description", str(a.description)},
+              {"value", num(0)},
+              {"isCompleted", Value::boolean(done)}});
+}
+
+}
+
+std::set<int64_t> Ubi::completed_actions(const std::string& name) {
+  std::set<int64_t> done;
+  v1_21::ModuleState& st = core_.v1_21_state();
+  if (st.club_saves && !st.club_saves->empty()) {
+    Files& files = *core_.files();
+    Raised raised;
+    std::optional<v1_21::Player> p = v1_21::Player::load(
+        files, files.join(*st.club_saves, save_name(name) + ".json"), v1_21::reward_max_bucks(core_), &raised);
+    if (p && p->club_actions.is_array()) {
+      for (const Value& a : p->club_actions.items()) {
+        if (!a.is_int()) continue;
+        if (std::optional<int64_t> i = a.as_i64()) done.insert(*i);
+      }
+    }
+  }
+  for (const auto& e : st.pending_actions) {
+    if (account_key(e.first) == account_key(name)) done.insert(e.second);
+  }
+  return done;
+}
+
+json::Value Ubi::club_actions(const std::string& name) {
+  std::set<int64_t> done = completed_actions(name);
+  Value list = Value::array();
+  for (const v1_21::gamedata::ClubAction& a : v1_21::gamedata::club().actions) list.push(club_action(a, done.count(a.id)));
+  return obj({{"actions", list}});
+}
+
+json::Value Ubi::complete_actions(const std::string& name, const json::Value& body) {
+  const std::vector<v1_21::gamedata::ClubAction>& actions = v1_21::gamedata::club().actions;
+  auto find = [&](int64_t id) -> const v1_21::gamedata::ClubAction* {
+    for (const auto& a : actions) {
+      if (a.id == id) return &a;
+    }
+    return nullptr;
+  };
+  const Value* ids = body.is_object() ? body.get("ids") : nullptr;
+  std::vector<int64_t> got;
+  if (ids && ids->is_array()) {
+    for (const Value& i : ids->items()) {
+      std::optional<int64_t> a;
+      if (i.is_string()) {
+        for (const auto& x : actions) {
+          if (std::to_string(x.id) == i.as_string()) a = x.id;
+        }
+      } else if (i.is_int()) {
+        std::optional<int64_t> n = i.as_i64();
+        if (n && find(*n)) a = *n;
+      }
+      if (a && std::find(got.begin(), got.end(), *a) == got.end()) got.push_back(*a);
+    }
+  }
+  std::vector<std::pair<std::string, int64_t>>& pending = core_.v1_21_state().pending_actions;
+  for (int64_t a : got) {
+    bool queued = false;
+    for (const auto& e : pending) queued = queued || (e.second == a && account_key(e.first) == account_key(name));
+    if (!queued) pending.emplace_back(name, a);
+  }
+  if (pending.size() > kPendingMax) pending.erase(pending.begin(), pending.end() - kPendingMax);
+  Value list = Value::array();
+  for (int64_t a : got) list.push(club_action(*find(a), true));
+  return obj({{"actions", list}});
+}
+
+static bool match_club(const std::string& path, std::string* profile, std::string* what) {
+  const std::string head = "/v1/profiles/";
+  if (path.size() <= head.size() || path.compare(0, head.size(), head) != 0) return false;
+  std::string rest = path.substr(head.size());
+  size_t slash = rest.find('/');
+  if (slash == std::string::npos || slash == 0) return false;
+  std::string tail = rest.substr(slash + 1);
+  if (tail != "rewards" && tail != "actions") return false;
+  *profile = rest.substr(0, slash);
+  *what = tail;
+  return true;
+}
+
 Reply Ubi::route(const std::string& method, const std::string& full_path, const json::Value& body,
                  const std::string& host, const std::string& client_ip, int client_port, const std::string& auth,
                  const std::string& raw) {
@@ -1119,6 +1243,22 @@ Reply Ubi::route(const std::string& method, const std::string& full_path, const 
   if (ends_with(path, "/traversal")) {
     r.json = obj({{"status", str("ok")}, {"traversalPort", num(4000)}, {"relayPort", num(4000)}});
     return r;
+  }
+  std::string club_what;
+  if (match_club(path, &name, &club_what) && (method == "GET" || (method == "PUT" && club_what == "actions"))) {
+    Raised err;
+    std::optional<std::string> who = club_owner(name, auth, &err);
+    if (!err.type.empty()) return raising(err);
+    if (who) {
+      if (club_what == "rewards") {
+        std::optional<Value> rewards = club_rewards(&err);
+        if (!rewards) return raising(err);
+        r.json = *rewards;
+      } else {
+        r.json = method == "PUT" ? complete_actions(*who, body) : club_actions(*who);
+      }
+      return r;
+    }
   }
   if (path.find("entities") != std::string::npos || path.find("rewards") != std::string::npos ||
       path.find("actions") != std::string::npos) {
