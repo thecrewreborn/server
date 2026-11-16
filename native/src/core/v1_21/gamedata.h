@@ -37,10 +37,25 @@ struct SummitRecord {
   std::array<int64_t, 4> start{};
   std::array<int64_t, 4> end{};
   bool monthly = false;
+  int64_t type = 0;
   std::vector<std::string> events;
+  uint64_t car = 0xFFFFFFFFFFFFFFFFull;
+};
+struct SummitMedals {
+  bool present = false;
+  int64_t bronze = 0, silver = 0, gold = 0, platinum = 0, platinum_level = 0;
+};
+struct SummitWheel {
+  double factor = 1.0;
+  int64_t days = 0;
+  int64_t crew_credits = 0;
+  std::vector<std::vector<int64_t>> chances;
 };
 struct Summit {
   std::vector<SummitRecord> records;
+  SummitMedals medals;
+  std::vector<SummitWheel> wheel;
+  std::vector<int64_t> esk_by_level;
 };
 const Summit* summit();
 

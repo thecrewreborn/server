@@ -19,6 +19,7 @@ constexpr size_t TABLE_MAX = 65536;
 class Relay final : public v1_21::Relay {
  public:
   Relay(Core& core, v1_21::RelayOptions options, v1_21::RelayHost* host = nullptr);
+  void pay_instant_challenges() override {}
 
  protected:
   std::string rpc_name(uint32_t id) const override;

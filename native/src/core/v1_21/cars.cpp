@@ -344,6 +344,47 @@ std::optional<Garage> entries(const Player& p, Raised* raised) {
   return out;
 }
 
+std::optional<std::set<uint64_t>> owned_variants(const Player& p, Raised* raised) {
+  std::optional<Garage> garage = entries(p, raised);
+  if (!garage) return std::nullopt;
+  std::set<uint64_t> out;
+  for (const auto& e : *garage) {
+    for (const Bytes& cfg : e.second) {
+      std::optional<uint64_t> v = variant_of(cfg, raised);
+      if (!v) return std::nullopt;
+      out.insert(*v);
+    }
+  }
+  return out;
+}
+
+std::optional<bool> grant(const Core& core, Player& p, uint64_t variant, Raised* raised) {
+  const Catalog* c = catalog(core);
+  const Variant* var = c ? c->variant(variant) : nullptr;
+  if (!var) return false;
+  std::optional<Garage> garage = entries(p, raised);
+  if (!garage) return std::nullopt;
+  for (const auto& e : *garage) {
+    for (const Bytes& cfg : e.second) {
+      std::optional<uint64_t> v = variant_of(cfg, raised);
+      if (!v) return std::nullopt;
+      if (*v == variant) return false;
+    }
+  }
+  const V model = obj::U(var->model);
+  std::vector<int64_t> s = slots(*c, *var, NONE, NONE, NONE);
+  std::vector<Bytes>* configs = configs_of(*garage, model);
+  if (!configs) {
+    garage->emplace_back(model, std::vector<Bytes>());
+    configs = &garage->back().second;
+  }
+  std::optional<Bytes> cfg = config(*c, variant, s, STORED, raised);
+  if (!cfg) return std::nullopt;
+  configs->push_back(*cfg);
+  store(p, *garage);
+  return true;
+}
+
 std::vector<Bytes>* configs_of(Garage& garage, const V& model) {
   for (auto& e : garage) {
     if (obj::eq(e.first, model)) return &e.second;

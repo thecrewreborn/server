@@ -681,22 +681,24 @@ bool owned_dealer_car(Ctx& ctx, Player& p, const Bytes& body, std::optional<Byte
   return true;
 }
 
-std::optional<int64_t> reward_part(Ctx& ctx, Player& p, uint64_t mission, int64_t score, const Bytes& body,
-                                   Raised* r) {
-  const rewards::Tables* t = reward_tables(ctx);
+std::optional<int64_t> reward_part(Core& core, Player& p, uint64_t mission, int64_t score, const Bytes& body,
+                                   Raised* r, size_t car_at = 0x28) {
+  const rewards::Tables* t = rewards::tables(core);
   if (!t) return -1;
   auto it = t->missions.find(mission);
-  if (it == t->missions.end() || it->second.thresholds.size() < 4 || body.size() < 0x38) return -1;
+  if (it == t->missions.end() || it->second.thresholds.size() < 4 || body.size() < car_at + 0x10) return -1;
   const rewards::Mission& m = it->second;
   int64_t md = -1;
-  if (score >= m.thresholds[0]) {
+  if (score == NO_SCORE) {
+    md = 0;
+  } else if (score >= m.thresholds[0]) {
     std::optional<int64_t> got = rewards::medal(*t, m.thresholds, score, p.level, r);
     if (!got) return std::nullopt;
     md = *got;
   }
-  uint64_t model = u64(body, 0x28), spec = u64(body, 0x30);
+  uint64_t model = u64(body, car_at), spec = u64(body, car_at + 8);
   std::optional<int64_t> part;
-  if (!physparts::mission_part(p, mission, md, model, spec, ctx.core->module_random(), *ctx.core, &part, r)) {
+  if (!physparts::mission_part(p, mission, md, model, spec, core.module_random(), core, &part, r)) {
     return std::nullopt;
   }
   return part ? *part : -1;
@@ -710,9 +712,10 @@ HandlerResult mission_end(Ctx& ctx, const Bytes& body, const Registered&) {
   Player& p = ctx.player;
   std::optional<bool> dealer = pays_dealer(ctx, p, mission, &r);
   if (!dealer) return failed(r);
-  if (!finish_mission(*ctx.core, p, mission, score, ctx.now_us(), true, &r)) return failed(r);
-  std::optional<int64_t> part = reward_part(ctx, p, mission, score, body, &r);
-  if (!part) return failed(r);
+  std::optional<int64_t> part;
+  if (!finish_mission(*ctx.core, p, mission, score, ctx.now_us(), true, &r, ctx.group_size, &body, 0x28, &part)) {
+    return failed(r);
+  }
   std::optional<Bytes> car;
   if (*dealer) {
     if (!dealer_car(ctx, p, body, &car, &r)) return failed(r);
@@ -722,7 +725,7 @@ HandlerResult mission_end(Ctx& ctx, const Bytes& body, const Registered&) {
   if (std::optional<Raised> f = p.save()) return failed(*f);
   if (!car) car = no_car();
   Bytes granted = wire::empty_array();
-  if (*part >= 0 && physparts::ANNOUNCE_PART) {
+  if (part && physparts::ANNOUNCE_PART) {
     const physparts::Table* t = physparts::table();
     if (!t || static_cast<size_t>(*part) >= t->ids.size()) return failed(Raised{"IndexError", "list index out of range"});
     granted = wire::u64_array({t->ids[static_cast<size_t>(*part)]});
@@ -798,28 +801,108 @@ Bytes rating(uint64_t player_id) {
   return out;
 }
 
+std::optional<bool> pay_gifts(Core& core, Player& p, Raised* raised) {
+  const rewards::Tables* t = rewards::tables(core);
+  if (!t || p.cc_fixed) return false;
+  Py py;
+  bool got = false;
+  V paid = p.gifts_paid.is_array() ? p.gifts_paid : V::array();
+  if (!p.missions_done.is_array()) return false;
+  const std::vector<V> done = p.missions_done.items();
+  for (const V& mission : done) {
+    if (!mission.is_int()) continue;
+    std::optional<uint64_t> id = mission.as_u64();
+    if (!id) continue;
+    auto m = t->missions.find(*id);
+    if (m == t->missions.end() || !m->second.cc_gift) continue;
+    const bool had = py.contains(paid, mission);
+    if (py.failed()) {
+      *raised = py.raised();
+      return std::nullopt;
+    }
+    if (had) continue;
+    p.crew_credits += m->second.cc_gift;
+    paid.push(mission);
+    p.gifts_paid = paid;
+    got = true;
+  }
+  return got;
+}
+
 bool finish_mission(Core& core, Player& p, uint64_t mission, int64_t score, int64_t now_us, bool paid,
-                    Raised* raised) {
+                    Raised* raised, int64_t group, const Bytes* body, size_t car_at, std::optional<int64_t>* part) {
+  if (part) part->reset();
   Py py;
   p.complete_mission(py, mission);
   if (py.failed()) {
     *raised = py.raised();
     return false;
   }
-  const rewards::Tables* t = rewards::tables(core);
-  if (!t) return true;
-  if (paid) {
-    std::optional<std::pair<int64_t, int64_t>> reward = rewards::mission_reward(*t, mission, score, p.level, raised);
-    if (!reward) return false;
-    std::pair<V, V> allowed = rewards::allow(py, core, p, now_us, I(reward->first), I(reward->second));
-    rewards::apply(py, *t, p, allowed.first, allowed.second, core.module_random());
+  if (const rewards::Tables* t = rewards::tables(core)) {
+    if (!pay_gifts(core, p, raised)) return false;
+    if (paid) {
+      std::optional<std::pair<int64_t, int64_t>> reward =
+          rewards::mission_reward(*t, mission, score == NO_SCORE ? 0 : score, p.level, raised, group);
+      if (!reward) return false;
+      *reward = rewards::boosted(core, p, now_us, reward->first, reward->second);
+      std::pair<V, V> allowed = rewards::allow(py, core, p, now_us, I(reward->first), I(reward->second));
+      rewards::apply(py, *t, p, allowed.first, allowed.second, core.module_random());
+    }
+    std::vector<uint64_t> earned = rewards::abilities(py, *t, p.missions_done);
+    if (py.failed()) {
+      *raised = py.raised();
+      return false;
+    }
+    p.abilities =
+        truthy(p.free_roam) ? obj::list_of_u64({ALL_ABILITIES[0], ALL_ABILITIES[1]}) : obj::list_of_u64(earned);
   }
-  std::vector<uint64_t> earned = rewards::abilities(py, *t, p.missions_done);
+  if (body) {
+    std::optional<int64_t> got = reward_part(core, p, mission, score, *body, raised, car_at);
+    if (!got) return false;
+    if (part && *got >= 0) *part = *got;
+  }
+  return true;
+}
+
+bool pay_instant_challenge(Core& core, Player& p, const InstantEnd& e, int64_t now_us,
+                           std::optional<std::pair<int64_t, int64_t>>* paid, Raised* raised) {
+  Py py;
+  const V seen = p.ic_seen.is_array() ? p.ic_seen : V::array();
+  const V key = V::string(e.key);
+  const bool had = py.contains(seen, key);
   if (py.failed()) {
     *raised = py.raised();
     return false;
   }
-  p.abilities = truthy(p.free_roam) ? obj::list_of_u64({ALL_ABILITIES[0], ALL_ABILITIES[1]}) : obj::list_of_u64(earned);
+  if (had) {
+    *paid = std::nullopt;
+    return true;
+  }
+  const rewards::Tables* t = rewards::tables(core);
+  std::pair<int64_t, int64_t> reward(0, 0);
+  if (t) {
+    std::optional<std::pair<int64_t, int64_t>> got =
+        rewards::instant_challenge(*t, p.level, e.speed_trap, e.waypoints, e.distance, raised);
+    if (!got) return false;
+    reward = *got;
+  }
+  reward = rewards::boosted(core, p, now_us, reward.first, reward.second, std::nullopt);
+  std::pair<V, V> allowed = rewards::allow(py, core, p, now_us, I(reward.first), I(reward.second));
+  if (t) rewards::apply(py, *t, p, allowed.first, allowed.second, core.module_random());
+  if (py.failed()) {
+    *raised = py.raised();
+    return false;
+  }
+  V list = V::array();
+  std::vector<V> items(seen.items().begin(), seen.items().end());
+  items.push_back(key);
+  for (size_t k = items.size() > IC_SEEN ? items.size() - IC_SEEN : 0; k < items.size(); k++) list.push(items[k]);
+  p.ic_seen = std::move(list);
+  if (std::optional<Raised> f = p.save()) {
+    *raised = *f;
+    return false;
+  }
+  *paid = std::make_pair(obj::small_int(allowed.first).value_or(0), obj::small_int(allowed.second).value_or(0));
   return true;
 }
 
@@ -842,14 +925,6 @@ bool dealer_car_part(Ctx& ctx, Player& p, const Bytes& body, std::optional<Bytes
 
 bool owned_dealer_car_part(Ctx& ctx, Player& p, const Bytes& body, std::optional<Bytes>* car, Raised* raised) {
   return owned_dealer_car(ctx, p, body, car, raised);
-}
-
-bool mission_reward_part(Ctx& ctx, Player& p, uint64_t mission, int64_t score, const Bytes& body,
-                         std::optional<int64_t>* part, Raised* raised) {
-  std::optional<int64_t> got = reward_part(ctx, p, mission, score, body, raised);
-  if (!got) return false;
-  *part = *got >= 0 ? got : std::nullopt;
-  return true;
 }
 
 void register_mission(std::vector<Registered>& out) {

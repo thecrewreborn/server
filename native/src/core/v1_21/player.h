@@ -78,9 +78,15 @@ struct Player {
   V group = obj::I(0);
   V group_joined = obj::I(0);
   V daily_last = obj::I(0);
+  V faction = V::object();
+  V ic_seen = V::array();
+  V gifts_paid = V::array();
   V save_ids = obj::list_of_u64(std::vector<uint64_t>(6, NO_ID));
   V update_charge = obj::I(0);
-  V chase = obj::list_of_u64({NO_ID, 0xFF});
+  V chase_racer_car = obj::U(NO_ID);
+  V chase_racer_chunks = obj::I(0);
+  V chase_police_car = obj::U(NO_ID);
+  V chase_police_chunks = obj::I(0);
   V heat = obj::F(0.0);
   V collectibles = V::array();
   V map_state = V::array();
@@ -88,6 +94,7 @@ struct Player {
   Files* files = nullptr;
   std::optional<int64_t> max_bucks;
   std::vector<Earned> earned;
+  std::vector<std::pair<int64_t, int64_t>> rep_earned;
 
   static std::optional<Player> load(Files& files, const std::string& path, std::optional<int64_t> max_bucks,
                                     Raised* raised);
@@ -106,6 +113,15 @@ struct Player {
   void set_record_field(obj::Py& py, uint64_t a, uint64_t b, uint64_t index, int64_t value);
   const V* extra_field(int64_t k) const;
 };
+
+inline uint64_t chase_car(const V& v) {
+  std::optional<uint64_t> u = v.is_int() ? v.as_u64() : std::nullopt;
+  return u ? *u : NO_ID;
+}
+inline int64_t chase_chunks(const V& v) {
+  std::optional<int64_t> i = v.is_int() ? v.as_i64() : std::nullopt;
+  return i && *i >= 0 && *i <= 0xFF ? *i : 0;
+}
 
 int64_t fit(int64_t x, int64_t hi);
 

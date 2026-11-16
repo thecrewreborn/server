@@ -1,6 +1,8 @@
 #include "core/v1_21/relay.h"
 
 #include <algorithm>
+#include <map>
+#include <set>
 #include <cstdio>
 
 #include "core/core.h"
@@ -8,6 +10,7 @@
 #include "core/keys.h"
 #include "core/logtext.h"
 #include "core/ubi.h"
+#include "core/v1_21/mission.h"
 #include "core/v1_21/pack.h"
 #include "core/v1_21/peers.h"
 #include "core/v1_21/replies.h"
@@ -756,9 +759,57 @@ std::optional<std::vector<Bytes>> Relay::ack_for(const wire::Message& msg, size_
                                       static_cast<uint32_t>(received))};
 }
 
+void Relay::pay_instant_challenges() {
+  std::vector<InstantEnd>& pending = core_.v1_21_state().pending_instant;
+  if (pending.empty()) return;
+  std::map<std::string, std::shared_ptr<Ctx>> players;
+  for (const auto& e : sessions_) {
+    const Session* s = e.second.sess.get();
+    if (!s || !s->name || s->odd_name || s->name->empty() || !s->ctx) continue;
+    players.emplace(account_key(*s->name), s->ctx);
+  }
+  std::vector<InstantEnd> mine, rest;
+  for (InstantEnd& e : pending) (players.count(account_key(e.name)) ? mine : rest).push_back(std::move(e));
+  pending = std::move(rest);
+  for (const InstantEnd& e : mine) {
+    std::shared_ptr<Ctx> ctx = players[account_key(e.name)];
+    json::Value entry = json::Value::object();
+    entry.set("kind", str("instant_challenge"));
+    entry.set("player", str(e.name));
+    entry.set("earned_bucks", e.earned_bucks);
+    entry.set("earned_xp", e.earned_xp);
+    std::optional<std::pair<int64_t, int64_t>> paid;
+    Raised r;
+    if (!pay_instant_challenge(core_, ctx->player, e, ctx->now_us(), &paid, &r)) {
+      entry.set("error", str(r.line()));
+      log(std::move(entry));
+      continue;
+    }
+    if (paid) {
+      entry.set("xp", json::Value::integer(paid->first));
+      entry.set("bucks", json::Value::integer(paid->second));
+      log(std::move(entry));
+    }
+  }
+}
+
+int64_t Relay::group_size(const Ctx& ctx) const {
+  const uint64_t g = ctx.crew_group;
+  if (!g || g >> 63) return 1;
+  std::set<const Ctx*> players{&ctx};
+  for (const auto& e : sessions_) {
+    const Session* s = e.second.sess.get();
+    if (!s || !s->connected || !s->ctx || s->ctx->crew_group != g) continue;
+    const bool named = s->odd_name ? obj::truthy(*s->odd_name) : s->name && !s->name->empty();
+    if (named) players.insert(s->ctx.get());
+  }
+  return static_cast<int64_t>(players.size());
+}
+
 bool Relay::reply_chunks(const wire::Message& msg, uint32_t rpc, const Bytes& request, Ctx& ctx,
                          std::optional<std::vector<Bytes>>* chunks, DatagramResult* result) {
   Bytes body(request.begin() + 12, request.end());
+  ctx.group_size = group_size(ctx);
   HandleResult h = dispatch(ctx, rpc, body);
   switch (h.kind) {
     case HandleResult::kRaised: {
@@ -798,6 +849,7 @@ DatagramResult Relay::handle_datagram(const Bytes& data, const Addr& addr) {
   muted_ = !(known && known->connected);
   double now = clock();
   expire(now);
+  pay_instant_challenges();
   bool handshake = data.size() == 6 && header[4] == 0 && (header[5] == 0 || header[5] == 1);
   if (handshake && !handshakes_.allow(addr.ip, now)) return r;
   if (guests_.contains(addr.key())) guest_active(addr);

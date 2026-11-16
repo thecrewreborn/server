@@ -8,6 +8,7 @@
 #include "core/v1_21/mission.h"
 #include "core/v1_21/pack.h"
 #include "core/v1_21/rewards.h"
+#include "core/v1_21/summit.h"
 #include "core/wire.h"
 
 namespace tcr {
@@ -17,9 +18,10 @@ namespace replies {
 namespace {
 
 const uint32_t kPorted[] = {0xF70D87D3, 0x0BE43657, 0xB7E9BB59, 0xB9BA9057, 0x115C657D, 0xF282A24C, 0xBF9B8FBD,
-                            0xE6D82939, 0x7C044567, 0x7932CE3E, 0xA7476B7D, 0x594BCC53, 0x82B2A771, 0xBBF8C44B,
+                            0xE6D82939, 0x7C044567, 0x7932CE3E, 0xA7476B7D, 0x594BCC53, 0x82B2A771, 0xAD26AF59, 0xBBF8C44B,
                             0xF93D21DA, 0x740437D6, 0x2FC9E8A6, 0x88648CE9, 0x8B70F3EB, 0x96F6E078};
-const uint32_t kReplace[] = {0x9FD2D3D4, 0xAE5D6365};
+const uint32_t kReplace[] = {0x9FD2D3D4, 0xAE5D6365, 0xA4E5124D};
+constexpr size_t kSummitEskAt = 53, kSummitBoostAt = 53 + 7 + 39;
 
 void put_le(Bytes& out, size_t offset, uint64_t v, size_t n) {
   for (size_t i = 0; i < n && offset + i < out.size(); i++) out[offset + i] = static_cast<uint8_t>(v >> (8 * i));
@@ -51,6 +53,7 @@ HandlerResult activity_end(Ctx& ctx, const Bytes& request, const Registered& sel
   if (const rewards::Tables* tables = rewards::tables(*ctx.core)) {
     std::optional<std::pair<int64_t, int64_t>> reward = rewards::activity_reward(*tables, activity, value, p.level, &r);
     if (!reward) return HandlerResult::fail(r);
+    *reward = rewards::boosted(*ctx.core, p, ctx.now_us(), reward->first, reward->second, std::nullopt);
     std::pair<V, V> allowed =
         rewards::allow(py, *ctx.core, p, ctx.now_us(), obj::I(reward->first), obj::I(reward->second));
     rewards::apply(py, *tables, p, allowed.first, allowed.second, ctx.core->module_random());
@@ -63,34 +66,48 @@ HandlerResult activity_end(Ctx& ctx, const Bytes& request, const Registered& sel
   return reply_of(t->type, pk);
 }
 
-constexpr double BUILDER_FACTOR = 100.0;
-
 HandlerResult mission_result(Ctx& ctx, const Bytes& request, const Registered& self) {
   const auto* t = static_cast<const gamedata::ReplyTemplate*>(self.data);
   Raised r;
   uint64_t mission = request.size() >= 0x24 ? wire::get_u64(request.data() + 0x1C) : 0;
+  int64_t score = request.size() >= 0x28 ? wire::get_u32(request.data() + 0x24) : 0;
   Player& p = ctx.player;
-  obj::Py py;
-  if (const rewards::Tables* tables = rewards::tables(*ctx.core)) {
-    std::optional<double> b = tables->f(rewards::BUCKS_BASE + p.level - 1, &r);
-    if (!b) return HandlerResult::fail(r);
-    int64_t bucks = static_cast<int64_t>(rewards::f32(*b * BUILDER_FACTOR));
-    std::optional<double> x = tables->f(rewards::XP_BASE + p.level - 1, &r);
-    if (!x) return HandlerResult::fail(r);
-    int64_t xp = static_cast<int64_t>(rewards::f32(*x * BUILDER_FACTOR));
-    std::pair<V, V> allowed = rewards::allow(py, *ctx.core, p, ctx.now_us(), obj::I(xp), obj::I(bucks));
-    rewards::add_bucks(py, *tables, p, allowed.second);
-    rewards::add_xp(py, *tables, p, allowed.first, ctx.core->module_random());
-    if (py.failed()) return HandlerResult::fail(py.raised());
-  }
   if (mission) {
-    if (!finish_mission(*ctx.core, p, mission, 0, ctx.now_us(), false, &r)) return HandlerResult::fail(r);
+    if (!finish_mission(*ctx.core, p, mission, score, ctx.now_us(), true, &r, ctx.group_size, &request,
+                        PRACTICE_CAR_AT)) {
+      return HandlerResult::fail(r);
+    }
   }
   if (std::optional<Raised> f = p.save()) return HandlerResult::fail(*f);
   pack::Packer pk;
   pk.H(0).I(p.level).I(p.xp).I(p.bucks).H(p.perk_points);
   pk.raw(wire::u64_array({0xFFFFFFFFFFFFFFFFull})).I(0).Q(uint64_t(0));
   return reply_of(t->type, pk);
+}
+
+HandlerResult summit_object(Ctx& ctx, const Bytes&, const Registered& self) {
+  const auto* t = static_cast<const gamedata::ReplyTemplate*>(self.data);
+  Bytes out = t->body;
+  obj::Py py;
+  Raised r;
+  Bytes esk;
+  if (!summit::esk(py, ctx.player, &esk, &r)) return HandlerResult::fail(r);
+  if (out.size() < kSummitEskAt + esk.size()) out.resize(kSummitEskAt + esk.size(), 0);
+  std::copy(esk.begin(), esk.end(), out.begin() + static_cast<std::ptrdiff_t>(kSummitEskAt));
+  std::optional<int64_t> client_now = ctx.client_now_us(&r);
+  if (!client_now) return HandlerResult::fail(r);
+  std::pair<int64_t, int64_t> boost = summit::boost_wire(ctx.player, ctx.now_us(), *client_now);
+  pack::Packer pk;
+  pk.B(boost.first).Qs(boost.second);
+  if (pk.failed()) return HandlerResult::fail(pk.raised());
+  if (out.size() < kSummitBoostAt + 9) {
+    return HandlerResult::fail(pack::error("pack_into requires a buffer of at least " +
+                                           std::to_string(kSummitBoostAt + 9) + " bytes for packing 9 bytes at offset " +
+                                           std::to_string(kSummitBoostAt) + " (actual buffer size is " +
+                                           std::to_string(out.size()) + ")"));
+  }
+  std::copy(pk.out().begin(), pk.out().end(), out.begin() + static_cast<std::ptrdiff_t>(kSummitBoostAt));
+  return HandlerResult::reply(t->type, std::move(out));
 }
 
 std::string upper_hex(uint32_t id) {
@@ -205,6 +222,8 @@ void register_replies(std::vector<Registered>& out) {
       r.fn = replies::activity_end;
     } else if (t.request == replies::kReplace[1]) {
       r.fn = replies::mission_result;
+    } else if (t.request == replies::kReplace[2]) {
+      r.fn = replies::summit_object;
     } else {
       r.fn = replies::template_handler;
     }

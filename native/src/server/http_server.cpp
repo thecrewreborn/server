@@ -1,5 +1,6 @@
 #include "server/http_server.h"
 
+#include <algorithm>
 #include <cstring>
 #include <utility>
 #include <vector>
@@ -414,7 +415,59 @@ class Handler {
     }
   }
 
+  Flow read_chunked(std::string* out, std::string* why) {
+    constexpr size_t kChunkLine = 1024, kChunkTrailers = 32;
+    out->clear();
+    why->clear();
+    for (;;) {
+      std::string line;
+      Flow f = reader_.readline(kChunkLine, &line);
+      if (f != Flow::kOk) return f;
+      std::string size_text = line.substr(0, line.find(';'));
+      size_t a = size_text.find_first_not_of(" \t\r\n"), b = size_text.find_last_not_of(" \t\r\n");
+      size_text = a == std::string::npos ? std::string() : size_text.substr(a, b - a + 1);
+      if (line.empty() || line.back() != '\n' || size_text.empty() || size_text.size() > 8 ||
+          size_text.find_first_not_of("0123456789abcdefABCDEF") != std::string::npos) {
+        *why = "bad";
+        return Flow::kOk;
+      }
+      const size_t size = static_cast<size_t>(std::stoull(size_text, nullptr, 16));
+      if (size == 0) {
+        for (size_t k = 0; k < kChunkTrailers; k++) {
+          std::string trailer;
+          f = reader_.readline(kChunkLine, &trailer);
+          if (f != Flow::kOk) return f;
+          if (trailer == "\r\n" || trailer == "\n") return Flow::kOk;
+          if (trailer.empty() || trailer.back() != '\n') break;
+        }
+        *why = "bad";
+        return Flow::kOk;
+      }
+      if (out->size() + size > lim_.max_body) {
+        *why = "large";
+        return Flow::kOk;
+      }
+      std::string data, crlf;
+      f = reader_.read(size, &data);
+      if (f != Flow::kOk) return f;
+      if (data.size() == size) {
+        f = reader_.read(2, &crlf);
+        if (f != Flow::kOk) return f;
+      }
+      if (data.size() != size || crlf != "\r\n") {
+        *why = "bad";
+        return Flow::kOk;
+      }
+      out->append(data);
+    }
+  }
+
   Flow serve() {
+    std::optional<std::string> te = headers_.get("Transfer-Encoding");
+    std::string te_lower = te ? *te : std::string();
+    std::transform(te_lower.begin(), te_lower.end(), te_lower.begin(),
+                   [](unsigned char c) { return static_cast<char>(c >= 'A' && c <= 'Z' ? c + 32 : c); });
+    const bool chunked = !headers_.get("Content-Length") && te_lower.find("chunked") != std::string::npos;
     std::optional<std::string> cl = headers_.get("Content-Length");
     int64_t length = 0;
     if (cl && !cl->empty() && !http::py_int_latin1(*cl, &length)) length = -1;
@@ -428,8 +481,17 @@ class Handler {
       return Flow::kOk;
     }
     Request req;
-    Flow f = reader_.read(static_cast<size_t>(length), &req.raw);
-    if (f != Flow::kOk) return f;
+    Flow f = Flow::kOk;
+    if (chunked) {
+      std::string why;
+      f = read_chunked(&req.raw, &why);
+      if (f != Flow::kOk) return f;
+      if (why == "large") return refuse(413, "body larger than " + std::to_string(lim_.max_body) + " bytes");
+      if (why == "bad") return refuse(400, "bad chunked body");
+    } else {
+      f = reader_.read(static_cast<size_t>(length), &req.raw);
+      if (f != Flow::kOk) return f;
+    }
     replying();
     req.method = command_;
     req.path = path_;

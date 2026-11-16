@@ -72,6 +72,15 @@
   ],
   "reply": "0x49440B69"
  },
+ "0x3B68E4FD": {
+  "layout": [
+   "u8",
+   "u32",
+   "u16"
+  ],
+  "reply": "0xE2E140C7",
+  "source": "emu_layout.py"
+ },
  "0x40BD5E2B": {
   "layout": [
    "u8",

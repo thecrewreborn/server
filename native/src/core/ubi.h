@@ -109,6 +109,7 @@ class Ubi {
                       Raised* raised);
   json::Value configuration(const std::string& host);
   json::Value profiles(const std::string& query);
+  void instant_events(const std::string& profile, const json::Value& body, const std::string& auth, Raised* raised);
   json::Value version_reply();
   bool link_home(Raised* raised);
 

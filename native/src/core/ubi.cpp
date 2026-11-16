@@ -1,12 +1,15 @@
 #include "core/ubi.h"
 
 #include <algorithm>
+#include <cmath>
 #include <cstdio>
 
 #include "core/core.h"
 #include "core/logtext.h"
 #include "core/util.h"
+#include "core/v1_21/module_state.h"
 #include "core/version.h"
+#include "core/wire.h"
 #include "mbedtls/md.h"
 
 namespace tcr {
@@ -46,6 +49,8 @@ const char* const kGatewayResources[][2] = {
     {"wall/post", "/{env}/{version}/profiles/wall/{postId}"},
     {"websocket/server", "/{env}"}};
 
+constexpr int64_t kEventPeriod = 30;
+const char* const kEventSendTags[] = {"custom.FREEDRIVE_CHALLENGE_END"};
 const char* const kEventTags[] = {
     "player.progression", "context.stop", "custom.PURCHASE", "custom.PHOTO_MODE_SCREENSHOT",
     "custom.PHOTO_MODE_END", "custom.TOKEN_UNLOCKED", "custom.SHOP_PURCHASE", "custom.KUDO_END",
@@ -61,6 +66,8 @@ const char* const kEventTags[] = {
     "game.start", "custom.achievement.unlock", "custom.COOP_STUNT_END", "custom.WHEEL_OF_FORTUNE_RESULT",
     "custom.DPOINT_VARIATION", "custom.PERK_UPGRADE", "custom.CAR_REPAIR", "custom.ACCESS_CARD_UNLOCKED",
     "custom.GRAPHICS_OPTIONS"};
+constexpr const char kInstantEnd[] = "custom.FREEDRIVE_CHALLENGE_END";
+constexpr size_t kPendingMax = 64, kEventsPerPost = 16;
 
 const std::pair<const char*, int64_t> kPunch[] = {
     {"ALLOW_PLAY_WITHOUT_PUNCH", 1},        {"MAX_LOGIN_WAIT_TIME_MS", 120000},
@@ -853,6 +860,91 @@ json::Value Ubi::version_reply() {
   return obj({{"server", str(kVersion)}, {"server_id", str(*id)}});
 }
 
+namespace {
+
+bool match_events_post(const std::string& path, std::string* profile) {
+  const std::string head = "/v2/profiles/", tail = "/events";
+  if (path.size() <= head.size() + tail.size() || path.compare(0, head.size(), head) != 0 ||
+      path.compare(path.size() - tail.size(), tail.size(), tail) != 0) {
+    return false;
+  }
+  std::string mid = path.substr(head.size(), path.size() - head.size() - tail.size());
+  if (mid.empty() || mid.find('/') != std::string::npos) return false;
+  *profile = mid;
+  return true;
+}
+
+std::optional<double> json_number(const json::Value* v) {
+  if (!v) return std::nullopt;
+  if (v->is_float()) {
+    double f = v->as_float();
+    return std::isfinite(f) ? std::optional<double>(f) : std::nullopt;
+  }
+  if (!v->is_int()) return std::nullopt;
+  if (std::optional<int64_t> i = v->as_i64()) return static_cast<double>(*i);
+  if (std::optional<uint64_t> u = v->as_u64()) return static_cast<double>(*u);
+  return std::nullopt;
+}
+
+}
+
+void Ubi::instant_events(const std::string& profile, const json::Value& body, const std::string& auth,
+                         Raised* raised) {
+  std::optional<AuthTicket> t = auth_ticket(auth);
+  std::optional<std::pair<std::string, std::string>> owner;
+  if (t) {
+    owner = ticket_owner(std::string(strip_ws_latin1(t->ticket)), false, raised);
+    if (!raised->type.empty()) return;
+  }
+  const std::pair<std::string, std::string>* known = profiles_.get(profile);
+  if (!owner || !known || account_key(owner->first) != account_key(known->first)) return;
+  const Value* info_v = body.is_object() ? body.get("info") : nullptr;
+  const Value info = info_v && info_v->is_object() ? *info_v : Value::object();
+  const Value* events = body.is_object() ? body.get("events") : nullptr;
+  std::vector<v1_21::InstantEnd> found;
+  if (events && events->is_array()) {
+    for (const Value& ev : events->items()) {
+      if (!ev.is_object()) continue;
+      const Value* type = ev.get("type");
+      if (!type || !type->is_string() || type->as_string() != kInstantEnd) continue;
+      const Value* o_v = ev.get("obj");
+      const Value o = o_v && o_v->is_object() ? *o_v : Value::object();
+      const Value* result = o.get("Result");
+      if (!result || !result->is_int() || result->as_i64() != std::optional<int64_t>(1)) continue;
+      Value key = Value::array();
+      for (const char* k : {"gameSessionId", "playerSessionId", "queueName"}) {
+        const Value* x = info.get(k);
+        key.push(x ? *x : Value());
+      }
+      const Value* seq = ev.get("seqId");
+      key.push(seq ? *seq : Value());
+      std::string text = json::dumps(key);
+      char hex[16];
+      std::snprintf(hex, sizeof(hex), "%08x", wire::crc32(reinterpret_cast<const uint8_t*>(text.data()), text.size()));
+      v1_21::InstantEnd e;
+      e.name = known->first;
+      e.key = hex;
+      const Value* st = o.get("IsSpeedTrapChallenge");
+      e.speed_trap = st && st->is_bool() && st->as_bool();
+      const Value* w = o.get("WaypointCount");
+      std::optional<int64_t> wi = w && w->is_int() ? w->as_i64() : std::nullopt;
+      e.waypoints = wi && *wi >= 0 && *wi < (int64_t(1) << 32) ? *wi : 0;
+      std::optional<double> d = json_number(o.get("ChallengeDistance"));
+      e.distance = d && *d > 0.0 ? *d : 0.0;
+      const Value* eb = o.get("EarnedBucks");
+      const Value* ex = o.get("EarnedXP");
+      e.earned_bucks = eb ? *eb : Value();
+      e.earned_xp = ex ? *ex : Value();
+      found.push_back(std::move(e));
+      if (found.size() >= kEventsPerPost) break;
+    }
+  }
+  if (found.empty()) return;
+  std::vector<v1_21::InstantEnd>& pending = core_.v1_21_state().pending_instant;
+  for (auto& e : found) pending.push_back(std::move(e));
+  if (pending.size() > kPendingMax) pending.erase(pending.begin(), pending.end() - kPendingMax);
+}
+
 Reply Ubi::route(const std::string& method, const std::string& full_path, const json::Value& body,
                  const std::string& host, const std::string& client_ip, int client_port, const std::string& auth,
                  const std::string& raw) {
@@ -991,11 +1083,19 @@ Reply Ubi::route(const std::string& method, const std::string& full_path, const 
     r.json = obj({{"news", Value::array()}});
     return r;
   }
+  if (method == "POST" && match_events_post(path, &name)) {
+    Raised err;
+    instant_events(name, body, auth, &err);
+    if (!err.type.empty()) return raising(err);
+    r.json = Value::object();
+    return r;
+  }
   if (path.find("configs/events") != std::string::npos) {
     Value tags = Value::array();
-    for (const char* t : kEventTags) tags.push(str(t));
-    r.json = obj({{"config", obj({{"hmacEnabled", Value::boolean(false)}, {"sendPeriodSeconds", num(30)}})},
-                  {"tags", tags}});
+    for (const char* t : kEventSendTags) tags.push(str(t));
+    Value all = Value::array();
+    for (const char* t : kEventTags) all.push(str(t));
+    r.json = obj({{"config", obj({{"sendPeriodSeconds", num(kEventPeriod)}, {"tags", tags}})}, {"tags", all}});
     return r;
   }
   if (path.find("populations") != std::string::npos) {

@@ -3,6 +3,7 @@
 #include <cstdint>
 #include <map>
 #include <optional>
+#include <set>
 #include <unordered_map>
 #include <utility>
 #include <vector>
@@ -71,6 +72,8 @@ std::optional<Bytes> player_parts(const Garage& entries, const std::vector<Bytes
 std::optional<Garage> entries(const Player& p, Raised* raised);
 std::vector<Bytes>* configs_of(Garage& garage, const V& model);
 void store(Player& p, const Garage& garage);
+std::optional<std::set<uint64_t>> owned_variants(const Player& p, Raised* raised);
+std::optional<bool> grant(const Core& core, Player& p, uint64_t variant, Raised* raised);
 bool spec_price(const Catalog& c, const Garage& garage, const Variant& v, std::optional<int64_t>* price,
                 Raised* raised);
 

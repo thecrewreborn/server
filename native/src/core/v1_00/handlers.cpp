@@ -467,9 +467,10 @@ HandleResult validate_mission(Ctx& ctx, const Bytes& body) {
   Player& p = ctx.player;
   std::optional<bool> dealer = v1_21::pays_dealer(ctx, p, mission, &r);
   if (!dealer) return fail(r);
-  if (!v1_21::finish_mission(*ctx.core, p, mission, score, ctx.now_us(), true, &r)) return fail(r);
   std::optional<int64_t> part;
-  if (!v1_21::mission_reward_part(ctx, p, mission, score, body, &part, &r)) return fail(r);
+  if (!v1_21::finish_mission(*ctx.core, p, mission, score, ctx.now_us(), true, &r, ctx.group_size, &body, 0x28, &part)) {
+    return fail(r);
+  }
   std::optional<Bytes> car;
   if (*dealer) {
     if (!v1_21::dealer_car_part(ctx, p, body, &car, &r)) return fail(r);
@@ -597,7 +598,16 @@ HandleResult meta_result(Ctx& ctx, uint32_t reply_id, size_t extra) {
   return reply(reply_id, out);
 }
 
-HandleResult validate_faction_mission(Ctx& ctx, const Bytes&) { return meta_result(ctx, 0x1D31095E, 0); }
+HandleResult validate_faction_mission(Ctx& ctx, const Bytes& request) {
+  Bytes body = request;
+  if (body.size() < 0x12) body.resize(0x12, 0);
+  Raised r;
+  if (!v1_21::pay_faction_mission(*ctx.core, ctx.player, body, ctx.now_us(), ctx.group_size, &r)) return fail(r);
+  if (wire::get_u64(body.data() + 0x08)) {
+    if (std::optional<Raised> f = ctx.player.save()) return fail(*f);
+  }
+  return meta_result(ctx, 0x1D31095E, 0);
+}
 HandleResult collect_send_friend_mission(Ctx& ctx, const Bytes&) { return meta_result(ctx, 0xD9F5D2BF, 0); }
 HandleResult validate_pvp_mission(Ctx& ctx, const Bytes&) { return meta_result(ctx, 0xDC5C75CA, 1); }
 

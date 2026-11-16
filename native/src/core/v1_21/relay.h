@@ -120,6 +120,8 @@ class Relay {
   const Session* session(const Addr& addr) const;
   int port() const { return o_.port; }
   std::vector<std::pair<Addr, const Session*>> sessions() const;
+  int64_t group_size(const Ctx& ctx) const;
+  virtual void pay_instant_challenges();
   const std::string& save_path() const { return o_.save_path; }
 
  protected:

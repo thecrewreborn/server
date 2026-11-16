@@ -34,6 +34,7 @@ struct Table {
   std::vector<std::array<int64_t, 4>> parts;
   std::vector<uint64_t> ids;
   std::map<std::string, Mission> missions;
+  size_t slot_count = 0;
 };
 
 const Table* table();
@@ -47,6 +48,10 @@ bool give(Player& p, uint64_t model, uint64_t spec, const std::vector<int64_t>& 
 bool has_ability(obj::Py& py, const Player& p, const std::string& name, const Core& core);
 bool mission_part(Player& p, uint64_t mission, int64_t medal, uint64_t model, uint64_t spec, Random& rng,
                   const Core& core, std::optional<int64_t>* part, Raised* raised);
+
+constexpr int64_t PACK_PARTS = 3;
+bool pack_parts(Player& p, uint64_t model, uint64_t spec, int64_t quality, int64_t level, Random& rng,
+                std::optional<std::vector<int64_t>>* parts, Raised* raised);
 
 }
 }

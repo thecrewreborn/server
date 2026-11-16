@@ -10,6 +10,7 @@
 #include "core/v1_21/gamedata.h"
 #include "core/v1_21/module_state.h"
 #include "core/v1_21/pack.h"
+#include "core/v1_21/summit.h"
 
 namespace tcr {
 namespace v1_21 {
@@ -47,7 +48,7 @@ std::unique_ptr<Tables> load() {
     for (const json::Member& e : ms->members()) {
       const json::Value& v = e.value;
       Mission m;
-      m.type = int_of(v.get("type"));
+      m.online = int_of(v.get("online"));
       m.min_level = int_of(v.get("min_level"));
       m.max_level = int_of(v.get("max_level"));
       const json::Value* rewarding = v.get("rewarding");
@@ -56,6 +57,7 @@ std::unique_ptr<Tables> load() {
       m.has_thresholds = v.get("thresholds") != nullptr;
       m.thresholds = ints_of(v.get("thresholds"));
       m.reward_values = gamedata::hex_id(str_of(v.get("reward_values")));
+      m.cc_gift = int_of(v.get("cc_gift"));
       if (const json::Value* names = v.get("abilities")) {
         for (const json::Value& n : names->items()) m.abilities.push_back(str_of(&n));
       }
@@ -81,9 +83,12 @@ std::unique_ptr<Tables> load() {
     for (const json::Member& e : regions->members()) {
       Region r;
       r.level = int_of(e.value.get("level"));
+      r.max = int_of(e.value.get("max"));
       r.xp = float_of(e.value.get("xp"));
       r.bucks = float_of(e.value.get("bucks"));
-      t->regions[gamedata::hex_id(e.key)] = r;
+      uint64_t key = gamedata::hex_id(e.key);
+      if (!t->regions.count(key)) t->region_order.push_back(key);
+      t->regions[key] = r;
     }
   }
   if (const json::Value* families = d->get("families")) {
@@ -91,6 +96,48 @@ std::unique_ptr<Tables> load() {
       std::vector<double> f;
       for (const json::Value& x : e.value.items()) f.push_back(float_of(&x));
       t->families[gamedata::hex_id(e.key)] = std::move(f);
+    }
+  }
+  if (const json::Value* ch = d->get("chase")) {
+    t->chase.present = ch->is_object() && !ch->members().empty();
+    t->chase.chunk_percent = ints_of(ch->get("chunk_percent"));
+    if (const json::Value* cv = ch->get("crate_values")) {
+      for (const json::Value& x : cv->items()) {
+        const auto& f = x.items();
+        t->chase.crate_values.emplace_back(f.size() > 0 ? float_of(&f[0]) : 0.0, f.size() > 1 ? float_of(&f[1]) : 0.0);
+      }
+    }
+    for (const char* key : {"racer_cars", "police_cars"}) {
+      auto& out = std::string(key) == "racer_cars" ? t->chase.racer_cars : t->chase.police_cars;
+      if (const json::Value* list = ch->get(key)) {
+        for (const json::Value& x : list->items()) {
+          const auto& f = x.items();
+          if (f.size() < 2) continue;
+          out.emplace_back(gamedata::hex_id(str_of(&f[0])), int_of(&f[1]));
+        }
+      }
+    }
+  }
+  if (const json::Value* ic = d->get("instant")) {
+    for (const json::Value& x : ic->get("xp") ? ic->get("xp")->items() : std::vector<json::Value>()) {
+      t->instant_xp.push_back(float_of(&x));
+    }
+    for (const json::Value& x : ic->get("bucks") ? ic->get("bucks")->items() : std::vector<json::Value>()) {
+      t->instant_bucks.push_back(float_of(&x));
+    }
+  }
+  if (const json::Value* coop = d->get("coop")) {
+    for (const json::Member& e : coop->members()) {
+      std::vector<double> f;
+      for (const json::Value& x : e.value.items()) f.push_back(float_of(&x));
+      t->coop[py::int_text_to_i64(py::parse_int(e.key).value_or("0")).value_or(0)] = std::move(f);
+    }
+  }
+  if (const json::Value* boosts = d->get("perk_boosts")) {
+    for (const json::Member& e : boosts->members()) {
+      std::vector<double> f;
+      for (const json::Value& x : e.value.items()) f.push_back(float_of(&x));
+      t->perk_boosts[py::int_text_to_i64(py::parse_int(e.key).value_or("0")).value_or(0)] = std::move(f);
     }
   }
   return t;
@@ -140,22 +187,28 @@ std::optional<int64_t> medal(const Tables& t, const std::vector<int64_t>& thresh
   return m == 3 && level < t.max_level() ? 2 : m;
 }
 
-std::optional<std::pair<int64_t, int64_t>> mission_reward(const Tables& t, uint64_t mission, int64_t score,
-                                                          int64_t level, Raised* raised) {
-  auto it = t.missions.find(mission);
-  if (it == t.missions.end() || !it->second.rewarding) return std::make_pair(int64_t(0), int64_t(0));
-  const Mission& m = it->second;
-  int64_t kind = m.type;
-  if ((kind == 0 || kind == 1 || kind == 5 || kind == 6) && level < m.min_level) {
-    return std::make_pair(int64_t(0), int64_t(0));
+bool player_level_type(int64_t online) {
+  return online == 4 || online == 5 || online == 6 || online == 10 || online == 11;
+}
+
+int64_t coop_bonus(const Tables& t, int64_t amount, int64_t players, int64_t rank) {
+  auto factors = players >= 2 && players <= 4 ? t.coop.find(players) : t.coop.end();
+  double f = 0.0;
+  if (factors != t.coop.end() && rank >= 1 && rank <= std::min<int64_t>(players, factors->second.size())) {
+    f = factors->second[static_cast<size_t>(rank - 1)];
   }
+  if (f == 0.0) return amount;
+  int64_t bonus = static_cast<int64_t>(f32(f32(static_cast<double>(amount)) * f32(f - 1.0)));
+  return static_cast<int64_t>(f32(f32(static_cast<double>(amount)) + f32(static_cast<double>(bonus))));
+}
+
+std::optional<std::pair<int64_t, int64_t>> client_reward(const Tables& t, const Mission& m, int64_t score,
+                                                         int64_t level, Raised* raised, int64_t group) {
+  const std::pair<int64_t, int64_t> none(0, 0);
+  int64_t top = t.table.size() > TOP_LEVEL ? t.table[TOP_LEVEL] : 0;
+  int64_t lvl = std::min(std::max(player_level_type(m.online) ? level : m.max_level, int64_t(1)), top);
   auto rv = t.reward_values.find(m.reward_values);
-  if (rv == t.reward_values.end()) {
-    char buf[32];
-    std::snprintf(buf, sizeof(buf), "%llu", static_cast<unsigned long long>(m.reward_values));
-    *raised = Raised{"KeyError", buf};
-    return std::nullopt;
-  }
+  if (rv == t.reward_values.end()) return none;
   if (rv->second.size() < 2) {
     *raised = Raised{"ValueError", "not enough values to unpack (expected 2, got " +
                                        std::to_string(rv->second.size()) + ")"};
@@ -163,41 +216,113 @@ std::optional<std::pair<int64_t, int64_t>> mission_reward(const Tables& t, uint6
   }
   double xp_factor = pack::f32_of_bits(static_cast<uint32_t>(rv->second[0])),
          bucks_factor = pack::f32_of_bits(static_cast<uint32_t>(rv->second[1]));
-  double bucks = 0.0, xp = 0.0;
-  int64_t base = 0;
-  if (kind == 0 || kind == 1 || kind == 6) {
-    base = kind == 6 ? level : m.max_level;
-    std::optional<int64_t> md = medal(t, m.thresholds, score, level, raised);
-    if (!md) return std::nullopt;
-    std::optional<double> b1 = t.f(BUCKS_BASE + base - 1, raised);
-    if (!b1) return std::nullopt;
-    std::optional<double> b2 = t.f(BUCKS_MEDAL + *md, raised);
-    if (!b2) return std::nullopt;
-    bucks = f32(f32(bucks_factor * *b1) * *b2);
-    std::optional<double> x1 = t.f(XP_BASE + base - 1, raised);
-    if (!x1) return std::nullopt;
-    std::optional<double> x2 = t.f(XP_MEDAL + *md, raised);
-    if (!x2) return std::nullopt;
-    xp = f32(f32(xp_factor * *x1) * *x2);
-  } else if (kind == 2) {
-    base = level;
-    std::optional<double> b1 = t.f(BUCKS_BASE + base - 1, raised);
-    if (!b1) return std::nullopt;
-    bucks = f32(bucks_factor * *b1);
-    std::optional<double> x1 = t.f(XP_BASE + base - 1, raised);
-    if (!x1) return std::nullopt;
-    xp = f32(xp_factor * *x1);
+  std::optional<double> x1 = t.f(XP_BASE + lvl - 1, raised);
+  if (!x1) return std::nullopt;
+  int64_t xp = static_cast<int64_t>(f32(xp_factor * *x1));
+  std::optional<double> b1 = t.f(BUCKS_BASE + lvl - 1, raised);
+  if (!b1) return std::nullopt;
+  int64_t bucks = static_cast<int64_t>(f32(bucks_factor * *b1));
+  if (m.online == EVENT) {
+    double k = (4.5 - static_cast<double>(EVENT_RANK)) * 0.01;
+    k = k + 1.0;
+    xp = static_cast<int64_t>(f32(k * static_cast<double>(xp)));
+    bucks = static_cast<int64_t>(f32(k * static_cast<double>(bucks)));
   } else {
-    return std::make_pair(int64_t(0), int64_t(0));
+    xp = coop_bonus(t, xp, group);
+    bucks = coop_bonus(t, bucks, group);
   }
-  bucks = f32(bucks * m.factor);
-  xp = f32(xp * m.factor);
-  if ((kind == 0 || kind == 1) && level - base > 10) {
-    double fade = f32(f32(static_cast<double>(level - base) - 10.0) / 10.0);
-    fade = std::min(std::max(fade, 0.0), 1.0);
-    xp = f32(xp * f32(1.0 - fade));
+  int64_t md = 0;
+  if (m.thresholds.size() >= 4) {
+    std::optional<int64_t> got = medal(t, m.thresholds, score, level, raised);
+    if (!got) return std::nullopt;
+    md = *got;
   }
-  return std::make_pair(static_cast<int64_t>(xp), static_cast<int64_t>(bucks));
+  std::optional<double> x2 = t.f(XP_MEDAL + md, raised);
+  if (!x2) return std::nullopt;
+  xp = static_cast<int64_t>(f32(f32(static_cast<double>(xp) * *x2) * m.factor));
+  std::optional<double> b2 = t.f(BUCKS_MEDAL + md, raised);
+  if (!b2) return std::nullopt;
+  bucks = static_cast<int64_t>(f32(f32(static_cast<double>(bucks) * *b2) * m.factor));
+  int64_t fade = std::min(std::max(level - lvl - 10, int64_t(0)), int64_t(10));
+  xp -= static_cast<int64_t>(f32(f32(static_cast<double>(fade) * f32(static_cast<double>(xp))) * f32(0.1)));
+  return std::make_pair(xp, bucks);
+}
+
+std::optional<std::pair<int64_t, int64_t>> mission_reward(const Tables& t, uint64_t mission, int64_t score,
+                                                          int64_t level, Raised* raised, int64_t group) {
+  const std::pair<int64_t, int64_t> none(0, 0);
+  auto it = t.missions.find(mission);
+  if (it == t.missions.end()) return none;
+  const Mission& m = it->second;
+  if (level < m.min_level) return none;
+  if ((m.online == EVENT && !PAY_EVENTS) || (m.online == SUMMIT && !PAY_SUMMIT)) return none;
+  std::optional<std::pair<int64_t, int64_t>> r = client_reward(t, m, score, level, raised, group);
+  if (!r) return std::nullopt;
+  if (!m.rewarding) r->first = 0;
+  return r;
+}
+
+double perk_boost(const Tables* t, const Player& p, int64_t perk) {
+  if (!t) return 0.0;
+  auto values = t->perk_boosts.find(perk);
+  if (values == t->perk_boosts.end()) return 0.0;
+  int64_t level = 0;
+  if (p.perks.is_array() && perk >= 0 && static_cast<size_t>(perk) < p.perks.items().size()) {
+    const V& item = p.perks.items()[static_cast<size_t>(perk)];
+    if (item.is_int()) level = item.as_i64().value_or(0);
+  }
+  const std::vector<double>& v = values->second;
+  return level >= 1 && level <= static_cast<int64_t>(v.size()) ? v[static_cast<size_t>(level - 1)] : 0.0;
+}
+
+std::pair<int64_t, int64_t> boosted(const Core& core, const Player& p, int64_t now_us, int64_t xp, int64_t bucks,
+                                    std::optional<int64_t> perk) {
+  if (std::optional<double> factor = summit::boost_factor(p, now_us, gamedata::summit())) {
+    if (xp > 0) xp = static_cast<int64_t>(f32(f32(static_cast<double>(xp)) * *factor));
+    if (bucks > 0) bucks = static_cast<int64_t>(f32(f32(static_cast<double>(bucks)) * *factor));
+  }
+  double v = perk ? perk_boost(tables(core), p, *perk) : 0.0;
+  if (v != 0.0) {
+    double k = v * PERK_FACTOR;
+    if (xp > 0) xp += static_cast<int64_t>(k * f32(static_cast<double>(xp)));
+    if (bucks > 0) bucks += static_cast<int64_t>(k * f32(static_cast<double>(bucks)));
+  }
+  return {xp, bucks};
+}
+
+bool faction_type(int64_t online) { return online == 4 || online == 5 || online == 6; }
+
+int64_t crew_reputation(int64_t rep, int64_t players, int64_t rank) {
+  if (!(1 <= rank && rank <= players && players <= CREW_MAX)) return rep;
+  double k = f32(f32(f32(static_cast<double>(players - rank)) * f32(CREW_REPUTATION_STEP)) + 1.0);
+  return static_cast<int64_t>(f32(k * f32(static_cast<double>(rep))));
+}
+
+std::optional<int64_t> mission_reputation(const Tables& t, uint64_t mission, int64_t level, Raised* raised,
+                                          int64_t group) {
+  auto it = t.missions.find(mission);
+  if (it == t.missions.end()) return 0;
+  const Mission& m = it->second;
+  if (!faction_type(m.online) || level < m.min_level) return 0;
+  if (m.online == FACTION_BONUS && !PAY_BONUS_REPUTATION) return 0;
+  auto rv = t.reward_values.find(m.reward_values);
+  if (rv == t.reward_values.end()) return 0;
+  if (rv->second.size() <= REPUTATION_FACTOR) {
+    *raised = index_error();
+    return std::nullopt;
+  }
+  int64_t top = t.table.size() > TOP_LEVEL ? t.table[TOP_LEVEL] : 0;
+  int64_t lvl = std::min(std::max(level, int64_t(1)), top);
+  std::optional<double> per_level = t.f(REPUTATION_BASE + lvl - 1, raised);
+  if (!per_level) return std::nullopt;
+  double factor = pack::f32_of_bits(static_cast<uint32_t>(rv->second[REPUTATION_FACTOR]));
+  int64_t rep = static_cast<int64_t>(f32(factor * *per_level));
+  rep = crew_reputation(rep, group);
+  return static_cast<int64_t>(f32(static_cast<double>(rep) * m.factor));
+}
+
+int64_t boosted_reputation(const Core& core, const Player& p, int64_t now_us, int64_t rep) {
+  return boosted(core, p, now_us, 0, rep, PERK_REPUTATION_BOOST).second;
 }
 
 std::optional<std::pair<int64_t, int64_t>> activity_reward(const Tables& t, uint64_t activity, int64_t value,
@@ -224,19 +349,96 @@ std::optional<std::pair<int64_t, int64_t>> activity_reward(const Tables& t, uint
   int64_t m = *md;
   if (m == 3 && level < t.max_level()) m = 2;
   const Region& r = region->second;
-  double fade = level <= r.level || level - r.level < 20 ? 1.0 : 0.0;
   const std::vector<double>& fam = family->second;
   if (fam.size() < 2) {
     *raised = index_error();
     return std::nullopt;
   }
-  std::optional<double> bm = t.f(ACTIVITY_BUCKS_MEDAL + m, raised);
-  if (!bm) return std::nullopt;
-  double bucks = f32(f32(r.bucks * fam[1]) * *bm);
+  int64_t xp = static_cast<int64_t>(f32(r.xp * fam[0]));
+  int64_t bucks = static_cast<int64_t>(f32(r.bucks * fam[1]));
+  xp = static_cast<int64_t>(f32(zone_fade(t, r, level) * static_cast<double>(xp)));
   std::optional<double> xm = t.f(ACTIVITY_XP_MEDAL + m, raised);
   if (!xm) return std::nullopt;
-  double xp = f32(f32(f32(r.xp * fam[0]) * fade) * *xm);
-  return std::make_pair(static_cast<int64_t>(xp), static_cast<int64_t>(bucks));
+  xp = static_cast<int64_t>(f32(static_cast<double>(xp) * *xm));
+  std::optional<double> bm = t.f(ACTIVITY_BUCKS_MEDAL + m, raised);
+  if (!bm) return std::nullopt;
+  bucks = static_cast<int64_t>(f32(static_cast<double>(bucks) * *bm));
+  return std::make_pair(xp, bucks);
+}
+
+double zone_fade(const Tables& t, const Region& zone, int64_t level) {
+  int64_t lv = std::min(level, ZONE_LEVEL_CAP);
+  const Region* here = nullptr;
+  for (uint64_t key : t.region_order) {
+    const Region& z = t.regions.at(key);
+    if (z.level <= lv && lv <= z.max) here = &z;
+  }
+  if (!here) return 1.0;
+  if (here->level == zone.max + 1) return 0.5;
+  if (zone.max < here->level) return 0.0;
+  return 1.0;
+}
+
+std::optional<std::pair<int64_t, int64_t>> instant_challenge(const Tables& t, int64_t level, bool speed_trap,
+                                                             int64_t waypoints, double distance, Raised* raised) {
+  if (t.instant_xp.size() < 2 || t.instant_bucks.size() < 2) return std::make_pair(int64_t(0), int64_t(0));
+  int64_t top = t.table.size() > TOP_LEVEL ? t.table[TOP_LEVEL] : 0;
+  int64_t lvl = std::min(std::max(level, int64_t(1)), top);
+  const size_t st = speed_trap ? 1 : 0;
+  double f = speed_trap ? static_cast<double>(std::max<int64_t>(std::min(waypoints, IC_WAYPOINT_CAP) - 1, 0))
+                        : f32(f32(std::min(distance, IC_DISTANCE_CAP)) * f32(IC_KM));
+  std::optional<double> xs = t.f(XP_BASE + lvl - 1, raised);
+  if (!xs) return std::nullopt;
+  int64_t xp = static_cast<int64_t>(f32(f32(*xs * t.instant_xp[st]) * f));
+  std::optional<double> bs = t.f(BUCKS_BASE + lvl - 1, raised);
+  if (!bs) return std::nullopt;
+  int64_t bucks = static_cast<int64_t>(f32(f32(*bs * t.instant_bucks[st]) * f));
+  return std::make_pair(xp, bucks);
+}
+
+std::optional<std::pair<int64_t, int64_t>> summit_skill_reward(const Tables& t, uint64_t activity, int64_t value,
+                                                               int64_t level, Raised* raised) {
+  const std::pair<int64_t, int64_t> none(0, 0);
+  auto a = t.activities.find(activity);
+  if (a == t.activities.end()) return none;
+  auto family = t.families.find(a->second.family);
+  if (family == t.families.end()) return none;
+  const std::vector<int64_t>& th = a->second.thresholds;
+  std::optional<int64_t> md;
+  for (int64_t i : {3, 2, 1, 0}) {
+    size_t k = 0;
+    if (!py_index(i, th.size(), &k)) {
+      *raised = index_error();
+      return std::nullopt;
+    }
+    if (th[k] <= value) {
+      md = i;
+      break;
+    }
+  }
+  if (!md) return none;
+  int64_t m = *md;
+  if (m == 3 && level < t.max_level()) m = 2;
+  const std::vector<double>& fam = family->second;
+  if (fam.size() < 2) {
+    *raised = index_error();
+    return std::nullopt;
+  }
+  int64_t top = t.table.size() > TOP_LEVEL ? t.table[TOP_LEVEL] : 0;
+  int64_t lvl = std::min(std::max(level, int64_t(1)), top);
+  std::optional<double> xs = t.f(XP_BASE + lvl - 1, raised);
+  if (!xs) return std::nullopt;
+  int64_t xp = static_cast<int64_t>(f32(fam[0] * *xs));
+  std::optional<double> bs = t.f(BUCKS_BASE + lvl - 1, raised);
+  if (!bs) return std::nullopt;
+  int64_t bucks = static_cast<int64_t>(f32(fam[1] * *bs));
+  std::optional<double> xm = t.f(ACTIVITY_XP_MEDAL + m, raised);
+  if (!xm) return std::nullopt;
+  xp = static_cast<int64_t>(f32(static_cast<double>(xp) * *xm));
+  std::optional<double> bm = t.f(ACTIVITY_BUCKS_MEDAL + m, raised);
+  if (!bm) return std::nullopt;
+  bucks = static_cast<int64_t>(f32(static_cast<double>(bucks) * *bm));
+  return std::make_pair(xp, bucks);
 }
 
 std::optional<uint64_t> table_key(const V& v) {

@@ -2,6 +2,7 @@
 
 #include "core/v1_21/cars.h"
 #include "core/v1_21/handlers.h"
+#include "core/v1_21/mission.h"
 #include "core/v1_21/pack.h"
 #include "core/v1_21/summit.h"
 #include "core/wire.h"
@@ -180,13 +181,21 @@ HandlerResult get_player(Ctx& ctx, const Bytes&, const Registered&) {
   values[52] = Val::u(3);
   values[50] = Val::u(0xFF);
   values[51] = Val::u(0xFF);
-  values[69] = Val::u(0xFF);
+  values[69] = Val::u(NO_ID);
   values[57] = Val::of(Bytes(kStartDate, kStartDate + sizeof(kStartDate) - 1));
   values[74] = Val::of(Bytes(kStartDate, kStartDate + sizeof(kStartDate) - 1));
   Player& p = ctx.player;
   obj::Py py;
   auto failed = [&]() { return HandlerResult::fail(py.raised()); };
   p.update_charge = obj::I(0);
+  {
+    Raised r;
+    std::optional<bool> gift = pay_gifts(*ctx.core, p, &r);
+    if (!gift) return HandlerResult::fail(r);
+    if (*gift) {
+      if (std::optional<Raised> f = p.save()) return HandlerResult::fail(*f);
+    }
+  }
   V id0 = py.getitem(p.ids, obj::I(0));
   V id1 = py.getitem(p.ids, obj::I(1));
   std::vector<V> place = py.iter(py.add(p.position, p.direction));
@@ -220,25 +229,32 @@ HandlerResult get_player(Ctx& ctx, const Bytes&, const Registered&) {
   Raised when;
   std::optional<int64_t> cur = summit::current(ctx.now_us(), gamedata::summit(), &when);
   if (!cur) return HandlerResult::fail(when);
-  summit::sync(py, p, *cur);
+  summit::sync(py, p, *cur, ctx.now_us(), gamedata::summit());
   V* s = summit::state(py, p);
   if (!s) return failed();
   const V& tokens = *s->get("tokens");
   values[38] = Val::of(*s->get("threshold"));
-  values[39] = Val::of(*s->get("last_kind"));
+  values[39] = Val::of(*s->get("meter"));
   for (int i = 0; i < 3; i++) values[40 + i] = Val::of(py.getitem(tokens, obj::I(i)));
   if (py.failed()) return failed();
-  values[43] = Val::of(*s->get("next_kind"));
+  values[43] = Val::u(static_cast<uint64_t>(summit::last_won(*s)));
   values[55] = Val::u(obj::truthy(*s->get("entered")) ? 0 : 1);
+  {
+    std::optional<int64_t> client_now = ctx.client_now_us(&when);
+    if (!client_now) return HandlerResult::fail(when);
+    std::pair<int64_t, int64_t> boost = summit::boost_wire(p, ctx.now_us(), *client_now);
+    values[52] = Val::of(obj::I(boost.first));
+    values[53] = Val::of(obj::I(boost.second));
+  }
   {
     std::vector<V> ids = py.iter(p.save_ids);
     if (py.failed()) return failed();
     for (size_t i = 0; i < ids.size(); i++) values[61 + static_cast<int64_t>(i)] = Val::of(ids[i]);
   }
-  std::vector<V> chase;
-  if (!py.unpack(p.chase, 2, &chase)) return failed();
-  values[67] = Val::of(chase[0]);
-  values[69] = Val::of(chase[1]);
+  values[67] = Val::u(chase_car(p.chase_racer_car));
+  values[68] = Val::u(static_cast<uint64_t>(chase_chunks(p.chase_racer_chunks)));
+  values[69] = Val::u(chase_car(p.chase_police_car));
+  values[70] = Val::u(static_cast<uint64_t>(chase_chunks(p.chase_police_chunks)));
   values[1] = Val::u(ctx.player_id);
   values[5] = Val::of(Bytes(ctx.player_name.begin(), ctx.player_name.end()));
   values[71] = Val::u(ctx.player_id);

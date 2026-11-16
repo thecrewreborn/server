@@ -28,6 +28,7 @@ struct Ctx {
   uint64_t crew_group = 0;
   bool verified = false;
   std::string client_ip;
+  int64_t group_size = 1;
 
   int64_t now_us() const;
   std::optional<int64_t> client_now_us(Raised* raised) const;

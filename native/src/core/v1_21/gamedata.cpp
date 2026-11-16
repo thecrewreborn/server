@@ -176,11 +176,39 @@ const Summit* summit() {
         }
         const json::Value* monthly = r.get("monthly");
         rec.monthly = monthly && monthly->is_bool() && monthly->as_bool();
+        rec.type = int_of(r.get("type"));
         if (const json::Value* events = r.get("events")) {
           for (const json::Value& e : events->items()) rec.events.push_back(e.as_string());
         }
+        const json::Value* car = r.get("car");
+        if (car && car->is_string() && !car->as_string().empty()) rec.car = hex_id(car->as_string());
         s->records.push_back(std::move(rec));
       }
+    }
+    if (const json::Value* m = t->get("medals")) {
+      if (m->is_object() && !m->members().empty()) {
+        s->medals.present = true;
+        s->medals.bronze = int_of(m->get("bronze"));
+        s->medals.silver = int_of(m->get("silver"));
+        s->medals.gold = int_of(m->get("gold"));
+        s->medals.platinum = int_of(m->get("platinum"));
+        s->medals.platinum_level = int_of(m->get("platinum_level"));
+      }
+    }
+    if (const json::Value* wheel = t->get("wheel")) {
+      for (const json::Value& w : wheel->items()) {
+        SummitWheel e;
+        e.factor = float_of(w.get("factor"));
+        e.days = int_of(w.get("days"));
+        e.crew_credits = int_of(w.get("crew_credits"));
+        if (const json::Value* chances = w.get("chances")) {
+          for (const json::Value& row : chances->items()) e.chances.push_back(ints_of(&row));
+        }
+        s->wheel.push_back(std::move(e));
+      }
+    }
+    if (const json::Value* esk = t->get("esk")) {
+      if (esk->is_object()) s->esk_by_level = ints_of(esk->get("by_level"));
     }
     return s;
   }();

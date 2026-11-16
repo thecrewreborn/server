@@ -31,6 +31,7 @@ const Table* embedded() {
     if (const json::Value* ids = d->get("ids")) {
       for (const json::Value& x : ids->items()) out->ids.push_back(x.is_string() ? gamedata::hex_id(x.as_string()) : 0);
     }
+    if (const json::Value* slots = d->get("slots")) out->slot_count = slots->items().size();
     if (const json::Value* parts = d->get("parts")) {
       for (const json::Value& x : parts->items()) {
         std::array<int64_t, 4> e{};
@@ -239,6 +240,30 @@ bool mission_part(Player& p, uint64_t mission, int64_t medal, uint64_t model, ui
   bool given = false;
   if (!give(p, model, spec, {*found}, false, &given, raised)) return false;
   if (given) *part = found;
+  return true;
+}
+
+bool pack_parts(Player& p, uint64_t model, uint64_t spec, int64_t quality, int64_t level, Random& rng,
+                std::optional<std::vector<int64_t>>* parts, Raised* raised) {
+  parts->reset();
+  const Table* t = table();
+  if (!t || !REWARD_PARTS) return true;
+  std::vector<int64_t> slots;
+  for (int64_t i = 0; i < static_cast<int64_t>(t->slot_count); i++) slots.push_back(i);
+  const int64_t n = static_cast<int64_t>(slots.size());
+  std::vector<int64_t> found;
+  for (int64_t i = 0; i < std::min<int64_t>(PACK_PARTS, n); i++) {
+    int64_t j = rng.randrange(i, n).value_or(i);
+    std::swap(slots[static_cast<size_t>(i)], slots[static_cast<size_t>(j)]);
+    int64_t bonus = NO_BONUS;
+    if (quality != BRONZE && quality != CAU_PLATINUM) bonus = rng.randrange(ALL_BONUSES).value_or(0);
+    std::optional<int64_t> part = find(*t, slots[static_cast<size_t>(i)], quality, level, bonus);
+    if (part) found.push_back(*part);
+  }
+  if (found.empty()) return true;
+  bool given = false;
+  if (!give(p, model, spec, found, false, &given, raised)) return false;
+  if (given) *parts = std::move(found);
   return true;
 }
 

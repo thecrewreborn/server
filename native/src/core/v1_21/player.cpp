@@ -16,7 +16,8 @@ const char* const STATE_KEYS[] = {
     "zone", "ids", "position", "direction", "abilities", "progress", "bucks", "map_state", "skill_last",
     kExtraFieldsKey, "missions_done", "activities_done", "level", "xp", "crew_credits", "perk_points", "field12",
     "garage", "garage_all", "free_roam", "perks", "rewarded", "table_bits", "owned_items", "summit", "group",
-    "group_joined", "daily_last", "save_ids", "update_charge", "chase", "heat", "collectibles"};
+    "group_joined", "daily_last", "save_ids", "update_charge", "chase_racer_car", "chase_racer_chunks",
+    "chase_police_car", "chase_police_chunks", "heat", "collectibles"};
 const size_t STATE_KEY_COUNT = sizeof(STATE_KEYS) / sizeof(STATE_KEYS[0]);
 const uint64_t ALL_ABILITIES[2] = {0xFFFFFFFFFFFFFFFFull, 0x0FFBA3};
 
@@ -78,10 +79,11 @@ std::optional<Raised> clamp_values(Player& p, const V* cc, const V* xp, const V*
       py.setitem(s, tokens_key, std::move(fitted));
     }
   }
-  for (const char* k : {"threshold", "meter", "last_kind", "next_kind"}) {
-    const V key = V::string(k);
+  for (const auto& kh : {std::make_pair("threshold", U8), std::make_pair("meter", U16), std::make_pair("last_kind", U8),
+                         std::make_pair("next_kind", U8)}) {
+    const V key = V::string(kh.first);
     if (py.contains(s, key)) {
-      int64_t f = fit_value(py, py.getitem(s, key), U8);
+      int64_t f = fit_value(py, py.getitem(s, key), kh.second);
       py.setitem(s, key, I(f));
     }
   }
@@ -235,11 +237,17 @@ std::optional<Player> Player::load(Files& files, const std::string& path, std::o
     else if (key == "daily_last") p.daily_last = *v;
     else if (key == "save_ids") p.save_ids = *v;
     else if (key == "update_charge") p.update_charge = *v;
-    else if (key == "chase") p.chase = *v;
+    else if (key == "chase_racer_car") p.chase_racer_car = *v;
+    else if (key == "chase_racer_chunks") p.chase_racer_chunks = *v;
+    else if (key == "chase_police_car") p.chase_police_car = *v;
+    else if (key == "chase_police_chunks") p.chase_police_chunks = *v;
     else if (key == "heat") p.heat = *v;
     else if (key == "collectibles") p.collectibles = *v;
   }
   if (data.contains("level2") && !data.contains("perk_points")) points = data.get("level2");
+  if (const V* f = data.get("faction")) p.faction = *f;
+  if (const V* f = data.get("ic_seen")) p.ic_seen = *f;
+  if (const V* f = data.get("gifts_paid")) p.gifts_paid = *f;
   if (const V* blob = data.get("save_blob")) {
     std::optional<Bytes> b = py.fromhex(*blob);
     if (!b) return failed();
@@ -341,7 +349,10 @@ std::string Player::save_text() const {
       {"daily_last", &daily_last},
       {"save_ids", &save_ids},
       {"update_charge", &update_charge},
-      {"chase", &chase},
+      {"chase_racer_car", &chase_racer_car},
+      {"chase_racer_chunks", &chase_racer_chunks},
+      {"chase_police_car", &chase_police_car},
+      {"chase_police_chunks", &chase_police_chunks},
       {"heat", &heat},
       {"collectibles", &collectibles},
   };
@@ -355,6 +366,9 @@ std::string Player::save_text() const {
       d.set(key, I(i));
     }
   }
+  if (obj::truthy(faction)) d.set("faction", faction);
+  if (obj::truthy(ic_seen)) d.set("ic_seen", ic_seen);
+  if (obj::truthy(gifts_paid)) d.set("gifts_paid", gifts_paid);
   d.set("save_blob", V::string(py::hex(save_blob)));
   return json::dumps(d);
 }
