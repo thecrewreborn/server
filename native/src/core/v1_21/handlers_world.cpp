@@ -578,6 +578,7 @@ HandlerResult group_status2(Ctx& ctx, const Bytes&, const Registered&) {
 
 constexpr double HEAT_CAP = 100000.0;
 constexpr int64_t WANTED_CAP = 100000;
+constexpr double HEAT_REPAIR = 10 * HEAT_CAP;
 constexpr int64_t RACER_CHUNKS = 10;
 constexpr size_t STATS_SIZE_AT = 0x52;
 
@@ -675,7 +676,20 @@ bool cau(Ctx& ctx, bool escaped, std::optional<int64_t> quality, Cau* out, Raise
   return true;
 }
 
-V chase(Py& py, Ctx& ctx, bool escaped, int64_t wanted_in, uint64_t start, int64_t now, const Cau& c, V* crate) {
+V chase_seconds(Py& py, uint64_t start, int64_t clock) { return py.max(py.sub(I(clock), U(start)), I(0)); }
+
+}
+
+bool repair_heat(Py& py, Player& p) {
+  if (!(p.heat.is_int() || p.heat.is_float()) || !py.gt(p.heat, obj::F(HEAT_REPAIR))) return false;
+  p.heat = obj::F(1.0);
+  return true;
+}
+
+namespace {
+
+V chase(Py& py, Ctx& ctx, bool escaped, int64_t wanted_in, uint64_t start, int64_t now, int64_t clock, const Cau& c,
+        V* crate) {
   Player& p = ctx.player;
   const V h = py.min(p.heat, obj::F(HEAT_CAP));
   const V wanted = I(std::min(wanted_in, WANTED_CAP));
@@ -685,7 +699,7 @@ V chase(Py& py, Ctx& ctx, bool escaped, int64_t wanted_in, uint64_t start, int64
     bonus = py.to_int(py.mul(obj::F(0.2), h));
     bucks = py.add(py.add(py.add(py.to_int(py.mul(wanted, obj::F(0.5))), I(500)), bonus), I(c.bucks));
     xp = py.add(xp, I(c.xp));
-    V grown = py.add(py.mul(U(static_cast<uint64_t>(now) - start), obj::F(0.5)), py.mul(wanted, obj::F(0.2)));
+    V grown = py.add(py.mul(chase_seconds(py, start, clock), obj::F(0.5)), py.mul(wanted, obj::F(0.2)));
     V heat = py.max(py.to_float(py.to_int(py.add(grown, h))), obj::F(1.0));
     if (py.failed()) return V();
     p.heat = heat;
@@ -729,7 +743,10 @@ HandlerResult chase_reward(Ctx& ctx, const Bytes& request, const Registered&) {
   if (!cau(ctx, escaped, crate_quality(body), &c, &r)) return HandlerResult::fail(r);
   Py py;
   V crate;
-  V value = chase(py, ctx, escaped, wanted, start, py::floor_div(ctx.now_us(), 1000000), c, &crate);
+  std::optional<int64_t> client_now = ctx.client_now_us(&r);
+  if (!client_now) return HandlerResult::fail(r);
+  V value = chase(py, ctx, escaped, wanted, start, py::floor_div(ctx.now_us(), 1000000),
+                  py::floor_div(*client_now, 1000000), c, &crate);
   if (py.failed()) return fail_of(py);
   if (std::optional<Raised> failed = p.save()) return HandlerResult::fail(*failed);
   Bytes array;
