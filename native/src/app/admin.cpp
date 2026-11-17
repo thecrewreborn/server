@@ -244,21 +244,27 @@ server::Response html_reply(int status, std::string html, const char* form_actio
   return r;
 }
 
+void same_origin_referrer(server::Response* r) {
+  for (auto& h : r->headers) {
+    if (h.first == "Referrer-Policy") h.second = "same-origin";
+  }
+}
+
 server::Response page() {
   std::string html(reinterpret_cast<const char*>(kAdminPage), sizeof(kAdminPage));
   fill(&html, kTokenMark, sizeof(kTokenMark), g_state->token);
   fill(&html, kRunMark, sizeof(kRunMark), g_state->run);
   fill(&html, kAuthMark, sizeof(kAuthMark), g_state->password.empty() ? "0" : "1");
-  return html_reply(200, std::move(html), "'none'");
+  server::Response r = html_reply(200, std::move(html), "'none'");
+  same_origin_referrer(&r);
+  return r;
 }
 
 server::Response login_page(int status, const std::string& error) {
   std::string html(reinterpret_cast<const char*>(kAdminLogin), sizeof(kAdminLogin));
   fill(&html, kErrorMark, sizeof(kErrorMark), error);
   server::Response r = html_reply(status, std::move(html), "'self'");
-  for (auto& h : r.headers) {
-    if (h.first == "Referrer-Policy") h.second = "same-origin";
-  }
+  same_origin_referrer(&r);
   return r;
 }
 

@@ -8,6 +8,22 @@
 <meta name="admin-auth" content="{{AUTH}}">
 <link rel="icon" href="data:,">
 <title>The Crew Reborn server</title>
+<script>
+(function () {
+  var t = null, app = null;
+  try {
+    var q = new URLSearchParams(window.location.search);
+    t = q.get("theme");
+    app = q.get("app");
+  } catch (e) { }
+  try {
+    if (t) window.localStorage.setItem("tcr-admin-theme", t); else t = window.localStorage.getItem("tcr-admin-theme");
+    if (app) window.localStorage.setItem("tcr-admin-app", app); else app = window.localStorage.getItem("tcr-admin-app");
+  } catch (e) { }
+  if (t === "dark" || t === "light") document.documentElement.setAttribute("data-theme", t);
+  if (app === "1") document.documentElement.setAttribute("data-app", "");
+})();
+</script>
 <style>
 :root {
   --bg: #f3f5f8;
@@ -32,7 +48,7 @@
   --gutter: 24px;
 }
 @media (prefers-color-scheme: dark) {
-  :root {
+  :root:not([data-theme="light"]) {
     --bg: #13161b;
     --panel: #1b1f26;
     --text: #e6e9ee;
@@ -52,6 +68,26 @@
     --gold: #e6b93f;
     --platinum: #6fc7d6;
   }
+}
+:root[data-theme="dark"] {
+  --bg: #13161b;
+  --panel: #1b1f26;
+  --text: #e6e9ee;
+  --muted: #9ba4b1;
+  --line: #2d333d;
+  --soft: #232831;
+  --accent: #5b96ff;
+  --accent-soft: rgba(91, 150, 255, 0.14);
+  --accent-text: #0b0d10;
+  --danger: #ef5350;
+  --ok: #66bb6a;
+  --code: #11141a;
+  --error-text: #ff8a80;
+  --shadow: none;
+  --bronze: #d9965f;
+  --silver: #b9c2cc;
+  --gold: #e6b93f;
+  --platinum: #6fc7d6;
 }
 * { box-sizing: border-box; }
 [hidden] { display: none !important; }
@@ -82,6 +118,9 @@ h2 { font-size: 18px; line-height: 1.3; margin: 0 0 12px; font-weight: 600; }
 .status.live::before { background: var(--ok); box-shadow: 0 0 0 3px rgba(46, 125, 50, 0.18); }
 .status.down::before { background: var(--danger); }
 .tools { margin-left: auto; display: flex; flex-wrap: wrap; gap: 8px; }
+.tools button { display: inline-flex; align-items: center; gap: 8px; }
+.tools svg { width: 16px; height: 16px; flex: none; fill: currentColor; }
+:root[data-app] header { display: none; }
 nav { background: var(--panel); border-top: 1px solid var(--line); border-bottom: 1px solid var(--line); box-shadow: var(--shadow); }
 nav .wrap { display: flex; }
 nav a {
@@ -180,7 +219,13 @@ code, pre, .mono { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, "
   white-space: pre-wrap;
   overflow-wrap: anywhere;
   line-height: 1.55;
+  font-size: 13px;
+  scrollbar-width: thin;
+  scrollbar-color: var(--muted) transparent;
 }
+#log-lines::-webkit-scrollbar { width: 8px; height: 8px; }
+#log-lines::-webkit-scrollbar-thumb { background: var(--muted); border-radius: 4px; }
+#log-lines::-webkit-scrollbar-track { background: transparent; }
 #log-lines .error { color: var(--error-text); }
 #viewer pre {
   background: var(--code);
@@ -305,16 +350,19 @@ li.item.open .tick { background: none; border: 2px solid var(--line); }
   .section-body .cards tr { grid-template-columns: repeat(auto-fill, minmax(104px, 1fr)); }
 }
 @media (max-width: 700px) {
-  nav .wrap { flex-wrap: wrap; gap: 6px; padding-top: 8px; padding-bottom: 8px; }
-  nav a { flex: 1 1 auto; padding: 8px 8px; font-size: 14px; border: 1px solid var(--line); border-radius: 8px; }
+  nav .wrap { gap: 6px; padding-top: 8px; padding-bottom: 8px; overflow-x: auto; scrollbar-width: none; }
+  nav .wrap::-webkit-scrollbar { display: none; }
+  nav a { flex: 0 0 auto; padding: 7px 12px; font-size: 14px; border: 1px solid var(--line); border-radius: 8px; }
   nav a[aria-current="page"] { background: var(--accent); border-color: var(--accent); color: var(--accent-text); }
 }
 @media (max-width: 640px) {
   :root { --gutter: 12px; }
-  header .wrap { padding-top: 12px; padding-bottom: 12px; }
-  h1 { font-size: 19px; }
-  .tools { margin-left: 0; width: 100%; }
-  .tools > button { flex: 1 1 auto; font-size: 14px; padding: 8px 10px; }
+  header .wrap { flex-wrap: nowrap; gap: 10px; padding-top: 8px; padding-bottom: 8px; }
+  .brand { flex: 1 1 auto; flex-wrap: nowrap; align-items: center; gap: 10px; }
+  h1 { font-size: 17px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .tools { flex: none; flex-wrap: nowrap; gap: 6px; }
+  .tools > button { min-width: 44px; padding: 8px 10px; justify-content: center; }
+  .tools .label { display: none; }
   main.wrap { padding-top: 14px; }
   .panel { padding: 16px; margin-bottom: 14px; }
   dl.facts { grid-template-columns: 1fr; gap: 8px; }
@@ -331,7 +379,9 @@ li.item.open .tick { background: none; border: 2px solid var(--line); }
   .switch button { flex: 1 1 0; }
   .section-body { padding: 12px 10px; }
   details.section > summary { padding: 10px 12px; }
-  #log-lines { height: 60vh; min-height: 0; font-size: 13px; }
+  #tab-log .panel { padding: 10px; }
+  #tab-log .row { gap: 8px 12px; margin-bottom: 8px; }
+  #log-lines { min-height: 0; font-size: 11.5px; line-height: 1.4; padding: 8px; }
   #notice { left: 12px; right: 12px; bottom: 12px; max-width: none; }
 }
 </style>
@@ -344,10 +394,9 @@ li.item.open .tick { background: none; border: 2px solid var(--line); }
     <span id="status" class="status"></span>
   </div>
   <div class="tools">
-    <button id="lang" type="button" lang="de">Deutsch</button>
     <button id="logout" type="button" data-t="logout" hidden>Log out</button>
-    <button id="restart" type="button" data-t="restart">Restart server</button>
-    <button id="stop" class="danger" type="button" data-t="stop">Stop server</button>
+    <button id="restart" type="button" data-ta="restart" aria-label="Restart server" title="Restart server"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 4a8 8 0 1 0 7.75 10h-2.1A6 6 0 1 1 12 6c1.66 0 3.14.69 4.22 1.78L13 11h7V4l-2.35 2.35A7.96 7.96 0 0 0 12 4z"/></svg><span class="label" data-t="restart">Restart server</span></button>
+    <button id="stop" class="danger" type="button" data-ta="stop" aria-label="Stop server" title="Stop server"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="6" y="6" width="12" height="12" rx="1.5"/></svg><span class="label" data-t="stop">Stop server</span></button>
   </div>
  </div>
 </header>
@@ -432,9 +481,9 @@ li.item.open .tick { background: none; border: 2px solid var(--line); }
   <section id="tab-log" hidden>
     <div class="panel">
       <div class="row">
-        <input id="log-filter" type="search" data-tp="filter" placeholder="Filter" aria-label="Filter">
+        <input id="log-filter" type="search" data-tp="log_search" placeholder="Search the log" aria-label="Search the log">
         <label><input id="log-errors" type="checkbox"> <span data-t="errors_only">Errors only</span></label>
-        <label><input id="log-follow" type="checkbox" checked> <span data-t="follow">Scroll with new lines</span></label>
+        <label><input id="log-follow" type="checkbox" checked> <span data-t="follow">Follow</span></label>
         <span id="log-count" class="status"></span>
       </div>
       <div id="log-lines" class="mono" role="log" aria-live="off"></div>
@@ -447,6 +496,10 @@ li.item.open .tick { background: none; border: 2px solid var(--line); }
         <h2 data-t="settings_title" style="margin: 0">Settings</h2>
         <span style="margin-left: auto"></span>
         <button type="button" id="settings-reload" data-t="reload">Reload</button>
+      </div>
+      <div class="row">
+        <span data-t="page_language">Language of this page</span>
+        <button id="lang" type="button" lang="de">Deutsch</button>
       </div>
       <p class="hint" data-t="settings_hint">The values of config.ini. Saving changes only that line of config.ini; comments and the other lines stay. You can still edit the file by hand.</p>
       <p class="folder mono" id="settings-path"></p>
@@ -540,7 +593,9 @@ li.item.open .tick { background: none; border: 2px solid var(--line); }
       no_saves: "No save yet.",
       filter: "Filter",
       errors_only: "Errors only",
-      follow: "Scroll with new lines",
+      follow: "Follow",
+      log_search: "Search the log",
+      page_language: "Language of this page",
       lines: "{shown} of {total} lines",
       error: "Error: {text}",
       tab_settings: "Settings",
@@ -715,7 +770,9 @@ li.item.open .tick { background: none; border: 2px solid var(--line); }
       no_saves: "Noch kein Spielstand vorhanden.",
       filter: "Filtern",
       errors_only: "Nur Fehler",
-      follow: "Bei neuen Zeilen mitscrollen",
+      follow: "Mitlaufen",
+      log_search: "Im Log suchen",
+      page_language: "Sprache dieser Seite",
       lines: "{shown} von {total} Zeilen",
       error: "Fehler: {text}",
       tab_settings: "Einstellungen",
@@ -955,6 +1012,10 @@ li.item.open .tick { background: none; border: 2px solid var(--line); }
     document.documentElement.lang = lang;
     document.title = t("title");
     document.querySelectorAll("[data-t]").forEach((e) => { e.textContent = t(e.getAttribute("data-t")); });
+    document.querySelectorAll("[data-ta]").forEach((e) => {
+      e.setAttribute("aria-label", t(e.getAttribute("data-ta")));
+      e.setAttribute("title", t(e.getAttribute("data-ta")));
+    });
     document.querySelectorAll("[data-tp]").forEach((e) => {
       e.setAttribute("placeholder", t(e.getAttribute("data-tp")));
       e.setAttribute("aria-label", t(e.getAttribute("data-tp")));
@@ -1646,6 +1707,15 @@ li.item.open .tick { background: none; border: 2px solid var(--line); }
     }
   }
 
+  function fitLog() {
+    const box = $("log-lines");
+    if (box.offsetParent === null) return;
+    const top = box.getBoundingClientRect().top + window.scrollY;
+    box.style.height = Math.max(240, window.innerHeight - top - 28) + "px";
+    if ($("log-follow").checked) box.scrollTop = box.scrollHeight;
+  }
+  window.addEventListener("resize", fitLog);
+
   function showTab(name) {
     if (["overview", "clients", "players", "names", "saves", "log", "settings"].indexOf(name) < 0) name = "overview";
     tab = name;
@@ -1654,6 +1724,12 @@ li.item.open .tick { background: none; border: 2px solid var(--line); }
       else a.removeAttribute("aria-current");
     });
     document.querySelectorAll("main > section").forEach((s) => { s.hidden = s.id !== "tab-" + name; });
+    const current = document.querySelector('nav a[aria-current="page"]');
+    const bar = current && current.parentNode;
+    if (bar && bar.scrollWidth > bar.clientWidth) {
+      bar.scrollLeft = current.offsetLeft - (bar.clientWidth - current.offsetWidth) / 2;
+    }
+    if (name === "log") fitLog();
     if (name === "settings") refreshSettings();
     poll();
   }

@@ -1,5 +1,9 @@
 #if !defined(_WIN32)
 
+#if defined(__linux__) && !defined(_GNU_SOURCE)
+#define _GNU_SOURCE
+#endif
+
 #include "platform/platform.h"
 
 #include <arpa/inet.h>
@@ -204,7 +208,11 @@ Socket tcp_accept(Socket listener, double seconds, Addr* peer, Error* err) {
   if (r <= 0) return kNoSocket;
   sockaddr_in sa;
   socklen_t len = sizeof(sa);
+#if defined(__linux__)
+  int fd = accept4(static_cast<int>(listener), reinterpret_cast<sockaddr*>(&sa), &len, SOCK_CLOEXEC);
+#else
   int fd = accept(static_cast<int>(listener), reinterpret_cast<sockaddr*>(&sa), &len);
+#endif
   if (fd < 0) {
     int code = errno;
     if (code == EAGAIN || code == EWOULDBLOCK || code == EINTR) return kNoSocket;

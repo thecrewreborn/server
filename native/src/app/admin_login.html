@@ -5,6 +5,22 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <link rel="icon" href="data:,">
 <title>The Crew Reborn server</title>
+<script>
+(function () {
+  var t = null, app = null;
+  try {
+    var q = new URLSearchParams(window.location.search);
+    t = q.get("theme");
+    app = q.get("app");
+  } catch (e) { }
+  try {
+    if (t) window.localStorage.setItem("tcr-admin-theme", t); else t = window.localStorage.getItem("tcr-admin-theme");
+    if (app) window.localStorage.setItem("tcr-admin-app", app); else app = window.localStorage.getItem("tcr-admin-app");
+  } catch (e) { }
+  if (t === "dark" || t === "light") document.documentElement.setAttribute("data-theme", t);
+  if (app === "1") document.documentElement.setAttribute("data-app", "");
+})();
+</script>
 <style>
 :root {
   --bg: #f6f7f9;
@@ -17,7 +33,7 @@
   --error-text: #b3261e;
 }
 @media (prefers-color-scheme: dark) {
-  :root {
+  :root:not([data-theme="light"]) {
     --bg: #15181d;
     --panel: #1d2128;
     --text: #e4e7ec;
@@ -27,6 +43,16 @@
     --accent-text: #0b0d10;
     --error-text: #ff8a80;
   }
+}
+:root[data-theme="dark"] {
+  --bg: #15181d;
+  --panel: #1d2128;
+  --text: #e4e7ec;
+  --muted: #9aa3af;
+  --line: #2f3540;
+  --accent: #4c8dff;
+  --accent-text: #0b0d10;
+  --error-text: #ff8a80;
 }
 * { box-sizing: border-box; }
 html, body { margin: 0; padding: 0; }

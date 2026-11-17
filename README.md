@@ -8,7 +8,8 @@ https://thecrewreborn.github.io
 From the [download page](https://thecrewreborn.github.io/#download) you need:
 
 1. **The server, for everyone:** `TheCrewReborn-Server-<version>-<platform>.zip` for the computer that runs it (see
-   "The server"). Unpack it on a computer in your home network and start `TheCrewReborn-Server`.
+   "The server"). Unpack it on a computer in your home network and start `TheCrewReborn-Server`. Or run it on an
+   Android phone: `TheCrewReborn-Server-<version>-android.apk` (see "Android phone").
 2. **Playing on PS4 / PS5:** `TheCrewReborn-PS4-<version>.zip`. Copy `CUSA00161.xml` to
    `/data/GoldHEN/patches/xml/` on the console and switch the patch on in GoldHEN's patch menu.
 3. **Playing on PC:** `TheCrewReborn-PC-<version>.zip`. Copy `dinput8.dll` and `reborn.ini` into the game folder,
@@ -33,7 +34,8 @@ again in the game. The very first start needs the server running.
   and 1.21.
 - A computer on the same network as the console or the gaming PC: Windows 10 or 11, macOS 11 or later, or Linux on
   an x64 or ARM64 processor. The server is one program and needs nothing else installed. It can also run on the gaming
-  PC itself, or on a computer on the internet (see "Running a server on the internet").
+  PC itself, or on a computer on the internet (see "Running a server on the internet"). An Android phone with
+  Android 9 or later works too (see "Android phone").
 
 ## The server
 
@@ -100,11 +102,60 @@ on its own. The `accounts` command reads the same variables, so set them the sam
 Stop the server, unpack the new zip over the old folder and start the server again. The zip holds only the program,
 `config.example.ini`, this guide and the licence texts; your `config.ini`, saves, certificate and logs stay as they are.
 
+## Android phone
+
+`TheCrewReborn-Server-<version>-android.apk` is the same server as an app. It runs in the background with a
+permanent notification, so the phone can stay on the charger and be the server for the whole home network. Android 9
+or later, on a phone with a 64-bit ARM processor (nearly every phone from the last years).
+
+**Installing:** copy the APK to the phone and open it there. Android asks once whether the app you opened it with
+(the file manager or the browser) may install apps: allow it. With a computer and USB debugging,
+`adb install -r TheCrewReborn-Server-<version>-android.apk` does the same.
+
+**Starting:** open "The Crew Reborn Server". The app starts the server and shows the admin page (see "The admin
+page"). Allow notifications when Android asks (Android 13 and later): the notification shows that the server runs and
+the address the games use, and has a Stop button. Closing the app or swiping it away leaves the server running; open
+the app again to see the page. The title bar shows the state and has a start/stop button; the menu has restart, the
+page language, light or dark design, the server log and "Keep running in the background".
+
+**Keep it running:** pick "Keep running in the background" in the app's menu once and allow it: Android then leaves
+the server alone when the phone sleeps. Some phones have their own battery saver on top; if the server stops while the
+phone sleeps, look in the phone's battery settings for the app and allow it to run in the background.
+
+**Ports:** an app may not use ports below 1024, so the server takes 8080 for HTTP and 8443 for HTTPS (written into
+its `config.ini` at the first start); the other ports are the usual ones (see "Ports"). Console and PC learn the port
+when they find the server on the network, so nothing has to be set.
+
+**The screen off:** some phones do not receive the console's search on the network while their screen is off. A
+console or PC that found the server once uses it again, so this matters only for the very first start. For a phone
+that is always off, give it a fixed address in your router and set it on the console and the PC: put
+`https://<phone address>:8443` into `/data/TheCrew/server.txt` on the console, and `Host=<phone address>` and
+`HttpsPort=8443` into `reborn.ini` on the PC.
+
+**Saves:** the app's menu moves them on and off the phone:
+
+- **Export saves** writes the whole `save` folder as one zip, wherever you choose (the phone's Download folder, a
+  cloud drive, ...).
+- **Import saves** takes such a zip and replaces the server's saves with it. It also takes the `save` folder of a
+  server on a computer, zipped (on Windows: right-click > Send to > Compressed folder; on a Mac: right-click >
+  Compress), or a zip of the whole server folder (only its `save` folder counts). The app stops the server for it,
+  first keeps the current saves as a zip in `backups/` of the server folder, and starts the server again. To move
+  your server from a computer to the phone: stop the server on the computer, zip its `save` folder, copy the zip to
+  the phone and import it. Then start only one of the two servers.
+- **Server folder:** by default the server keeps its files in the app's own storage, which other apps and a computer
+  cannot see, and uninstalling the app deletes them. Pick a folder in the phone's storage instead (for example
+  `Documents/TheCrewReborn`) and the files are there for a file manager and for a computer connected over USB, and
+  they stay when the app is uninstalled. The app asks for the storage permission for it (from Android 11 on "All
+  files access", on its own settings page). A folder without server files gets the current ones copied; a folder
+  with server files (from an earlier install) is used as it is. Change saves there only while the server is stopped.
+
+To update the app, install the new APK over the old one: the app and its saves stay.
+
 ## Ports
 
 TCP 80 and 443, UDP 4000, 4001 and 4100 (4100: the base game 1.00), and TCP 8090 for the admin page. Nothing has to be opened on the router for play
 at home. When the system refuses port 80 or 443 (another program uses it, or Linux without root) the server takes 8080
-and 8443 instead and tells the game; it says so when it starts. If the game doesn't find the server, set `Host` in
+and 8443 instead and tells the game; it says so when it starts. The Android app always uses 8080 and 8443. If the game doesn't find the server, set `Host` in
 `reborn.ini` (PC) or put the server address into `/data/TheCrew/server.txt` on the console (PS4).
 
 ## Names and devices
@@ -303,7 +354,7 @@ command gives the file back to its owner, so the server can still read it. To us
 
 ## The admin page
 
-The server has a page for you in the browser: the console log with a filter, the connected players, the claimed
+The server has a page for you in the browser: the console log with a search, the connected players, the claimed
 names with their devices, the saves (view, download, open the folder) and the server's settings. From there you can
 open a link window for a name, free a name, restart the server and stop it.
 
@@ -314,10 +365,10 @@ open a link window for a name, free a name, restart the server and stop it.
   default. Saving changes only the lines you changed and keeps your comments, so you can still edit the file by
   hand. If the file changed on disk after you opened the page, the page refuses to save and asks you to reload.
   Settings marked "needs a restart" count after a restart.
-- **Restart:** the button stops the server like Ctrl+C and starts it again in the same window. The game stays
-  connected.
-- **Turn this page off:** writes `enabled = off` into `[ui]` and closes the page; the server keeps running. To turn
-  the page on again, set `enabled = on` and restart the server.
+- **Restart and stop:** the two buttons at the top. Restart stops the server like Ctrl+C and starts it again in the
+  same window; the game stays connected. The page's language is under Settings.
+- **Turning the page off:** set `enabled = off` under `[ui]` in `config.ini` and restart the server; the server keeps
+  running without the page. Set `enabled = on` to bring it back.
 
 When the server starts it names the page's address, for example `Admin page: http://192.168.1.20:8090/ (home
 network)`. Open it on this computer or on any device in your home network, a phone included. The page answers only

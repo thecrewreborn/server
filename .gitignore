@@ -9,3 +9,8 @@ native/dist/
 /TheCrewReborn-Server
 /TheCrewReborn-Server.exe
 !native/cmake/*.cmake
+android/.gradle/
+android/build/
+android/app/build/
+android/app/jni/
+android/local.properties
