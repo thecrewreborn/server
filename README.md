@@ -112,8 +112,8 @@ or later, on a phone with a 64-bit ARM processor (nearly every phone from the la
 (the file manager or the browser) may install apps: allow it. With a computer and USB debugging,
 `adb install -r TheCrewReborn-Server-<version>-android.apk` does the same.
 
-**Starting:** open "The Crew Reborn Server". The app starts the server and shows the admin page (see "The admin
-page"). Allow notifications when Android asks (Android 13 and later): the notification shows that the server runs and
+**Starting:** open "The Crew Reborn Server" and tap "Start server". The app then shows the admin page (see "The
+admin page"), its overview with the server's state and the latest log lines. Allow notifications when Android asks (Android 13 and later): the notification shows that the server runs and
 the address the games use, and has a Stop button. Closing the app or swiping it away leaves the server running; open
 the app again to see the page. The title bar shows the state and has a start/stop button; the menu has restart, the
 page language, light or dark design, the server log and "Keep running in the background".

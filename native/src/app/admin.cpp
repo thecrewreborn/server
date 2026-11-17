@@ -239,7 +239,7 @@ server::Response html_reply(int status, std::string html, const char* form_actio
   common_headers(&r);
   r.headers.push_back({"Content-Security-Policy",
                        std::string("default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; "
-                                   "connect-src 'self'; img-src 'self' data:; base-uri 'none'; form-action ") +
+                                   "connect-src 'self'; img-src 'self' data:; font-src 'self'; base-uri 'none'; form-action ") +
                            form_action + "; frame-ancestors 'none'"});
   return r;
 }

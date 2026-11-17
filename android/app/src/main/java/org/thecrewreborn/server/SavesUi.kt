@@ -82,6 +82,7 @@ class SavesUi(private val activity: Activity, private val afterRestart: () -> Un
     }
 
     private fun withServerStopped(work: (File) -> String) {
+        val wasRunning = ServerService.running
         Thread({
             if (ServerService.running) {
                 main.post { ServerService.stop(activity) }
@@ -102,7 +103,7 @@ class SavesUi(private val activity: Activity, private val afterRestart: () -> Un
             }
             main.post {
                 toast(result)
-                ServerService.start(activity)
+                if (wasRunning) ServerService.start(activity)
                 afterRestart()
             }
         }, "saves").start()

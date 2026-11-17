@@ -18,8 +18,8 @@
     <string name="menu_battery">Keep running in the background</string>
     <string name="menu_stop">Stop server</string>
     <string name="menu_start">Start server</string>
-    <string name="waiting">Waiting for the server…</string>
-    <string name="stopped_hint">The server is stopped. Start it with the play button at the top or with Start in the notification.</string>
+    <string name="waiting">Starting the server …</string>
+    <string name="stopped_hint">The server is stopped.</string>
     <string name="battery_done">Battery optimisation is already off for this app.</string>
     <string name="download_done">Saved.</string>
     <string name="download_failed">The download failed.</string>
@@ -34,7 +34,7 @@
     <string name="export_done">Saved: %1$d files.</string>
     <string name="export_failed">Export failed: %1$s</string>
     <string name="import_title">Import saves</string>
-    <string name="import_confirm">The saves of the zip replace the saves of this server. The server stops for it and starts again; the current saves are kept first as a zip in backups/ of the server folder.</string>
+    <string name="import_confirm">The saves of the zip replace the saves of this server. A running server stops for it and starts again afterwards; the current saves are kept first as a zip in backups/ of the server folder.</string>
     <string name="import_go">Import</string>
     <string name="import_done">Imported. The previous saves are in %1$s.</string>
     <string name="import_failed">Failed: %1$s</string>
@@ -46,8 +46,12 @@
     <string name="folder_permission">For a folder in the phone\'s storage the app needs \"All files access\". Allow it on the next page, then come back.</string>
     <string name="folder_no_permission">Without the storage permission the server stays in the app\'s storage.</string>
     <string name="folder_unsupported">This folder cannot be used. Pick one in the phone\'s storage.</string>
-    <string name="folder_confirm">Use this folder for the server?\n\n%1$s\n\nIf it holds no server files yet, the current ones (config.ini, save, certs) are copied there. The server restarts.</string>
+    <string name="folder_confirm">Use this folder for the server?\n\n%1$s\n\nIf it holds no server files yet, the current ones (config.ini, save, certs) are copied there. A running server restarts.</string>
     <string name="folder_copied">The server now uses %1$s (files copied).</string>
     <string name="folder_used">The server now uses %1$s.</string>
     <string name="state_folder_error">Stopped: the server folder cannot be used</string>
+    <string name="app_name_mark">THE CREW REBORN</string>
+    <string name="splash_mark_1">THE CREW</string>
+    <string name="splash_mark_2">REBORN</string>
+    <string name="splash_start">\u25B6  Start server</string>
 </resources>

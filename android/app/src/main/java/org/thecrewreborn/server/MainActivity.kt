@@ -21,6 +21,7 @@ import android.webkit.URLUtil
 import android.webkit.WebChromeClient
 import android.webkit.WebResourceError
 import android.webkit.WebResourceRequest
+import android.webkit.WebResourceResponse
 import android.webkit.WebView
 import android.webkit.WebViewClient
 import android.widget.Toast
@@ -39,6 +40,9 @@ class MainActivity : Activity() {
     private var pendingDownload: String? = null
 
     private var darkShown = false
+    private lateinit var titleBar: Brand.TitleBar
+    private lateinit var splash: Brand.Splash
+    private var pageFailed = false
     private val saves by lazy { SavesUi(this) { scheduleRetry() } }
 
     private fun themeSetting(): String =
@@ -72,24 +76,42 @@ class MainActivity : Activity() {
     @SuppressLint("SetJavaScriptEnabled")
     override fun onCreate(savedInstanceState: Bundle?) {
         darkShown = isDark()
-        setTheme(if (darkShown) android.R.style.Theme_DeviceDefault else android.R.style.Theme_DeviceDefault_Light)
+        setTheme(if (darkShown) android.R.style.Theme_DeviceDefault
+                 else android.R.style.Theme_DeviceDefault_Light_DarkActionBar)
         super.onCreate(savedInstanceState)
-        if (!darkShown) {
-            @Suppress("DEPRECATION")
-            window.decorView.systemUiVisibility =
-                window.decorView.systemUiVisibility or android.view.View.SYSTEM_UI_FLAG_LIGHT_STATUS_BAR
+        window.statusBarColor = Brand.NIGHT
+        titleBar = Brand.titleBar(this)
+        actionBar?.apply {
+            setBackgroundDrawable(android.graphics.drawable.ColorDrawable(Brand.NIGHT))
+            setDisplayShowTitleEnabled(false)
+            setDisplayShowCustomEnabled(true)
+            customView = titleBar.view
         }
         web = WebView(this)
-        web.setBackgroundColor(if (darkShown) 0xFF13161B.toInt() else 0xFFF3F5F8.toInt())
+        web.setBackgroundColor(if (darkShown) Brand.NIGHT else 0xFFF3F5F8.toInt())
         web.settings.javaScriptEnabled = true
         web.settings.domStorageEnabled = true
         web.webViewClient = object : WebViewClient() {
             override fun onReceivedError(view: WebView, request: WebResourceRequest, error: WebResourceError) {
-                if (request.isForMainFrame) scheduleRetry()
+                if (request.isForMainFrame) {
+                    pageFailed = true
+                    scheduleRetry()
+                }
             }
 
             override fun onPageStarted(view: WebView, url: String, favicon: Bitmap?) {
-                if (url.startsWith("http")) cancelRetry()
+                pageFailed = false
+                cancelRetry()
+            }
+
+            override fun onPageFinished(view: WebView, url: String) {
+                if (!pageFailed && url.startsWith("http")) splash.hide()
+            }
+
+            override fun shouldInterceptRequest(view: WebView, request: WebResourceRequest): WebResourceResponse? {
+                val uri = request.url
+                if (uri.host != "127.0.0.1") return null
+                return Brand.pageFile(this@MainActivity, uri.path ?: return null)
             }
 
             override fun shouldOverrideUrlLoading(view: WebView, request: WebResourceRequest): Boolean {
@@ -112,18 +134,16 @@ class MainActivity : Activity() {
                 .putExtra(Intent.EXTRA_TITLE, Uri.parse(url).getQueryParameter("file") ?: name)
             startActivityForResult(pick, REQUEST_SAVE)
         }
-        setContentView(web)
-        askNotifications()
-        ServerService.start(this)
-        loadPage()
-    }
-
-    override fun onNewIntent(intent: Intent) {
-        super.onNewIntent(intent)
-        if (!ServerService.running) {
+        splash = Brand.splash(this) {
             ServerService.start(this)
             scheduleRetry()
         }
+        setContentView(android.widget.FrameLayout(this).apply {
+            addView(web)
+            addView(splash.view)
+        })
+        askNotifications()
+        scheduleRetry()
     }
 
     override fun onDestroy() {
@@ -171,11 +191,13 @@ class MainActivity : Activity() {
     private val stateTick = object : Runnable {
         override fun run() {
             val running = ServerService.running
-            actionBar?.subtitle = if (running) {
+            titleBar.subtitle.text = if (running) {
                 getString(R.string.state_running) + (ServerService.address?.let { " · $it" } ?: "")
             } else {
                 getString(R.string.state_stopped)
             }
+            if (!running && !splash.visible) scheduleRetry()
+            if (running && splash.visible && retry == null) scheduleRetry()
             if (running != shownRunning) {
                 shownRunning = running
                 invalidateOptionsMenu()
@@ -210,14 +232,13 @@ class MainActivity : Activity() {
 
     private fun scheduleRetry() {
         cancelRetry()
-        web.loadDataWithBaseURL(
-            null,
-            "<html><body style='font-family:sans-serif;padding:24px;color:#888;background:" +
-                (if (darkShown) "#13161b" else "#f3f5f8") + "'>" +
-                getString(if (ServerService.running) R.string.waiting else R.string.stopped_hint) + "</body></html>",
-            "text/html", "utf-8", null
-        )
-        val r = Runnable { loadPage() }
+        val running = ServerService.running
+        splash.show(running, getString(if (running) R.string.waiting else R.string.stopped_hint))
+        if (!running) return
+        val r = Runnable {
+            retry = null
+            loadPage()
+        }
         retry = r
         main.postDelayed(r, 1000)
     }

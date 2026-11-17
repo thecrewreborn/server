@@ -89,6 +89,53 @@
   --gold: #e6b93f;
   --platinum: #6fc7d6;
 }
+@font-face {
+  font-family: "Barlow Condensed"; font-style: italic; font-weight: 800; font-display: swap;
+  src: url(/_app/barlow-condensed-800i.woff2) format("woff2");
+}
+@font-face {
+  font-family: "Barlow Condensed"; font-style: normal; font-weight: 600; font-display: swap;
+  src: url(/_app/barlow-condensed-600.woff2) format("woff2");
+}
+:root[data-app] { --accent: #0a8fc2; --accent-soft: rgba(10, 143, 194, 0.12); --cut: polygon(8px 0, 100% 0, calc(100% - 8px) 100%, 0 100%); }
+:root[data-app][data-theme="dark"] {
+  --bg: #070b12; --panel: #0d1520; --soft: #121c2a; --line: rgba(140, 180, 220, 0.16); --text: #eaf1f8; --muted: #8d99ab;
+  --accent: #2ec5ff; --accent-soft: rgba(46, 197, 255, 0.16); --accent-text: #04121c; --danger: #ff3b3b; --code: #060a10;
+}
+:root[data-app] h2 {
+  font-family: "Barlow Condensed", "Arial Narrow", sans-serif; font-style: italic; font-weight: 800;
+  text-transform: uppercase; letter-spacing: 0.03em; font-size: 22px;
+}
+:root[data-app] nav { background: var(--bg); border: 0; box-shadow: none; }
+:root[data-app] nav a, :root[data-app] nav a[aria-current="page"] {
+  font-family: "Barlow Condensed", "Arial Narrow", sans-serif; font-weight: 600; text-transform: uppercase;
+  letter-spacing: 0.05em; border: 0; border-radius: 0; background: var(--soft); clip-path: var(--cut); padding: 8px 16px;
+}
+:root[data-app] nav a[aria-current="page"] { background: var(--accent); color: var(--accent-text); }
+:root[data-app] .panel { border-radius: 4px; }
+.app-hero { display: none; }
+:root[data-app] .app-hero {
+  position: relative; display: flex; flex-direction: column; justify-content: flex-end; min-height: 150px;
+  margin: 0 0 12px; padding: 14px 16px; border-radius: 4px; overflow: hidden; color: #fff;
+  background: linear-gradient(180deg, rgba(7, 11, 18, 0) 30%, rgba(7, 11, 18, 0.88) 92%),
+    linear-gradient(200deg, rgba(46, 197, 255, 0.25), transparent 60%), url(/_app/hero.webp) 50% 40% / cover #0b121c;
+}
+.app-hero .big {
+  font-family: "Barlow Condensed", "Arial Narrow", sans-serif; font-style: italic; font-weight: 800; font-size: 34px;
+  line-height: 0.95; text-transform: uppercase;
+}
+.app-hero .big b { color: #2ec5ff; }
+.app-hero.down .big b { color: #ff3b3b; }
+.app-hero .addr { font-size: 15px; margin-top: 6px; color: #eaf1f8; }
+.app-hero .chips { margin: 10px 0 0; position: relative; z-index: 1; }
+.app-hero .chip {
+  display: inline-block; margin-right: 4px; padding: 4px 12px; font: 600 13px "Barlow Condensed", "Arial Narrow", sans-serif;
+  text-transform: uppercase; letter-spacing: 0.04em; color: #bfefff; background: rgba(46, 197, 255, 0.18); clip-path: var(--cut);
+}
+.app-hero::after {
+  content: ""; position: absolute; left: 0; right: 30%; bottom: 46px; height: 2px;
+  background: linear-gradient(90deg, transparent, #2ec5ff); box-shadow: 0 0 10px #2ec5ff;
+}
 * { box-sizing: border-box; }
 [hidden] { display: none !important; }
 html, body { margin: 0; padding: 0; }
@@ -226,6 +273,26 @@ code, pre, .mono { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, "
 #log-lines::-webkit-scrollbar { width: 8px; height: 8px; }
 #log-lines::-webkit-scrollbar-thumb { background: var(--muted); border-radius: 4px; }
 #log-lines::-webkit-scrollbar-track { background: transparent; }
+#mini-log {
+  background: var(--code); border: 1px solid var(--line); border-radius: 8px; padding: 8px 10px; cursor: pointer;
+  font-size: 12px; line-height: 1.45; white-space: pre-wrap; overflow-wrap: anywhere; overflow: hidden;
+  height: calc(8 * 1.45em + 18px); display: flex; flex-direction: column; justify-content: flex-end;
+}
+#mini-log .error { color: var(--error-text); }
+@media (max-width: 900px) {
+  #mini-log-panel {
+    position: fixed; left: 0; right: 0; bottom: 0; z-index: 5; margin: 0; padding: 8px 12px 10px;
+    border-radius: 0; border-left: 0; border-right: 0; box-shadow: 0 -6px 18px rgba(0, 0, 0, 0.25);
+  }
+  #mini-log-panel .panel-head { margin-bottom: 6px; }
+  #mini-log-panel h2 { font-size: 15px; }
+  #mini-log { height: calc(5 * 1.45em + 14px); }
+  #tab-overview { padding-bottom: 170px; }
+}
+#mini-log:hover { border-color: var(--accent); }
+.panel-head { display: flex; align-items: baseline; gap: 12px; margin-bottom: 10px; }
+.panel-head h2 { margin: 0; }
+.panel-head a { margin-left: auto; color: var(--accent); text-decoration: none; font-weight: 500; white-space: nowrap; }
 #log-lines .error { color: var(--error-text); }
 #viewer pre {
   background: var(--code);
@@ -365,8 +432,10 @@ li.item.open .tick { background: none; border: 2px solid var(--line); }
   .tools .label { display: none; }
   main.wrap { padding-top: 14px; }
   .panel { padding: 16px; margin-bottom: 14px; }
-  dl.facts { grid-template-columns: 1fr; gap: 8px; }
-  dl.facts .fact { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: baseline; gap: 2px 12px; padding: 10px 12px; }
+  dl.facts { grid-template-columns: 1fr; gap: 4px; }
+  dl.facts .fact { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: baseline; gap: 2px 12px; padding: 6px 10px; }
+  dl.facts dd { font-size: 14px; }
+  #mini-log { font-size: 11.5px; padding: 6px 8px; }
   dl.facts dt { margin: 0; }
   dl.facts dd { text-align: right; margin-left: auto; }
   button, .button { min-height: 44px; padding: 10px 14px; font-size: 15px; }
@@ -415,9 +484,18 @@ li.item.open .tick { background: none; border: 2px solid var(--line); }
 </nav>
 <main class="wrap">
   <section id="tab-overview">
+    <div class="app-hero" id="app-hero">
+      <div class="big"><span data-t="hero_server">Server</span> <b id="hero-state"></b></div>
+      <div class="addr mono" id="hero-addr"></div>
+      <div class="chips" id="hero-chips"></div>
+    </div>
     <div class="panel">
       <h2 data-t="facts">Server</h2>
       <dl class="facts" id="facts"></dl>
+    </div>
+    <div class="panel" id="mini-log-panel">
+      <div class="panel-head"><h2 data-t="recent_log">Latest log lines</h2><a href="#log" data-t="open_log">Full log</a></div>
+      <div id="mini-log" class="mono" role="log" aria-live="off" title="Log"></div>
     </div>
   </section>
 
@@ -526,6 +604,13 @@ li.item.open .tick { background: none; border: 2px solid var(--line); }
       confirm_stop: "Stop the server? Every connected player loses the connection.",
       live: "Live",
       offline: "No connection to the server",
+      recent_log: "Latest log lines",
+      open_log: "Full log \u203a",
+      hero_server: "Server",
+      hero_live: "live",
+      hero_down: "offline",
+      hero_clients: "{n} clients",
+      hero_client: "1 client",
       tab_overview: "Overview",
       tab_clients: "Clients",
       tab_names: "Names",
@@ -703,6 +788,13 @@ li.item.open .tick { background: none; border: 2px solid var(--line); }
       confirm_stop: "Server beenden? Alle verbundenen Spieler verlieren die Verbindung.",
       live: "Live",
       offline: "Keine Verbindung zum Server",
+      recent_log: "Neueste Log-Zeilen",
+      open_log: "Ganzes Log \u203a",
+      hero_server: "Server",
+      hero_live: "live",
+      hero_down: "offline",
+      hero_clients: "{n} Clients",
+      hero_client: "1 Client",
       tab_overview: "Übersicht",
       tab_clients: "Clients",
       tab_names: "Namen",
@@ -1025,7 +1117,26 @@ li.item.open .tick { background: none; border: 2px solid var(--line); }
     $("lang").setAttribute("lang", other);
   }
 
+  let heroUp = true;
+  function renderHero() {
+    $("app-hero").classList.toggle("down", !heroUp);
+    $("hero-state").textContent = t(heroUp ? "hero_live" : "hero_down");
+    $("hero-addr").textContent = facts ? facts.address : "";
+    const chips = [];
+    if (heroUp) {
+      chips.push(clients.length === 1 ? t("hero_client") : t("hero_clients", { n: clients.length }));
+      const kinds = [];
+      clients.forEach((c) => { const k = platform(c.platform); if (k && kinds.indexOf(k) < 0) kinds.push(k); });
+      if (kinds.length) chips.push(kinds.join(" \u00b7 "));
+    }
+    const box = $("hero-chips");
+    box.textContent = "";
+    chips.forEach((c) => box.appendChild(el("span", { class: "chip", text: c })));
+  }
+
   function setStatus(ok) {
+    heroUp = ok && !stopped && !restarted;
+    renderHero();
     const s = $("status");
     if (stopped) { s.className = "status down"; s.textContent = t("stopped"); return; }
     if (restarted) { s.className = "status down"; s.textContent = ""; return; }
@@ -1408,6 +1519,7 @@ li.item.open .tick { background: none; border: 2px solid var(--line); }
     rows.push(["f_home", facts.home]);
     rows.push(["f_started", when(facts.started)]);
     rows.push(["f_uptime", duration(facts.uptime)]);
+    renderHero();
     rows.forEach((row) => {
       dl.appendChild(el("div", { class: "fact" }, [
         el("dt", { text: row[2] ? row[0] : t(row[0]) }),
@@ -1418,6 +1530,7 @@ li.item.open .tick { background: none; border: 2px solid var(--line); }
 
   function renderClients() {
     $("client-count").textContent = clients.length ? "(" + clients.length + ")" : "";
+    renderHero();
     if (!clients.length) { replace($("clients"), el("p", { class: "empty", text: t("no_clients") })); return; }
     const rows = clients.map((c) => el("tr", null, [
       el("td", { text: c.name === null ? t("not_logged_in") : c.name }),
@@ -1581,7 +1694,14 @@ li.item.open .tick { background: none; border: 2px solid var(--line); }
   function logRow(line) {
     return el("div", { class: line.error ? "error" : "", text: line.text === "" ? " " : line.text });
   }
+  const MINI_LOG = 8;
+  function renderMiniLog() {
+    const box = $("mini-log");
+    box.textContent = "";
+    logLines.slice(-MINI_LOG).forEach((l) => box.appendChild(logRow(l)));
+  }
   function renderLog(appended) {
+    renderMiniLog();
     const box = $("log-lines");
     const follow = $("log-follow").checked;
     if (appended) {
@@ -1769,6 +1889,7 @@ li.item.open .tick { background: none; border: 2px solid var(--line); }
   $("player-close").addEventListener("click", () => { shownPlayer = null; livePlayer = null; renderPlayer(); });
   $("saved-close").addEventListener("click", () => { savedPlayer = null; renderSavedPlayer(); });
   $("log-errors").addEventListener("change", () => renderLog(null));
+  $("mini-log").addEventListener("click", () => { window.location.hash = "#log"; });
   window.addEventListener("hashchange", () => showTab(location.hash.slice(1)));
 
   translateStatic();
