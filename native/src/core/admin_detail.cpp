@@ -54,6 +54,8 @@ struct Tables {
   std::unordered_map<uint64_t, std::string> region_names;
   std::unordered_map<uint64_t, std::string> car_names;
   std::unordered_map<uint64_t, uint64_t> variant_model;
+  std::unordered_map<uint64_t, uint64_t> variant_spec;
+  std::unordered_map<uint64_t, std::string> spec_names;
   std::vector<std::pair<uint64_t, int64_t>> sets;
   std::vector<uint64_t> landmark_bits;
   std::vector<uint64_t> landmark_regions;
@@ -207,11 +209,19 @@ Tables load() {
       if (id && m.value.is_string()) t.car_names[*id] = m.value.as_string();
     }
   }
+  if (const Value* specs = obj(names, "specs")) {
+    for (const json::Member& m : specs->members()) {
+      std::optional<uint64_t> id = hex_text(m.key);
+      if (id && m.value.is_string()) t.spec_names[*id] = m.value.as_string();
+    }
+  }
   if (const Value* variants = obj(gd::table("cars.json"), "variants")) {
     for (const json::Member& m : variants->members()) {
       std::optional<uint64_t> id = hex_text(m.key);
       std::optional<uint64_t> model = m.value.is_object() ? hex_value(m.value.get("model")) : std::nullopt;
       if (id && model) t.variant_model[*id] = *model;
+      std::optional<uint64_t> spec = m.value.is_object() ? hex_value(m.value.get("spec")) : std::nullopt;
+      if (id && spec) t.variant_spec[*id] = *spec;
     }
   }
   const Value* collectibles = gd::table("collectibles.json");
@@ -460,6 +470,11 @@ uint64_t u64_at(const Bytes& b, size_t at) {
   return v;
 }
 
+Value spec_name(const Tables& t, std::optional<uint64_t> spec) {
+  auto it = spec ? t.spec_names.find(*spec) : t.spec_names.end();
+  return it != t.spec_names.end() ? Value::string(it->second) : Value();
+}
+
 Value car_list(const Tables& t, const Value& save, const DetailContext& ctx,
                const std::unordered_set<uint64_t>& missions) {
   std::optional<uint64_t> cur_model, cur_spec;
@@ -486,6 +501,7 @@ Value car_list(const Tables& t, const Value& save, const DetailContext& ctx,
       }
       row.v.set("variant", variant ? hex(*variant) : Value());
       row.v.set("spec", spec ? hex(*spec) : Value());
+      row.v.set("spec_name", spec_name(t, spec));
       row.v.set("source", Value::string(car.pack ? "pack" : "own"));
       row.model = car.model && cur_model && *car.model == *cur_model;
       row.exact = row.model && spec && cur_spec && *spec == *cur_spec;
@@ -516,6 +532,9 @@ Value chase_car(const Tables& t, const Value* car, const Value* chunks, int64_t 
   out.set("model", model != t.variant_model.end() ? hex(model->second) : Value());
   auto name = model != t.variant_model.end() ? t.car_names.find(model->second) : t.car_names.end();
   out.set("name", name != t.car_names.end() ? Value::string(name->second) : Value());
+  auto spec = t.variant_spec.find(*variant);
+  out.set("spec", spec != t.variant_spec.end() ? hex(spec->second) : Value());
+  out.set("spec_name", spec_name(t, spec != t.variant_spec.end() ? std::optional<uint64_t>(spec->second) : std::nullopt));
   out.set("chunks", Value::integer(chunks ? v1_21::chase_chunks(*chunks) : 0));
   out.set("of", Value::integer(of));
   return out;

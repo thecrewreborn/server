@@ -555,7 +555,7 @@ li.item.open .tick { background: none; border: 2px solid var(--line); }
       p_xp: "XP",
       p_bucks: "Bucks",
       p_cc: "Crew credits",
-      p_car: "Current car (id)",
+      p_car: "Current car",
       p_garage: "Cars in the garage",
       p_missions: "Missions done",
       p_activities: "Activities done",
@@ -579,8 +579,7 @@ li.item.open .tick { background: none; border: 2px solid var(--line); }
       d_summit: "Summit",
       d_raw: "Other save keys",
       d_car: "Car",
-      d_variant: "Variant (id)",
-      d_spec: "Spec (id)",
+      d_spec: "Spec",
       d_source: "Source",
       d_src_own: "own garage",
       d_src_pack: "car pack",
@@ -731,7 +730,7 @@ li.item.open .tick { background: none; border: 2px solid var(--line); }
       p_xp: "XP",
       p_bucks: "Bucks",
       p_cc: "Crew Credits",
-      p_car: "Aktuelles Auto (ID)",
+      p_car: "Aktuelles Auto",
       p_garage: "Autos in der Garage",
       p_missions: "Erledigte Missionen",
       p_activities: "Erledigte Aktivitäten",
@@ -755,8 +754,7 @@ li.item.open .tick { background: none; border: 2px solid var(--line); }
       d_summit: "Summit",
       d_raw: "Weitere Schlüssel im Spielstand",
       d_car: "Auto",
-      d_variant: "Variante (ID)",
-      d_spec: "Spec (ID)",
+      d_spec: "Spec",
       d_source: "Herkunft",
       d_src_own: "eigene Garage",
       d_src_pack: "Autopaket",
@@ -977,6 +975,11 @@ li.item.open .tick { background: none; border: 2px solid var(--line); }
   function num(v) {
     return v === null || v === undefined ? "" : typeof v === "number" ? v.toLocaleString(locale()) : String(v);
   }
+  function currentCar(p) {
+    const car = p.detail && (p.detail.cars || []).find((c) => c.current);
+    if (car && car.name) return car.name + (car.spec_name ? " · " + car.spec_name : "");
+    return p.car || t("none");
+  }
   function playerRows(p) {
     const rows = [];
     if (p.name !== undefined) {
@@ -984,7 +987,7 @@ li.item.open .tick { background: none; border: 2px solid var(--line); }
         [t("p_since"), when(p.since)], [t("p_seen"), when(p.last_seen)]);
     }
     rows.push([t("p_level"), num(p.level)], [t("p_xp"), num(p.xp)], [t("p_bucks"), num(p.bucks)],
-      [t("p_cc"), num(p.crew_credits)], [t("p_car"), p.car || t("none")], [t("p_garage"), num(p.garage)],
+      [t("p_cc"), num(p.crew_credits)], [t("p_car"), currentCar(p)], [t("p_garage"), num(p.garage)],
       [t("p_missions"), num(p.missions_done)], [t("p_activities"), num(p.activities_done)],
       [t("p_perks"), (p.perks || []).join(" ") + " (" + num(p.perk_total) + ")"],
       [t("p_perk_points"), num(p.perk_points)], [t("p_collectibles"), num(p.collectibles)],
@@ -1056,7 +1059,7 @@ li.item.open .tick { background: none; border: 2px solid var(--line); }
     return el("li", { class: it.done ? "item" : "item open" }, [
       el("span", { class: "tick", role: "img", "aria-label": mark, title: mark, text: it.done ? "✓" : "" }),
       el("div", { class: "what" }, [
-        el("div", { class: it.name ? "name" : "name mono", text: it.name || it.id }),
+        el("div", { class: it.name ? "name" : "name mono", text: it.name || it.id, title: it.id }),
         sub ? el("span", { class: "sub", text: sub }) : null
       ]),
       itemResult(it)
@@ -1122,7 +1125,7 @@ li.item.open .tick { background: none; border: 2px solid var(--line); }
   }
   function chaseText(c) {
     if (!c) return t("none");
-    return (c.name || c.variant) + " (" + t("d_chunks", { have: num(c.chunks), of: num(c.of) }) + ")";
+    return (c.name || c.variant) + (c.spec_name ? " · " + c.spec_name : "") + " (" + t("d_chunks", { have: num(c.chunks), of: num(c.of) }) + ")";
   }
   function carsBody(d) {
     const parts = [];
@@ -1130,13 +1133,13 @@ li.item.open .tick { background: none; border: 2px solid var(--line); }
     if (!cars.length) parts.push(el("p", { class: "empty", text: t("d_no_cars") }));
     else {
       const rows = cars.map((c) => el("tr", null, [
-        el("td", { text: c.name || c.model, class: c.name ? "" : "mono" }),
-        el("td", null, [el("span", { text: c.variant || DASH, class: "mono" })]),
-        el("td", null, [el("span", { text: c.spec || DASH, class: "mono" })]),
+        el("td", { text: c.name || c.model, class: c.name ? "" : "mono",
+          title: [c.model, c.variant, c.spec].filter(Boolean).join(" · ") }),
+        el("td", { text: c.spec_name || c.spec || DASH, class: c.spec_name ? "" : "mono" }),
         el("td", { text: t(c.source === "pack" ? "d_src_pack" : "d_src_own") }),
         el("td", null, [c.current ? el("span", { class: "badge current", text: t("d_current") }) : null])
       ]));
-      parts.push(table([t("d_car"), t("d_variant"), t("d_spec"), t("d_source"), ""], rows));
+      parts.push(table([t("d_car"), t("d_spec"), t("d_source"), ""], rows));
     }
     const chase = d.chase || {};
     const dl = el("dl", { class: "facts" });
@@ -1148,14 +1151,14 @@ li.item.open .tick { background: none; border: 2px solid var(--line); }
   function missionGroups(m) {
     const groups = (m.groups || []).map((g) => ({
       title: g.label || t("d_kind", { n: g.kind }), done: g.done, total: g.total, items: g.items || [],
-      sub: (it) => (it.name ? it.id : "")
+      sub: () => ""
     }));
     return groups.concat(otherGroup(m.other));
   }
   function activityGroups(a) {
     const groups = (a.regions || []).map((r) => ({
       title: r.name || r.region, done: r.done, total: r.total, items: r.items || [],
-      sub: (it) => [it.district, it.id].filter(Boolean).join(" · ")
+      sub: (it) => it.district || ""
     }));
     return groups.concat(otherGroup(a.other));
   }
