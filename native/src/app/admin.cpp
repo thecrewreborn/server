@@ -1,7 +1,6 @@
 #include "app/admin.h"
 
 #include <algorithm>
-#include <atomic>
 #include <cmath>
 #include <cstdint>
 #include <cstdio>
@@ -51,13 +50,11 @@ struct State {
   std::string password;
   std::deque<std::string> sessions;
   std::map<std::string, std::deque<double>> fails;
-  server::HttpServer* http = nullptr;
   struct Bucket {
     double tokens = kBurst;
     double at = 0.0;
   };
   std::map<std::string, Bucket> buckets;
-  std::atomic<bool> off{false};
 };
 State* g_state = nullptr;
 
@@ -504,37 +501,8 @@ server::Response open_folder(Core& core, const json::Value& body) {
   return json_reply(200, out);
 }
 
-server::Response page_off(Core& core) {
-  json::Value view = tcr::admin::settings(core);
-  const json::Value* stamp = view.get("stamp");
-  json::Value body = json::Value::object();
-  body.set("section", json::Value::string("ui"));
-  body.set("key", json::Value::string("enabled"));
-  body.set("value", json::Value::string("off"));
-  body.set("stamp", json::Value::string(stamp && stamp->is_string() ? stamp->as_string() : std::string()));
-  int status = 500;
-  std::string said;
-  json::Value out = tcr::admin::set_setting(core, body, &status, &said);
-  if (status != 200) return json_reply(status, out);
-  const json::Value* path = view.get("path");
-  say_action(core, "off (config.ini [ui] enabled = off). To turn it on again, set [ui] enabled = on in " +
-                       (path && path->is_string() ? path->as_string() : std::string("config.ini")) +
-                       " and restart the server.");
-  g_state->off = true;
-  server::HttpServer* http = g_state->http;
-  if (!plat::start_thread([http]() {
-        plat::sleep_seconds(0.3);
-        http->stop();
-        server::console_log::stop();
-      })) {
-    say_action(core, "cannot close the listener: the system refused a thread; it closes at the next start");
-  }
-  return ok_reply("the admin page is off");
-}
-
 server::Response route(const server::Request& req) {
   State& s = *g_state;
-  if (s.off) return refused();
   Core& core = *s.core;
   std::string client_ip = req.client_ip, local_ip = req.host;
   int client_port = req.client_port;
@@ -617,7 +585,6 @@ server::Response route(const server::Request& req) {
     return json_reply(status, out);
   }
   if (path == "/api/logout") return logout(req);
-  if (path == "/api/page-off") return page_off(core);
   if (path == "/api/restart") {
     say_action(core, "restart");
     request_restart();
@@ -685,7 +652,6 @@ void start_admin_page(Core& core, AdminOptions options) {
   }
   if (!ok) return off("Admin page: off (cannot open tcp port " + std::to_string(want) + ": " + err.text + ")");
   g_state->port = http.port();
-  g_state->http = &http;
   g_state->o.facts.admin_port = g_state->port;
   const std::string pw = g_state->password.empty() ? "" : ", password";
   const std::string local_url = "http://127.0.0.1:" + std::to_string(g_state->port) + "/";

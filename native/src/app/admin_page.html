@@ -271,7 +271,6 @@ code, pre, .mono { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, "
   <div class="tools">
     <button id="lang" type="button" lang="de">Deutsch</button>
     <button id="logout" type="button" data-t="logout" hidden>Log out</button>
-    <button id="page-off" type="button" data-t="page_off">Turn this page off</button>
     <button id="restart" type="button" data-t="restart">Restart server</button>
     <button id="stop" class="danger" type="button" data-t="stop">Stop server</button>
   </div>
@@ -389,9 +388,6 @@ code, pre, .mono { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, "
       title: "The Crew Reborn server",
       stop: "Stop server",
       logout: "Log out",
-      page_off: "Turn this page off",
-      confirm_page_off: "Turn the admin page off? The server keeps running. To turn the page on again, set [ui] enabled = on in config.ini and restart the server.",
-      page_is_off: "The admin page is off. To turn it on again, set [ui] enabled = on in config.ini and restart the server.",
       restart: "Restart server",
       confirm_restart: "Restart the server? It reads config.ini again. The players' sessions are kept.",
       restarting: "The server restarts. The page reloads by itself.",
@@ -523,9 +519,6 @@ code, pre, .mono { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, "
       title: "The Crew Reborn Server",
       stop: "Server beenden",
       logout: "Abmelden",
-      page_off: "Diese Seite ausschalten",
-      confirm_page_off: "Die Verwaltungsseite ausschalten? Der Server läuft weiter. Um die Seite wieder einzuschalten, setze [ui] enabled = on in config.ini und starte den Server neu.",
-      page_is_off: "Die Verwaltungsseite ist ausgeschaltet. Um sie wieder einzuschalten, setze [ui] enabled = on in config.ini und starte den Server neu.",
       restart: "Server neu starten",
       confirm_restart: "Server neu starten? Er liest config.ini neu ein. Die Sitzungen der Spieler bleiben erhalten.",
       restarting: "Der Server startet neu. Die Seite lädt sich danach selbst neu.",
@@ -1119,18 +1112,6 @@ code, pre, .mono { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, "
       notice(t("folder_opened"), false);
     } catch (e) { notice(e.message, true); }
   }
-  async function pageOff() {
-    if (!window.confirm(t("confirm_page_off"))) return;
-    try {
-      await post("/api/page-off", {});
-    } catch (e) { notice(e.message, true); return; }
-    stopped = true;
-    ["page-off", "restart", "stop"].forEach((id) => { $(id).disabled = true; });
-    $("stopped").textContent = t("page_is_off");
-    $("stopped").removeAttribute("data-t");
-    $("stopped").hidden = false;
-    setStatus(false);
-  }
   async function restartServer() {
     if (!window.confirm(t("confirm_restart"))) return;
     try {
@@ -1250,7 +1231,6 @@ code, pre, .mono { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, "
   });
   $("stop").addEventListener("click", stopServer);
   $("restart").addEventListener("click", restartServer);
-  $("page-off").addEventListener("click", pageOff);
   if (document.querySelector('meta[name="admin-auth"]').content === "1") {
     $("logout").hidden = false;
     $("logout").addEventListener("click", async () => {
