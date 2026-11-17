@@ -87,7 +87,7 @@ Everything sits next to the program:
 | File or folder | Holds |
 |---|---|
 | `config.ini` | your settings. The first start copies `config.example.ini`, which explains every setting. |
-| `save/` | the saves, the names and their devices (`accounts.json`), the server's id (`server_id`) |
+| `save/` | the saves, the names and their devices (`accounts.json`), the logins of running games (`tickets.json`), the server's id (`server_id`) |
 | `certs/` | the HTTPS certificate and its key, made at the first start |
 | `captures/` | the logs (see "Logs") |
 
@@ -465,7 +465,8 @@ These rules apply to every server, at home and on the internet:
   at most 254 configurations, the garage 1100. A tuner purchase the server refuses does not write the save.
 - The server answers a request the game sends again from its store of recent replies. When that reply is no longer
   stored, the server drops the request, so a purchase is never made twice.
-- `save/accounts.json` and `sessions.json` are readable only by the user that runs the server.
+- `save/accounts.json`, `save/tickets.json` and `sessions.json` are readable only by the user that runs the
+  server. `tickets.json` keeps a hash of each login ticket, never the ticket itself.
 - Multiplayer serves only logged-in games, with `lan` only those from the home network while `link_home` is on.
 - A `config.ini` the server cannot read (for example one with a second `[server]` heading), or an unknown
   `link_home` or `multiplayer` value, stops the start with a message.

@@ -6,7 +6,9 @@
 
 #include "core/core.h"
 #include "core/entities.h"
+#include "core/files.h"
 #include "core/logtext.h"
+#include "core/session_store.h"
 #include "core/util.h"
 #include "core/v1_21/gamedata.h"
 #include "core/v1_21/handlers.h"
@@ -479,12 +481,112 @@ json::Value loggable(const json::Value& reply) {
   return hide_upload_key(reply);
 }
 
+std::string ticket_key(const std::string& ticket) {
+  uint8_t out[32];
+  mbedtls_md(mbedtls_md_info_from_type(MBEDTLS_MD_SHA256), reinterpret_cast<const uint8_t*>(ticket.data()),
+             ticket.size(), out);
+  return py::hex(out, sizeof(out));
+}
+
+namespace {
+
+bool stored_text(const json::Value* v, size_t limit = 64) {
+  if (!v || !v->is_string()) return false;
+  const std::string& s = v->as_string();
+  if (s.empty() || s.size() > limit) return false;
+  for (char c : s) {
+    if (c < ' ' || c > '~') return false;
+  }
+  return true;
+}
+
+bool hex_key(const std::string& key) {
+  if (key.size() != 64) return false;
+  for (char c : key) {
+    if (!((c >= '0' && c <= '9') || (c >= 'a' && c <= 'f'))) return false;
+  }
+  return true;
+}
+
+std::optional<double> stored_time(const json::Value* v) {
+  if (!v) return std::nullopt;
+  if (v->type() == json::Type::Int) {
+    int64_t i = *v->as_i64();
+    if (i < 0 || i >= 1000000000000LL) return std::nullopt;
+    return static_cast<double>(i);
+  }
+  if (v->type() == json::Type::Float) {
+    double f = v->as_float();
+    if (!(f >= 0 && f < 1e12)) return std::nullopt;
+    return f;
+  }
+  return std::nullopt;
+}
+
+}
+
 Ubi::Ubi(Core& core) : core_(core) {
   const std::string save = paths_.join(core.home(), "save");
   accounts_.reset(new AccountStore(core.env(), *core.files(), paths_.join(save, kAccountsStoreName),
                                    core.accounts_key()));
   server_id_.reset(new ServerId(core.env(), *core.files(), paths_.join(save, "server_id")));
   avatars_.reset(new avatar::Avatars(core.env(), *core.files(), paths_.join(save, "avatars"), paths_));
+  tickets_path_ = paths_.join(save, kTicketsName);
+  load_tickets();
+}
+
+void Ubi::load_tickets() {
+  std::string data;
+  OsError err;
+  if (!core_.files()->read(tickets_path_, &data, &err)) return;
+  std::string text;
+  if (decode_text_file(core_.files(), data, true, &text)) return;
+  std::optional<json::Value> parsed = json::loads(py::universal_newlines(text), json::kFileMaxDepth);
+  if (!parsed || !parsed->is_object()) return;
+  const double t = now(), wall_now = core_.env().time();
+  for (const json::Member& m : parsed->members()) {
+    const json::Value& e = m.value;
+    if (m.int_key || !hex_key(m.key) || !e.is_object()) continue;
+    const json::Value* name = e.get("name");
+    const json::Value* login = e.get("login");
+    const json::Value* platform = e.get("platform");
+    const json::Value* ip = e.get("ip");
+    const json::Value* claim = e.get("claim");
+    std::optional<double> wall = stored_time(e.get("issued"));
+    if (!name || !name->is_string() || !name_allowed(name->as_string()) || !login || !login->is_string() ||
+        !name_allowed(login->as_string()) || !stored_text(platform) || !stored_text(ip) ||
+        !(!claim || claim->is_null() || stored_text(claim)) || !wall) {
+      continue;
+    }
+    if (wall_now - *wall > session::STORE_MAX_AGE) continue;
+    Ticket entry{name->as_string(), platform->as_string(), t - std::max(0.0, wall_now - *wall),
+                 claim && claim->is_string() ? std::optional<std::string>(claim->as_string()) : std::nullopt,
+                 login->as_string(), ip->as_string(), *wall};
+    tickets_.set(m.key, entry);
+    profiles_.set(stable_id("profile", entry.login), {entry.login, entry.platform});
+    sessions_.set(entry.ip, entry.login);
+    platforms_.set(entry.ip, entry.platform);
+  }
+}
+
+void Ubi::save_tickets() {
+  json::Value entries = json::Value::object();
+  for (const auto& kv : tickets_) {
+    const Ticket& t = kv.second;
+    json::Value e = json::Value::object();
+    e.set("name", json::Value::string(t.name));
+    e.set("login", json::Value::string(t.login));
+    e.set("platform", json::Value::string(t.platform));
+    e.set("ip", json::Value::string(t.ip));
+    e.set("issued", json::Value::number(t.wall));
+    e.set("claim", t.claim ? json::Value::string(*t.claim) : json::Value());
+    entries.set(kv.first, std::move(e));
+  }
+  FileStat st;
+  OsError err;
+  if (!core_.files()->write_atomic(tickets_path_, json::dumps(entries, 1), true, -1, -1, &st, &err)) {
+    core_.env().print_line("could not write " + tickets_path_ + ": " + err.text());
+  }
 }
 
 double Ubi::now() { return core_.env().monotonic(); }
@@ -527,7 +629,8 @@ void Ubi::active(const std::string& name) { active_.set(account_key(name), now()
 std::optional<std::pair<std::string, std::string>> Ubi::ticket_owner(const std::string& ticket, bool refresh,
                                                                       Raised* raised) {
   double t = now();
-  const Ticket* found = tickets_.get(ticket);
+  const std::string key = ticket_key(ticket);
+  const Ticket* found = tickets_.get(key);
   if (!found || expired(*found, t)) return std::nullopt;
   Ticket entry = *found;
   Raised err;
@@ -537,9 +640,13 @@ std::optional<std::pair<std::string, std::string>> Ubi::ticket_owner(const std::
     return std::nullopt;
   }
   if (!claim || claim != entry.claim) return std::nullopt;
-  if (refresh) {
-    Ticket* current = tickets_.get(ticket);
-    if (current && *current == entry) current->issued = std::max(entry.issued, t);
+  if (refresh && t > entry.issued) {
+    Ticket* current = tickets_.get(key);
+    if (current && *current == entry) {
+      current->issued = t;
+      current->wall = core_.env().time();
+      save_tickets();
+    }
   }
   return std::make_pair(entry.name, entry.platform);
 }
@@ -549,7 +656,8 @@ bool Ubi::live_ticket(const std::string& auth, Raised* raised) {
   return t && ticket_owner(std::string(strip_ws_latin1(t->ticket)), false, raised).has_value();
 }
 
-bool Ubi::issue(const std::string& ticket, const std::string& name, const std::string& platform, Raised* raised) {
+bool Ubi::issue(const std::string& ticket, const std::string& name, const std::string& platform,
+                const std::string& login, const std::string& client_ip, Raised* raised) {
   double t = now();
   std::string account = account_key(name);
   std::optional<std::string> claim = accounts_->account_id(name, raised);
@@ -561,7 +669,8 @@ bool Ubi::issue(const std::string& ticket, const std::string& name, const std::s
   for (auto it = active_.begin(); it != active_.end();) {
     it = t - it->second >= kTicketTtl ? active_.erase(it) : std::next(it);
   }
-  tickets_.set(ticket, Ticket{name, platform, t, claim});
+  tickets_.set(ticket_key(ticket), Ticket{name, platform, t, claim, login, client_ip, core_.env().time()});
+  save_tickets();
   return true;
 }
 
@@ -796,7 +905,7 @@ json::Value Ubi::session(const json::Value& body, const std::string& client_ip, 
   std::string token = b64encode("offline-token:" + uuid4_text(random));
   std::optional<std::string> shown = accounts_->display_name(name, raised);
   if (!raised->type.empty()) return Value();
-  if (!issue(ticket, shown ? *shown : name, platform, raised)) return Value();
+  if (!issue(ticket, shown ? *shown : name, platform, name, client_ip, raised)) return Value();
   Value reply = obj({{"platformType", str(platform)},
                      {"ticket", str(ticket)},
                      {"token", str(token)},

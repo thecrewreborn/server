@@ -68,10 +68,16 @@ struct Ticket {
   std::string name, platform;
   double issued = 0;
   std::optional<std::string> claim;
+  std::string login, ip;
+  double wall = 0;
   bool operator==(const Ticket& o) const {
-    return name == o.name && platform == o.platform && issued == o.issued && claim == o.claim;
+    return name == o.name && platform == o.platform && issued == o.issued && claim == o.claim && login == o.login &&
+           ip == o.ip && wall == o.wall;
   }
 };
+
+constexpr const char kTicketsName[] = "tickets.json";
+std::string ticket_key(const std::string& ticket);
 
 class Ubi {
  public:
@@ -100,7 +106,10 @@ class Ubi {
   double now();
   void print(const std::string& text);
   bool expired(const Ticket& t, double now);
-  bool issue(const std::string& ticket, const std::string& name, const std::string& platform, Raised* raised);
+  bool issue(const std::string& ticket, const std::string& name, const std::string& platform, const std::string& login,
+             const std::string& client_ip, Raised* raised);
+  void load_tickets();
+  void save_tickets();
   static void prune(Times& table, double window, double now);
   std::optional<double> take(Times& table, int limit, double window, const std::string& ip);
   void give_back(Times& table, double window, const std::string& ip, double stamp);
@@ -143,6 +152,7 @@ class Ubi {
   std::unique_ptr<ServerId> server_id_;
   std::unique_ptr<avatar::Avatars> avatars_;
   const py::PathRules& paths_ = py::native_paths();
+  std::string tickets_path_;
   int http_port_ = 80;
 
   OrderedMap<std::string> sessions_;
