@@ -309,7 +309,6 @@ int run_server(const std::vector<std::string>& argv) {
   SystemEnv& env = *new SystemEnv(files, config_path);
   Core& core = *new Core(env, home, "");
   core.set_files(&files);
-  core.overrides().skill_part_announce = plat::env_var("TCR_SKILL_PART_ANNOUNCE");
   v1_21::factions::path(core);
   v1_21::scores::path(core);
 
