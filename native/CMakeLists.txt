@@ -227,6 +227,21 @@ foreach(page admin_page:kAdminPage admin_login:kAdminLogin)
     VERBATIM)
   list(APPEND TCR_ADMIN_SOURCES ${page_source})
 endforeach()
+foreach(asset hero.webp:kPageHero barlow-condensed-800i.woff2:kPageFont800i barlow-condensed-600.woff2:kPageFont600)
+  string(REPLACE ":" ";" asset "${asset}")
+  list(GET asset 0 asset_file)
+  list(GET asset 1 asset_array)
+  set(asset_source ${TCR_GENERATED}/app/page_${asset_array}.inc)
+  add_custom_command(
+    OUTPUT ${asset_source}
+    COMMAND ${CMAKE_COMMAND} -DTCR_EMBED_LOGO=${CMAKE_CURRENT_SOURCE_DIR}/src/app/page/${asset_file}
+            -DTCR_EMBED_NAME=${asset_array} -DTCR_EMBED_OUT=${asset_source}
+            -P ${CMAKE_CURRENT_SOURCE_DIR}/cmake/embed.cmake
+    DEPENDS ${CMAKE_CURRENT_SOURCE_DIR}/cmake/embed.cmake ${CMAKE_CURRENT_SOURCE_DIR}/src/app/page/${asset_file}
+    COMMENT "Embedding page/${asset_file}"
+    VERBATIM)
+  list(APPEND TCR_ADMIN_SOURCES ${asset_source})
+endforeach()
 target_sources(TheCrewReborn-Server PRIVATE ${TCR_ADMIN_SOURCES})
 if(WIN32)
   target_link_libraries(tcrplatform PUBLIC shell32 user32 ole32)

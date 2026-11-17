@@ -15,7 +15,6 @@ import android.view.Gravity
 import android.view.View
 import android.view.ViewGroup.LayoutParams.MATCH_PARENT
 import android.view.ViewGroup.LayoutParams.WRAP_CONTENT
-import android.webkit.WebResourceResponse
 import android.widget.Button
 import android.widget.FrameLayout
 import android.widget.ImageView
@@ -146,6 +145,12 @@ object Brand {
             setPadding(dp(a, 34f), dp(a, 10f), dp(a, 34f), dp(a, 10f))
             setOnClickListener { onStart() }
         }
+        val version = TextView(a).apply {
+            text = a.getString(R.string.version_line, versionName(a))
+            setTextColor(STEEL)
+            setTextSize(TypedValue.COMPLEX_UNIT_SP, 13f)
+            setPadding(0, dp(a, 14f), 0, 0)
+        }
         val glow = View(a).apply {
             background = GradientDrawable(GradientDrawable.Orientation.LEFT_RIGHT, intArrayOf(0x002EC5FF, CYAN))
         }
@@ -157,6 +162,7 @@ object Brand {
             addView(status)
             addView(start, LinearLayout.LayoutParams(WRAP_CONTENT, WRAP_CONTENT))
             addView(glow, LinearLayout.LayoutParams(dp(a, 180f), dp(a, 3f)).apply { topMargin = dp(a, 26f) })
+            addView(version)
         }
         val root = FrameLayout(a).apply {
             setBackgroundColor(NIGHT)
@@ -169,19 +175,9 @@ object Brand {
         return Splash(root, status, start, glow)
     }
 
-    fun pageFile(a: Activity, path: String): WebResourceResponse? {
-        if (!path.startsWith("/_app/")) return null
-        val name = path.removePrefix("/_app/")
-        if (name.contains('/') || name.contains("..")) return null
-        val mime = when {
-            name.endsWith(".webp") -> "image/webp"
-            name.endsWith(".woff2") -> "font/woff2"
-            else -> return null
-        }
-        return try {
-            WebResourceResponse(mime, null, a.assets.open("app/$name"))
-        } catch (e: Exception) {
-            null
-        }
+    fun versionName(a: Activity): String = try {
+        a.packageManager.getPackageInfo(a.packageName, 0).versionName ?: "?"
+    } catch (e: Exception) {
+        "?"
     }
 }

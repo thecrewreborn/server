@@ -53,4 +53,5 @@
     <string name="splash_mark_1">THE CREW</string>
     <string name="splash_mark_2">REBORN</string>
     <string name="splash_start">\u25B6  Server starten</string>
+    <string name="version_line">Version %1$s</string>
 </resources>

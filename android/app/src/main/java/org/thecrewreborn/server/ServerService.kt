@@ -170,7 +170,7 @@ class ServerService : Service() {
     }
 
     private fun updateNotification() {
-        val addr = lanAddress()
+        val addr = shownAddressOverride() ?: lanAddress()
         val https = files.httpsPort()
         address = if (addr != null) "$addr:$https" else null
         val text = if (addr != null) "${getString(R.string.state_running)} · $addr:$https" else getString(R.string.state_running)
@@ -232,6 +232,11 @@ class ServerService : Service() {
         wakeLock = null
         wifiLock = null
         multicastLock = null
+    }
+
+    private fun shownAddressOverride(): String? {
+        if (applicationInfo.flags and android.content.pm.ApplicationInfo.FLAG_DEBUGGABLE == 0) return null
+        return File(filesDir, "debug_address").takeIf { it.exists() }?.readText()?.trim()?.takeIf { it.isNotEmpty() }
     }
 
     private fun lanAddress(): String? {

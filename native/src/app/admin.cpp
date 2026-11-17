@@ -6,6 +6,7 @@
 #include <cstdio>
 #include <deque>
 #include <map>
+#include <optional>
 #include <string>
 
 #include "app/system.h"
@@ -29,6 +30,9 @@ namespace {
 
 #include "app/admin_page.inc"
 #include "app/admin_login.inc"
+#include "app/page_kPageHero.inc"
+#include "app/page_kPageFont800i.inc"
+#include "app/page_kPageFont600.inc"
 
 constexpr char kTokenMark[] = "{{TOKEN}}";
 constexpr char kRunMark[] = "{{RUN}}";
@@ -248,6 +252,27 @@ void same_origin_referrer(server::Response* r) {
   for (auto& h : r->headers) {
     if (h.first == "Referrer-Policy") h.second = "same-origin";
   }
+}
+
+std::optional<server::Response> page_file(const std::string& path) {
+  struct File { const char* path; const unsigned char* data; size_t size; const char* type; };
+  static const File files[] = {
+      {"/_app/hero.webp", kPageHero, sizeof(kPageHero), "image/webp"},
+      {"/_app/barlow-condensed-800i.woff2", kPageFont800i, sizeof(kPageFont800i), "font/woff2"},
+      {"/_app/barlow-condensed-600.woff2", kPageFont600, sizeof(kPageFont600), "font/woff2"},
+  };
+  for (const File& f : files) {
+    if (path != f.path) continue;
+    server::Response r;
+    r.status = 200;
+    r.payload.assign(reinterpret_cast<const char*>(f.data), f.size);
+    r.binary = true;
+    r.content_type = f.type;
+    r.headers.push_back({"Cache-Control", "max-age=86400"});
+    r.headers.push_back({"X-Content-Type-Options", "nosniff"});
+    return r;
+  }
+  return std::nullopt;
 }
 
 server::Response page() {
@@ -593,6 +618,10 @@ server::Response route(const server::Request& req) {
   if (q != std::string::npos) {
     query = path.substr(q + 1);
     path = path.substr(0, q);
+  }
+  if (req.method == "GET" && path.compare(0, 6, "/_app/") == 0) {
+    if (std::optional<server::Response> f = page_file(path)) return *f;
+    return error_reply(404, "not found");
   }
   if (!s.password.empty() && !logged_in(req)) {
     if (req.method == "POST" && path == "/login") {

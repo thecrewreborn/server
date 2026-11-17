@@ -21,7 +21,6 @@ import android.webkit.URLUtil
 import android.webkit.WebChromeClient
 import android.webkit.WebResourceError
 import android.webkit.WebResourceRequest
-import android.webkit.WebResourceResponse
 import android.webkit.WebView
 import android.webkit.WebViewClient
 import android.widget.Toast
@@ -106,12 +105,6 @@ class MainActivity : Activity() {
 
             override fun onPageFinished(view: WebView, url: String) {
                 if (!pageFailed && url.startsWith("http")) splash.hide()
-            }
-
-            override fun shouldInterceptRequest(view: WebView, request: WebResourceRequest): WebResourceResponse? {
-                val uri = request.url
-                if (uri.host != "127.0.0.1") return null
-                return Brand.pageFile(this@MainActivity, uri.path ?: return null)
             }
 
             override fun shouldOverrideUrlLoading(view: WebView, request: WebResourceRequest): Boolean {
@@ -267,6 +260,7 @@ class MainActivity : Activity() {
         menu.add(0, 2, 4, R.string.menu_log)
         menu.add(0, 3, 5, R.string.menu_battery)
         menu.add(0, 1, 6, R.string.menu_reload)
+        menu.add(0, 11, 7, getString(R.string.version_line, Brand.versionName(this))).isEnabled = false
         return true
     }
 
