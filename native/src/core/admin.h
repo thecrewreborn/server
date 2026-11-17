@@ -2,14 +2,17 @@
 
 #include <cstddef>
 #include <cstdint>
+#include <map>
 #include <optional>
 #include <string>
 #include <vector>
 
 #include "core/json.h"
+#include "core/util.h"
 
 namespace tcr {
 class Core;
+class Files;
 namespace v1_21 {
 class Relay;
 }
@@ -54,7 +57,37 @@ std::string save_file(Core& core, const std::vector<RelayView>& relays, const st
 std::string save_view(const std::string& data, bool* formatted);
 
 json::Value players(Core& core, const std::vector<RelayView>& relays);
-json::Value saved_player(const std::string& data);
+
+struct DetailContext {
+  std::optional<Bytes> pack_garage;
+  std::map<uint64_t, int64_t> best;
+};
+
+json::Value player_detail(const json::Value& save, const DetailContext& ctx);
+
+int64_t collectibles_found(const json::Value* list);
+
+std::map<uint64_t, int64_t> best_scores(Files* files, const std::string& data, uint64_t player);
+
+json::Value saved_player(const std::string& data, const DetailContext* ctx = nullptr);
+
+struct SavedSource {
+  DetailContext ctx;
+  std::string scores_path;
+  uint64_t player = 0;
+};
+bool saved_source(Core& core, const std::vector<RelayView>& relays, const std::string& version,
+                  const std::string& file, SavedSource* out);
+
+struct LivePlayer {
+  json::Value entry;
+  std::string save_text;
+  DetailContext ctx;
+  std::string scores_path;
+  uint64_t player = 0;
+};
+bool live_player(Core& core, const std::vector<RelayView>& relays, const std::string& version,
+                 const std::string& name, LivePlayer* out);
 
 json::Value settings(Core& core);
 

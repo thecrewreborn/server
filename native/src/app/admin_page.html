@@ -24,6 +24,10 @@
   --code: #f0f2f5;
   --error-text: #b3261e;
   --shadow: 0 1px 2px rgba(16, 24, 40, 0.06);
+  --bronze: #9a5a26;
+  --silver: #5f6a76;
+  --gold: #9a6f00;
+  --platinum: #2b7585;
   --wrap: 1320px;
   --gutter: 24px;
 }
@@ -43,6 +47,10 @@
     --code: #11141a;
     --error-text: #ff8a80;
     --shadow: none;
+    --bronze: #d9965f;
+    --silver: #b9c2cc;
+    --gold: #e6b93f;
+    --platinum: #6fc7d6;
   }
 }
 * { box-sizing: border-box; }
@@ -209,6 +217,68 @@ code, pre, .mono { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, "
 #settings th:nth-child(3) { width: 20%; }
 #settings th:nth-child(4) { width: 16%; }
 #settings td { overflow-wrap: anywhere; }
+details.section { border: 1px solid var(--line); border-radius: 8px; margin-top: 12px; min-width: 0; }
+details.section > summary {
+  display: flex; flex-wrap: wrap; align-items: center; gap: 4px 12px; min-height: 48px; padding: 10px 14px;
+  cursor: pointer; list-style: none; font-weight: 600; border-radius: 8px;
+}
+details.section > summary::-webkit-details-marker { display: none; }
+details.section > summary::before {
+  content: ""; flex: none; width: 7px; height: 7px; margin: 0 4px 0 2px;
+  border-right: 2px solid var(--muted); border-bottom: 2px solid var(--muted); transform: rotate(-45deg); transition: transform 0.12s;
+}
+details.section[open] > summary::before { transform: rotate(45deg); }
+details.section > summary:hover { background: var(--soft); }
+details.section > summary:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+details.section > summary .count { margin-left: auto; color: var(--muted); font-weight: 400; font-size: 14px; }
+details.section[open] > summary { border-bottom: 1px solid var(--line); border-radius: 8px 8px 0 0; }
+.section-body { padding: 14px; min-width: 0; }
+.section-body h3 { font-size: 15px; line-height: 1.3; margin: 0; font-weight: 600; }
+.section-body > h3 { margin: 18px 0 8px; }
+.section-body > h3:first-child { margin-top: 0; }
+.switch { display: inline-flex; border: 1px solid var(--line); border-radius: 7px; overflow: hidden; }
+.switch button { border: none; border-radius: 0; border-left: 1px solid var(--line); }
+.switch button:first-child { border-left: none; }
+.switch button[aria-pressed="true"] { background: var(--accent); color: var(--accent-text); }
+.meter { height: 6px; border-radius: 3px; background: var(--soft); overflow: hidden; margin-top: 6px; }
+.meter > span { display: block; height: 100%; background: var(--accent); border-radius: 3px; }
+.group { margin-top: 18px; }
+.group:first-child { margin-top: 0; }
+.group-head { display: flex; flex-wrap: wrap; align-items: baseline; gap: 2px 12px; }
+.group-head .count, .tile .count { margin-left: auto; color: var(--muted); font-size: 14px; white-space: nowrap; }
+ul.items {
+  list-style: none; margin: 10px 0 0; padding: 0; display: grid; gap: 6px 10px;
+  grid-template-columns: repeat(auto-fill, minmax(min(320px, 100%), 1fr));
+}
+li.item { display: flex; align-items: center; gap: 10px; padding: 8px 10px; border-radius: 7px; background: var(--soft); min-width: 0; }
+li.item.open { background: none; border: 1px dashed var(--line); }
+.tick { flex: none; width: 20px; height: 20px; border-radius: 50%; display: grid; place-items: center; font-size: 12px; line-height: 1; }
+li.item .tick { background: var(--ok); color: var(--panel); font-weight: 700; }
+li.item.open .tick { background: none; border: 2px solid var(--line); }
+.what { flex: 1 1 auto; min-width: 0; }
+.what .name { overflow-wrap: anywhere; }
+.sub { display: block; color: var(--muted); font-size: 12px; line-height: 1.4; overflow-wrap: anywhere; }
+.result { flex: none; max-width: 45%; display: flex; flex-direction: column; align-items: flex-end; gap: 2px; text-align: right; font-size: 13px; }
+.medal {
+  display: inline-flex; align-items: center; gap: 5px; padding: 1px 8px 1px 6px; border-radius: 999px;
+  border: 1px solid currentColor; font-size: 12px; font-weight: 600; white-space: nowrap;
+}
+.medal::before { content: ""; width: 9px; height: 9px; border-radius: 50%; background: currentColor; }
+.medal.m0 { color: var(--bronze); }
+.medal.m1 { color: var(--silver); }
+.medal.m2 { color: var(--gold); }
+.medal.m3 { color: var(--platinum); }
+.current { border-color: var(--accent); color: var(--accent); }
+.tiles { display: grid; gap: 8px; grid-template-columns: repeat(auto-fill, minmax(min(190px, 100%), 1fr)); }
+.tiles.small { grid-template-columns: repeat(auto-fill, minmax(62px, 1fr)); }
+.tile { background: var(--soft); border-radius: 8px; padding: 10px 12px; min-width: 0; }
+.tile .top { display: flex; align-items: baseline; gap: 2px 10px; flex-wrap: wrap; }
+.tile.full .meter > span { background: var(--ok); }
+.tiles.small .tile { text-align: center; padding: 8px 6px; border: 1px solid transparent; }
+.tiles.small .tile.on { border-color: var(--accent); }
+.tile .level { display: block; font-size: 20px; font-weight: 600; line-height: 1.3; }
+.chips { display: flex; flex-wrap: wrap; gap: 6px; margin: 0 0 12px; }
+.chips .badge { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, "Liberation Mono", monospace; }
 @media (max-width: 900px) {
   .cards table, .cards tbody, .cards tr, .cards td { display: block; width: 100%; }
   .cards thead { display: none; }
@@ -232,6 +302,7 @@ code, pre, .mono { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, "
   .cards td.actions { display: flex; flex-wrap: wrap; gap: 8px; text-align: left; white-space: normal; padding-top: 4px; }
   .cards td.actions > * { margin-left: 0; flex: 1 1 auto; text-align: center; }
   .setting-value input, .setting-value select { max-width: none; }
+  .section-body .cards tr { grid-template-columns: repeat(auto-fill, minmax(104px, 1fr)); }
 }
 @media (max-width: 700px) {
   nav .wrap { flex-wrap: wrap; gap: 6px; padding-top: 8px; padding-bottom: 8px; }
@@ -256,6 +327,10 @@ code, pre, .mono { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, "
   .cards tr { padding: 10px 12px; }
   .cards td.mono { grid-column: 1 / -1; }
   #viewer pre { white-space: pre-wrap; overflow-wrap: anywhere; }
+  .switch { width: 100%; }
+  .switch button { flex: 1 1 0; }
+  .section-body { padding: 12px 10px; }
+  details.section > summary { padding: 10px 12px; }
   #log-lines { height: 60vh; min-height: 0; font-size: 13px; }
   #notice { left: 12px; right: 12px; bottom: 12px; max-width: none; }
 }
@@ -317,7 +392,7 @@ code, pre, .mono { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, "
         <span style="margin-left: auto"></span>
         <button type="button" id="player-close" data-t="close">Close</button>
       </div>
-      <dl class="facts" id="player-facts"></dl>
+      <div id="player-detail"></div>
     </div>
   </section>
 
@@ -340,7 +415,7 @@ code, pre, .mono { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, "
         <span style="margin-left: auto"></span>
         <button type="button" id="saved-close" data-t="close">Close</button>
       </div>
-      <dl class="facts" id="saved-facts"></dl>
+      <div id="saved-detail"></div>
     </div>
     <div class="panel" id="viewer" hidden>
       <div class="row">
@@ -496,6 +571,51 @@ code, pre, .mono { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, "
       p_seen: "Last activity",
       none: "none",
       player_details: "Player",
+      d_cars: "Cars",
+      d_missions: "Missions",
+      d_activities: "Activities and skills",
+      d_collectibles: "Collectibles and landmarks",
+      d_perks: "Perks",
+      d_summit: "Summit",
+      d_raw: "Other save keys",
+      d_car: "Car",
+      d_variant: "Variant (id)",
+      d_spec: "Spec (id)",
+      d_source: "Source",
+      d_src_own: "own garage",
+      d_src_pack: "car pack",
+      d_current: "current",
+      d_no_cars: "No car.",
+      d_chase_racer: "Racer chase car",
+      d_chase_police: "Police chase car",
+      d_chunks: "{have} of {of} chunks",
+      d_kind: "Kind {n}",
+      d_other: "Not in the table",
+      d_filter: "Filter by name or id",
+      d_show_done: "Done",
+      d_show_open: "Open",
+      d_show_all: "All",
+      d_no_match: "No entry matches.",
+      d_done_mark: "done",
+      d_open_mark: "open",
+      d_have: "{have} of {of}",
+      medal_0: "Bronze",
+      medal_1: "Silver",
+      medal_2: "Gold",
+      medal_3: "Platinum",
+      d_from_reward: "from reward",
+      d_no_medal: "no medal",
+      d_score: "Score {score}",
+      d_sets: "Collectible sets",
+      d_set: "Set {n}",
+      d_landmarks: "Landmarks",
+      d_slot: "Slot {n}",
+      d_perk_count: "{levels} levels, {points} unspent",
+      d_summit_name: "Current summit",
+      d_summit_state: "State in the save",
+      d_raw_hint: "Keys of the save that no section above shows.",
+      d_raw_live: "The whole save file opens from the Saves tab.",
+      d_raw_view: "Show the whole save",
       settings_title: "Settings",
       settings_hint: "The values of config.ini. Saving changes only that line of config.ini; comments and the other lines stay. You can still edit the file by hand.",
       k_key: "Key",
@@ -627,6 +747,51 @@ code, pre, .mono { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, "
       p_seen: "Letzte Aktivität",
       none: "keine",
       player_details: "Spieler",
+      d_cars: "Autos",
+      d_missions: "Missionen",
+      d_activities: "Aktivitäten und Skills",
+      d_collectibles: "Sammelobjekte und Wahrzeichen",
+      d_perks: "Perks",
+      d_summit: "Summit",
+      d_raw: "Weitere Schlüssel im Spielstand",
+      d_car: "Auto",
+      d_variant: "Variante (ID)",
+      d_spec: "Spec (ID)",
+      d_source: "Herkunft",
+      d_src_own: "eigene Garage",
+      d_src_pack: "Autopaket",
+      d_current: "aktuell",
+      d_no_cars: "Kein Auto.",
+      d_chase_racer: "Verfolgungsauto (Racer)",
+      d_chase_police: "Verfolgungsauto (Polizei)",
+      d_chunks: "{have} von {of} Teilen",
+      d_kind: "Art {n}",
+      d_other: "Nicht in der Tabelle",
+      d_filter: "Nach Name oder ID filtern",
+      d_show_done: "Erledigt",
+      d_show_open: "Offen",
+      d_show_all: "Alle",
+      d_no_match: "Kein Eintrag passt.",
+      d_done_mark: "erledigt",
+      d_open_mark: "offen",
+      d_have: "{have} von {of}",
+      medal_0: "Bronze",
+      medal_1: "Silber",
+      medal_2: "Gold",
+      medal_3: "Platin",
+      d_from_reward: "aus Belohnung",
+      d_no_medal: "keine Medaille",
+      d_score: "Ergebnis {score}",
+      d_sets: "Sammelobjekt-Sets",
+      d_set: "Set {n}",
+      d_landmarks: "Wahrzeichen",
+      d_slot: "Platz {n}",
+      d_perk_count: "{levels} Stufen, {points} frei",
+      d_summit_name: "Aktueller Summit",
+      d_summit_state: "Stand im Spielstand",
+      d_raw_hint: "Schlüssel des Spielstands, die kein Abschnitt oben zeigt.",
+      d_raw_live: "Die ganze Spielstanddatei öffnest du im Reiter Spielstände.",
+      d_raw_view: "Ganzen Spielstand anzeigen",
       settings_title: "Einstellungen",
       settings_hint: "Die Werte aus config.ini. Beim Speichern ändert sich nur diese Zeile in config.ini; Kommentare und die übrigen Zeilen bleiben erhalten. Du kannst die Datei weiterhin von Hand bearbeiten.",
       k_key: "Schlüssel",
@@ -670,7 +835,7 @@ code, pre, .mono { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, "
   let logLines = [], logLast = 0;
   let viewing = null;
   let settings = null;
-  let players = [], shownPlayer = null, savedPlayer = null;
+  let players = [], shownPlayer = null, livePlayer = null, savedPlayer = null;
 
   function t(key, vars) {
     let s = (TEXT[lang] && TEXT[lang][key]) || TEXT.en[key] || key;
@@ -757,7 +922,11 @@ code, pre, .mono { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, "
       window.location.reload();
       throw new Error(body.error);
     }
-    if (!r.ok) throw new Error(body.error || String(r.status));
+    if (!r.ok) {
+      const e = new Error(body.error || String(r.status));
+      e.status = r.status;
+      throw e;
+    }
     return body;
   }
   async function post(path, data) {
@@ -827,6 +996,15 @@ code, pre, .mono { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, "
     return rows;
   }
   function fillFacts(dl, rows) {
+    const old = dl.children;
+    if (old.length === rows.length) {
+      rows.forEach((row, i) => {
+        const dt = old[i].firstChild, dd = old[i].lastChild;
+        if (dt.textContent !== row[0]) dt.textContent = row[0];
+        if (dd.textContent !== String(row[1])) dd.textContent = String(row[1]);
+      });
+      return;
+    }
     dl.textContent = "";
     rows.forEach((row) => {
       dl.appendChild(el("div", { class: "fact" }, [el("dt", { text: row[0] }), el("dd", { text: String(row[1]) })]));
@@ -844,25 +1022,290 @@ code, pre, .mono { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, "
         el("td", { text: num(p.bucks) }),
         el("td", { text: num(p.missions_done) }),
         el("td", { text: when(p.last_seen) }),
-        el("td", { class: "actions" }, [el("button", { type: "button", text: t("details"), onclick: () => { shownPlayer = p.version + "/" + p.name; renderPlayer(); } })])
+        el("td", { class: "actions" }, [el("button", { type: "button", text: t("details"), onclick: () => showLivePlayer(p.version, p.name) })])
       ]));
       replace($("players"), table([t("c_name"), t("c_platform"), t("c_version"), t("p_level"), t("p_bucks"), t("p_missions"), t("p_seen"), ""], rows));
     }
-    renderPlayer();
   }
+
+  const detailState = {};
+  const DASH = "–";
+  function has(v) { return v !== null && v !== undefined; }
+  function meter(have, of) {
+    const share = of > 0 ? Math.max(0, Math.min(1, have / of)) : 0;
+    const bar = el("span");
+    bar.style.width = (share * 100).toFixed(1) + "%";
+    return el("div", { class: "meter", "aria-hidden": "true" }, [bar]);
+  }
+  function itemResult(it) {
+    const box = el("div", { class: "result" });
+    if (has(it.medal)) {
+      box.appendChild(el("span", { class: "medal m" + it.medal, text: t("medal_" + it.medal) }));
+      if (it.medal_source === "reward") box.appendChild(el("span", { class: "sub", text: t("d_from_reward") }));
+      else if (has(it.score)) box.appendChild(el("span", { class: "sub", text: t("d_score", { score: num(it.score) }) }));
+    } else if (it.medal_source === "result" && has(it.score)) {
+      box.appendChild(el("span", { text: t("d_score", { score: num(it.score) }) }));
+      box.appendChild(el("span", { class: "sub", text: t("d_no_medal") }));
+    } else {
+      box.appendChild(el("span", { class: "sub", text: DASH }));
+    }
+    return box;
+  }
+  function itemRow(it, sub) {
+    const mark = t(it.done ? "d_done_mark" : "d_open_mark");
+    return el("li", { class: it.done ? "item" : "item open" }, [
+      el("span", { class: "tick", role: "img", "aria-label": mark, title: mark, text: it.done ? "✓" : "" }),
+      el("div", { class: "what" }, [
+        el("div", { class: it.name ? "name" : "name mono", text: it.name || it.id }),
+        sub ? el("span", { class: "sub", text: sub }) : null
+      ]),
+      itemResult(it)
+    ]);
+  }
+  function itemList(st, key, groups) {
+    const ls = st.lists[key] || (st.lists[key] = { q: "", mode: "done" });
+    const input = el("input", { type: "search", "data-key": key + "-q", placeholder: t("d_filter"), "aria-label": t("d_filter") });
+    input.value = ls.q;
+    const modes = ["done", "open", "all"];
+    const buttons = modes.map((m) => el("button", {
+      type: "button", "data-key": key + "-" + m, "aria-pressed": String(ls.mode === m), text: t("d_show_" + m),
+      onclick: () => {
+        ls.mode = m;
+        buttons.forEach((b, i) => b.setAttribute("aria-pressed", String(modes[i] === m)));
+        draw();
+      }
+    }));
+    const list = el("div");
+    function draw() {
+      list.textContent = "";
+      const q = ls.q.trim().toLowerCase();
+      let shown = 0;
+      groups.forEach((g) => {
+        const items = g.items.filter((it) => (ls.mode === "all" || (ls.mode === "done") === !!it.done)
+          && (!q || [it.name, it.id, it.district].some((s) => s && String(s).toLowerCase().indexOf(q) >= 0)));
+        if (q && !items.length) return;
+        shown += items.length;
+        const parts = [
+          el("div", { class: "group-head" }, [
+            el("h3", { text: g.title }),
+            el("span", { class: "count", text: t("d_have", { have: num(g.done), of: num(g.total) }) })
+          ]),
+          meter(g.done, g.total)
+        ];
+        if (items.length) parts.push(el("ul", { class: "items" }, items.map((it) => itemRow(it, g.sub(it)))));
+        list.appendChild(el("div", { class: "group" }, parts));
+      });
+      if (q && !shown) list.appendChild(el("p", { class: "empty", text: t("d_no_match") }));
+    }
+    input.addEventListener("input", () => { ls.q = input.value; draw(); });
+    draw();
+    return el("div", null, [
+      el("div", { class: "row" }, [input, el("div", { class: "switch", role: "group", "aria-label": t("filter") }, buttons)]),
+      list
+    ]);
+  }
+  function section(st, key, count, body) {
+    const d = el("details", { class: "section", "data-section": key }, [
+      el("summary", null, [el("span", { text: t(key) }), el("span", { class: "count", text: count })]),
+      el("div", { class: "section-body" }, body)
+    ]);
+    if (st.open[key]) d.open = true;
+    d.addEventListener("toggle", () => { st.open[key] = d.open; });
+    return d;
+  }
+  function tile(title, sub, have, of) {
+    return el("div", { class: have >= of && of > 0 ? "tile full" : "tile" }, [
+      el("div", { class: "top" }, [el("span", { text: title }), el("span", { class: "count", text: t("d_have", { have: num(have), of: num(of) }) })]),
+      sub ? el("span", { class: "sub mono", text: sub }) : null,
+      meter(have, of)
+    ]);
+  }
+  function chaseText(c) {
+    if (!c) return t("none");
+    return (c.name || c.variant) + " (" + t("d_chunks", { have: num(c.chunks), of: num(c.of) }) + ")";
+  }
+  function carsBody(d) {
+    const parts = [];
+    const cars = d.cars || [];
+    if (!cars.length) parts.push(el("p", { class: "empty", text: t("d_no_cars") }));
+    else {
+      const rows = cars.map((c) => el("tr", null, [
+        el("td", { text: c.name || c.model, class: c.name ? "" : "mono" }),
+        el("td", null, [el("span", { text: c.variant || DASH, class: "mono" })]),
+        el("td", null, [el("span", { text: c.spec || DASH, class: "mono" })]),
+        el("td", { text: t(c.source === "pack" ? "d_src_pack" : "d_src_own") }),
+        el("td", null, [c.current ? el("span", { class: "badge current", text: t("d_current") }) : null])
+      ]));
+      parts.push(table([t("d_car"), t("d_variant"), t("d_spec"), t("d_source"), ""], rows));
+    }
+    const chase = d.chase || {};
+    const dl = el("dl", { class: "facts" });
+    fillFacts(dl, [[t("d_chase_racer"), chaseText(chase.racer)], [t("d_chase_police"), chaseText(chase.police)]]);
+    dl.style.marginTop = "14px";
+    parts.push(dl);
+    return parts;
+  }
+  function missionGroups(m) {
+    const groups = (m.groups || []).map((g) => ({
+      title: g.label || t("d_kind", { n: g.kind }), done: g.done, total: g.total, items: g.items || [],
+      sub: (it) => (it.name ? it.id : "")
+    }));
+    return groups.concat(otherGroup(m.other));
+  }
+  function activityGroups(a) {
+    const groups = (a.regions || []).map((r) => ({
+      title: r.name || r.region, done: r.done, total: r.total, items: r.items || [],
+      sub: (it) => [it.district, it.id].filter(Boolean).join(" · ")
+    }));
+    return groups.concat(otherGroup(a.other));
+  }
+  function otherGroup(ids) {
+    if (!ids || !ids.length) return [];
+    const items = ids.map((id) => ({ id: id, name: null, done: true, medal: null, medal_source: null, score: null }));
+    return [{ title: t("d_other"), done: ids.length, total: ids.length, items: items, sub: () => "" }];
+  }
+  function collectiblesBody(d) {
+    const c = d.collectibles || {}, l = d.landmarks || {};
+    return [
+      el("h3", { text: t("d_landmarks") + " · " + t("d_have", { have: num(l.have), of: num(l.total) }) }),
+      el("div", { class: "tiles" }, (l.regions || []).map((r) => tile(r.name || r.region, "", r.have, r.of))),
+      el("h3", { text: t("d_sets") + " · " + t("d_have", { have: num(c.have), of: num(c.total) }) }),
+      el("div", { class: "tiles" }, (c.sets || []).map((s, i) => tile(t("d_set", { n: i + 1 }), s.set, s.have, s.of)))
+    ];
+  }
+  function perksBody(d) {
+    const p = d.perks || {};
+    return [el("div", { class: "tiles small" }, (p.slots || []).map((s) => el("div", { class: s.level ? "tile on" : "tile" }, [
+      el("span", { class: "sub", text: t("d_slot", { n: s.slot }) }),
+      el("span", { class: "level", text: has(s.level) ? num(s.level) : DASH })
+    ])))];
+  }
+  function summitBody(d) {
+    const s = d.summit || {};
+    const rows = [[t("d_summit_name"), s.name || t("none")]];
+    const state = s.state;
+    const parts = [];
+    if (state && typeof state === "object" && !Array.isArray(state)) {
+      Object.keys(state).forEach((k) => {
+        const v = state[k];
+        rows.push([k, JSON.stringify(v)]);
+      });
+    } else if (has(state)) {
+      rows.push([t("d_summit_state"), JSON.stringify(state)]);
+    }
+    const dl = el("dl", { class: "facts" });
+    fillFacts(dl, rows);
+    parts.push(dl);
+    return parts;
+  }
+  function rawBody(reply) {
+    const keys = reply.detail.raw_keys || [];
+    const parts = [el("p", { class: "hint", text: t("d_raw_hint") }),
+      el("div", { class: "chips" }, keys.map((k) => el("span", { class: "badge", text: k })))];
+    if (reply.file !== undefined) {
+      parts.push(el("button", { type: "button", text: t("d_raw_view"), onclick: () => view(reply.version, reply.file) }));
+    } else {
+      parts.push(el("p", { class: "hint", text: t("d_raw_live") }));
+    }
+    return parts;
+  }
+  function renderDetail(box, reply) {
+    const who = reply.version + "/" + (reply.file !== undefined ? reply.file : reply.name);
+    let st = detailState[box.id];
+    if (!st) st = detailState[box.id] = { open: { d_cars: true }, lists: {}, who: who };
+    const key = lang + "\n" + (reply.error || "") + "\n" + JSON.stringify(reply.detail || null);
+    const shown = box.firstElementChild && box.firstElementChild.matches("dl.facts") ? box.firstElementChild : null;
+    if (st.who === who && st.key === key && shown && !reply.error) {
+      fillFacts(shown, playerRows(reply));
+      return;
+    }
+    st.key = key;
+    if (st.who !== who) { st.who = who; st.lists = {}; }
+    const active = document.activeElement;
+    const focusKey = active && box.contains(active) ? active.getAttribute("data-key") : null;
+    const caret = focusKey && active.selectionStart !== undefined ? [active.selectionStart, active.selectionEnd] : null;
+    box.querySelectorAll("details[data-section]").forEach((d) => { st.open[d.getAttribute("data-section")] = d.open; });
+    box.textContent = "";
+    const facts = el("dl", { class: "facts" });
+    if (reply.error) {
+      fillFacts(facts, [[t("error", { text: "" }), reply.error]]);
+      box.appendChild(facts);
+      return;
+    }
+    fillFacts(facts, playerRows(reply));
+    box.appendChild(facts);
+    const d = reply.detail;
+    if (!d) return;
+    const m = d.missions || {}, a = d.activities || {}, c = d.collectibles || {}, l = d.landmarks || {}, p = d.perks || {};
+    const levels = (p.slots || []).reduce((sum, s) => sum + (s.level || 0), 0);
+    box.appendChild(section(st, "d_cars", num((d.cars || []).length), carsBody(d)));
+    box.appendChild(section(st, "d_missions", t("d_have", { have: num(m.done), of: num(m.total) }), [itemList(st, "missions", missionGroups(m))]));
+    box.appendChild(section(st, "d_activities", t("d_have", { have: num(a.done), of: num(a.total) }), [itemList(st, "activities", activityGroups(a))]));
+    box.appendChild(section(st, "d_collectibles", t("d_have", { have: num(c.have), of: num(c.total) }) + " · "
+      + t("d_have", { have: num(l.have), of: num(l.total) }), collectiblesBody(d)));
+    box.appendChild(section(st, "d_perks", t("d_perk_count", { levels: num(levels), points: num(p.points) }), perksBody(d)));
+    box.appendChild(section(st, "d_summit", (d.summit && d.summit.name) || DASH, summitBody(d)));
+    box.appendChild(section(st, "d_raw", num((d.raw_keys || []).length), rawBody(reply)));
+    if (focusKey) {
+      const again = box.querySelector('[data-key="' + focusKey + '"]');
+      if (again) {
+        again.focus();
+        if (caret && again.setSelectionRange) try { again.setSelectionRange(caret[0], caret[1]); } catch (e) { }
+      }
+    }
+  }
+
   function renderPlayer() {
-    const p = players.find((x) => x.version + "/" + x.name === shownPlayer);
-    $("player-panel").hidden = !p;
-    if (!p) return;
-    $("player-title").textContent = t("player_title", { name: p.name });
-    fillFacts($("player-facts"), playerRows(p));
+    $("player-panel").hidden = !livePlayer;
+    if (!livePlayer) return;
+    $("player-title").textContent = t("player_title", { name: livePlayer.name });
+    renderDetail($("player-detail"), livePlayer);
+  }
+  const LIVE_PROGRESS = ["level", "xp", "bucks", "crew_credits", "perk_points", "perks", "perk_total", "car", "garage",
+    "missions_done", "activities_done", "collectibles"];
+  const LIVE_REFETCH_MS = 15000;
+  let liveFetched = { key: null, at: 0 };
+  function progressKey(p) { return JSON.stringify(LIVE_PROGRESS.map((k) => p[k])); }
+  async function followLivePlayer() {
+    if (!shownPlayer) return;
+    const row = players.find((p) => p.version === shownPlayer.version && p.name === shownPlayer.name);
+    if (row && livePlayer && progressKey(row) === liveFetched.key && Date.now() - liveFetched.at < LIVE_REFETCH_MS) {
+      if (changed("live-row", row)) { livePlayer = Object.assign({}, livePlayer, row); renderPlayer(); }
+      return;
+    }
+    await loadLivePlayer();
+  }
+  async function loadLivePlayer() {
+    if (!shownPlayer) return;
+    const want = shownPlayer;
+    try {
+      const v = await get("/api/player?version=" + encodeURIComponent(want.version) + "&name=" + encodeURIComponent(want.name));
+      if (shownPlayer !== want) return;
+      liveFetched = { key: progressKey(v), at: Date.now() };
+      if (changed("live-player", v)) { livePlayer = v; renderPlayer(); }
+    } catch (e) {
+      if (shownPlayer !== want) return;
+      if (e.status === 404) {
+        shownPlayer = null;
+        livePlayer = null;
+        delete seen["live-player"];
+        renderPlayer();
+      }
+      notice(e.message, true);
+    }
+  }
+  async function showLivePlayer(version, name) {
+    shownPlayer = { version: version, name: name };
+    liveFetched = { key: null, at: 0 };
+    delete seen["live-player"];
+    await loadLivePlayer();
+    if (livePlayer) $("player-panel").scrollIntoView({ behavior: "smooth", block: "start" });
   }
   function renderSavedPlayer() {
     $("saved-panel").hidden = !savedPlayer;
     if (!savedPlayer) return;
     $("saved-title").textContent = t("saved_title", { file: savedPlayer.version + " / " + savedPlayer.file });
-    if (savedPlayer.error) fillFacts($("saved-facts"), [[t("error", { text: "" }), savedPlayer.error]]);
-    else fillFacts($("saved-facts"), playerRows(savedPlayer));
+    renderDetail($("saved-detail"), savedPlayer);
   }
   async function showSavedPlayer(version, file) {
     try {
@@ -1188,6 +1631,7 @@ code, pre, .mono { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, "
       if (tab === "players") {
         const v = await get("/api/players");
         if (changed("players", v)) { players = v; renderPlayers(); }
+        await followLivePlayer();
       }
       if (tab === "names") await refreshNames();
       if (tab === "saves") await refreshSaves();
@@ -1220,6 +1664,7 @@ code, pre, .mono { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, "
     renderLog(null);
     renderSettings();
     renderPlayers();
+    renderPlayer();
     renderSavedPlayer();
     setStatus(!stopped && !restarted);
   }
@@ -1242,7 +1687,7 @@ code, pre, .mono { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, "
   $("viewer-close").addEventListener("click", () => { $("viewer").hidden = true; viewing = null; });
   $("log-filter").addEventListener("input", () => renderLog(null));
   $("settings-reload").addEventListener("click", refreshSettings);
-  $("player-close").addEventListener("click", () => { shownPlayer = null; renderPlayer(); });
+  $("player-close").addEventListener("click", () => { shownPlayer = null; livePlayer = null; renderPlayer(); });
   $("saved-close").addEventListener("click", () => { savedPlayer = null; renderSavedPlayer(); });
   $("log-errors").addEventListener("change", () => renderLog(null));
   window.addEventListener("hashchange", () => showTab(location.hash.slice(1)));

@@ -5,6 +5,7 @@
 
 #include <algorithm>
 #include <cerrno>
+#include <cstddef>
 #include <cstring>
 #include <mutex>
 #include <tuple>
@@ -69,6 +70,32 @@ OsError win_error(DWORD code, std::optional<std::string> filename, std::optional
   e.filename = std::move(filename);
   e.filename2 = std::move(filename2);
   return e;
+}
+
+bool replace_file(const std::wstring& src, const std::wstring& dst) {
+  HANDLE h = CreateFileW(src.c_str(), DELETE | SYNCHRONIZE, FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE,
+                         nullptr, OPEN_EXISTING, FILE_FLAG_OPEN_REPARSE_POINT | FILE_FLAG_BACKUP_SEMANTICS, nullptr);
+  if (h != INVALID_HANDLE_VALUE) {
+    DWORD n = GetFullPathNameW(dst.c_str(), 0, nullptr, nullptr);
+    std::wstring full(n, L'\0');
+    if (n) n = GetFullPathNameW(dst.c_str(), n, &full[0], nullptr);
+    bool done = false;
+    if (n && n < full.size()) {
+      full.resize(n);
+      const size_t head = offsetof(FILE_RENAME_INFO, FileName);
+      std::vector<unsigned char> buf(head + (full.size() + 1) * sizeof(wchar_t), 0);
+      const DWORD flags = 0x1 | 0x2;
+      std::memcpy(buf.data(), &flags, sizeof(flags));
+      auto* info = reinterpret_cast<FILE_RENAME_INFO*>(buf.data());
+      info->RootDirectory = nullptr;
+      info->FileNameLength = static_cast<DWORD>(full.size() * sizeof(wchar_t));
+      std::memcpy(info->FileName, full.data(), full.size() * sizeof(wchar_t));
+      done = SetFileInformationByHandle(h, FileRenameInfoEx, info, static_cast<DWORD>(buf.size())) != 0;
+    }
+    CloseHandle(h);
+    if (done) return true;
+  }
+  return MoveFileExW(src.c_str(), dst.c_str(), MOVEFILE_REPLACE_EXISTING) != 0;
 }
 
 bool handle_stat(HANDLE h, FileStat* st) {
@@ -233,10 +260,55 @@ void fill_stat(const
 #endif
 }
 
+#if defined(_WIN32)
+
+int errno_of(DWORD code) {
+  static const std::pair<DWORD, int> table[] = {
+      {ERROR_INVALID_FUNCTION, EINVAL},      {ERROR_FILE_NOT_FOUND, ENOENT},       {ERROR_PATH_NOT_FOUND, ENOENT},
+      {ERROR_TOO_MANY_OPEN_FILES, EMFILE},   {ERROR_ACCESS_DENIED, EACCES},        {ERROR_INVALID_HANDLE, EBADF},
+      {ERROR_ARENA_TRASHED, ENOMEM},         {ERROR_NOT_ENOUGH_MEMORY, ENOMEM},    {ERROR_INVALID_BLOCK, ENOMEM},
+      {ERROR_BAD_ENVIRONMENT, E2BIG},        {ERROR_BAD_FORMAT, ENOEXEC},          {ERROR_INVALID_ACCESS, EINVAL},
+      {ERROR_INVALID_DATA, EINVAL},          {ERROR_INVALID_DRIVE, ENOENT},        {ERROR_CURRENT_DIRECTORY, EACCES},
+      {ERROR_NOT_SAME_DEVICE, EXDEV},        {ERROR_NO_MORE_FILES, ENOENT},        {ERROR_LOCK_VIOLATION, EACCES},
+      {ERROR_BAD_NETPATH, ENOENT},           {ERROR_NETWORK_ACCESS_DENIED, EACCES}, {ERROR_BAD_NET_NAME, ENOENT},
+      {ERROR_FILE_EXISTS, EEXIST},           {ERROR_CANNOT_MAKE, EACCES},          {ERROR_FAIL_I24, EACCES},
+      {ERROR_INVALID_PARAMETER, EINVAL},     {ERROR_NO_PROC_SLOTS, EAGAIN},        {ERROR_DRIVE_LOCKED, EACCES},
+      {ERROR_BROKEN_PIPE, EPIPE},            {ERROR_DISK_FULL, ENOSPC},            {ERROR_INVALID_TARGET_HANDLE, EBADF},
+      {ERROR_WAIT_NO_CHILDREN, ECHILD},      {ERROR_CHILD_NOT_COMPLETE, ECHILD},   {ERROR_DIRECT_ACCESS_HANDLE, EBADF},
+      {ERROR_NEGATIVE_SEEK, EINVAL},         {ERROR_SEEK_ON_DEVICE, EACCES},       {ERROR_DIR_NOT_EMPTY, ENOTEMPTY},
+      {ERROR_NOT_LOCKED, EACCES},            {ERROR_BAD_PATHNAME, ENOENT},         {ERROR_MAX_THRDS_REACHED, EAGAIN},
+      {ERROR_LOCK_FAILED, EACCES},           {ERROR_ALREADY_EXISTS, EEXIST},       {ERROR_FILENAME_EXCED_RANGE, ENOENT},
+      {ERROR_NESTING_NOT_ALLOWED, EAGAIN},   {ERROR_NOT_ENOUGH_QUOTA, ENOMEM}};
+  for (const auto& [win, posix] : table) {
+    if (win == code) return posix;
+  }
+  if (code >= ERROR_WRITE_PROTECT && code <= ERROR_SHARING_BUFFER_EXCEEDED) return EACCES;
+  if (code >= ERROR_INVALID_STARTING_CODESEG && code <= ERROR_INFLOOP_IN_RELOC_CHAIN) return ENOEXEC;
+  return EINVAL;
+}
+
+int open_for_reading(const std::string& path) {
+  HANDLE h = CreateFileW(wide(path).c_str(), GENERIC_READ, FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE,
+                         nullptr, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, nullptr);
+  if (h == INVALID_HANDLE_VALUE) {
+    errno = errno_of(GetLastError());
+    return -1;
+  }
+  int fd = _open_osfhandle(reinterpret_cast<intptr_t>(h), _O_RDONLY | _O_BINARY);
+  if (fd < 0) {
+    int code = errno;
+    CloseHandle(h);
+    errno = code;
+  }
+  return fd;
+}
+
+#endif
+
 bool read_file(const std::string& path, std::string* data, FileStat* st, OsError* err,
                size_t limit = static_cast<size_t>(-1)) {
 #if defined(_WIN32)
-  int fd = _wopen(wide(path).c_str(), _O_RDONLY | _O_BINARY);
+  int fd = open_for_reading(path);
 #else
   int fd = ::open(path.c_str(), O_RDONLY | O_CLOEXEC);
 #endif
@@ -321,7 +393,7 @@ bool SystemFiles::makedirs(const std::string& path, OsError* err) { return platf
 
 bool SystemFiles::replace(const std::string& src, const std::string& dst, OsError* err) {
 #if defined(_WIN32)
-  if (!MoveFileExW(wide(src).c_str(), wide(dst).c_str(), MOVEFILE_REPLACE_EXISTING)) {
+  if (!replace_file(wide(src), wide(dst))) {
     *err = win_error(GetLastError(), src, dst);
     return false;
   }
@@ -634,7 +706,7 @@ bool SystemFiles::write_atomic_impl(const std::string& path, std::string_view da
     *err = os_error(code);
     return false;
   }
-  if (!MoveFileExW(wide(tmp).c_str(), wide(path).c_str(), MOVEFILE_REPLACE_EXISTING)) {
+  if (!replace_file(wide(tmp), wide(path))) {
     DWORD code = GetLastError();
     _wunlink(wide(tmp).c_str());
     *err = win_error(code, tmp, path);

@@ -59,7 +59,7 @@ target_compile_options(tcr_flags INTERFACE
 set(TCR_GENERATED ${CMAKE_CURRENT_BINARY_DIR}/generated)
 set(TCR_RELEASE_DATA ${CMAKE_CURRENT_SOURCE_DIR}/data)
 set(TCR_TABLE_NAMES auto_replies.json replies.json dlc.json club.json cars.json npc.json physparts.json rewards.json summit.json
-    collectibles.json regions.json replies_schema.json v1_00_replies.json v1_00_cars.json)
+    collectibles.json regions.json names.json replies_schema.json v1_00_replies.json v1_00_cars.json)
 set(TCR_TABLES)
 if(EXISTS ${TCR_RELEASE_DATA})
   foreach(name IN LISTS TCR_TABLE_NAMES)
@@ -94,6 +94,7 @@ else()
     summit.json ${TCR_DATA_121}/summit.json
     collectibles.json ${TCR_DATA_121}/collectibles.json
     regions.json ${TCR_DATA_121}/regions.json
+    names.json ${TCR_DATA_121}/names.json
     replies_schema.json ${TCR_SCHEMA_121}/replies.json
     v1_00_replies.json ${TCR_DATA_100}/replies.json
     v1_00_cars.json ${TCR_DATA_100}/cars.json)

@@ -195,6 +195,18 @@ std::string percent_decode(const std::string& s) {
   return out;
 }
 
+bool query_has(const std::string& query, const std::string& key) {
+  size_t at = 0;
+  while (at <= query.size()) {
+    size_t end = query.find('&', at);
+    if (end == std::string::npos) end = query.size();
+    std::string part = query.substr(at, end - at);
+    if (percent_decode(part.substr(0, part.find('='))) == key) return true;
+    at = end + 1;
+  }
+  return false;
+}
+
 std::string query_value(const std::string& query, const std::string& key) {
   size_t at = 0;
   while (at <= query.size()) {
@@ -383,12 +395,48 @@ server::Response save_view(Core& core, const std::string& query, bool download) 
   return json_reply(200, out);
 }
 
+server::Response utf8_reply(int status, const json::Value& v) {
+  server::Response r = json_reply(status, v);
+  r.payload = tcr::admin::unescape_non_ascii(r.payload);
+  return r;
+}
+
+void read_scores(Files* files, const std::string& path, uint64_t player, tcr::admin::DetailContext* ctx) {
+  std::string data;
+  OsError ignored;
+  if (files->read(path, &data, &ignored)) ctx->best = tcr::admin::best_scores(files, data, player);
+}
+
+server::Response live_player_view(Core& core, const std::string& version, const std::string& name) {
+  struct Job {
+    Files* files;
+    tcr::admin::LivePlayer live;
+    json::Value out;
+  } job;
+  job.files = core.files();
+  if (!tcr::admin::live_player(core, g_state->o.relays, version, name, &job.live)) {
+    return error_reply(404, "no such player");
+  }
+  core.env().hash_unlocked(
+      [](void* arg) {
+        Job& j = *static_cast<Job*>(arg);
+        read_scores(j.files, j.live.scores_path, j.live.player, &j.live.ctx);
+        j.out = tcr::admin::saved_player(j.live.save_text, &j.live.ctx);
+      },
+      &job);
+  json::Value out = job.live.entry;
+  if (const json::Value* detail = job.out.get("detail")) out.set("detail", *detail);
+  return utf8_reply(200, out);
+}
+
 server::Response player_view(Core& core, const std::string& query) {
   std::string version = query_value(query, "version");
+  if (query_has(query, "name")) return live_player_view(core, version, query_value(query, "name"));
   std::string file = query_value(query, "file");
   struct Job {
     Files* files;
     std::string path, data;
+    tcr::admin::SavedSource source;
     OsError err;
     bool ok = false;
     int refused = 0;
@@ -397,21 +445,25 @@ server::Response player_view(Core& core, const std::string& query) {
   } job;
   job.files = core.files();
   job.path = tcr::admin::save_file(core, g_state->o.relays, version, file);
-  if (job.path.empty()) return error_reply(404, "no such save");
+  if (job.path.empty() || !tcr::admin::saved_source(core, g_state->o.relays, version, file, &job.source)) {
+    return error_reply(404, "no such save");
+  }
   core.env().hash_unlocked(
       [](void* arg) {
         Job& j = *static_cast<Job*>(arg);
         j.refused = save_file_refusal(*j.files, j.path, &j.why);
         if (j.refused) return;
         j.ok = j.files->read(j.path, &j.data, &j.err);
-        if (j.ok) j.out = tcr::admin::saved_player(j.data);
+        if (!j.ok) return;
+        read_scores(j.files, j.source.scores_path, j.source.player, &j.source.ctx);
+        j.out = tcr::admin::saved_player(j.data, &j.source.ctx);
       },
       &job);
   if (job.refused) return error_reply(job.refused, job.why);
   if (!job.ok) return error_reply(500, "cannot read " + job.path + ": " + job.err.text());
   job.out.set("version", json::Value::string(version));
   job.out.set("file", json::Value::string(file));
-  return json_reply(200, job.out);
+  return utf8_reply(200, job.out);
 }
 
 json::Value body_of(const server::Request& req) {

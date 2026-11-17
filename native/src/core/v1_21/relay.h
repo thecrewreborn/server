@@ -126,6 +126,7 @@ class Relay {
   virtual void pay_instant_challenges();
   virtual void store_club_actions();
   const std::string& save_path() const { return o_.save_path; }
+  const RelayOptions& options() const { return o_; }
 
  protected:
   virtual std::string rpc_name(uint32_t id) const;
