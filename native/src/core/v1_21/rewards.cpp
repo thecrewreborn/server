@@ -474,6 +474,33 @@ std::vector<uint64_t> abilities(obj::Py& py, const Tables& t, const V& missions)
   return words;
 }
 
+std::vector<uint64_t> with_chat(obj::Py& py, const Tables& t, const std::vector<uint64_t>& words, const V& missions,
+                                const V& free_roam) {
+  static const std::string kChat = "CAbility_Chat";
+  auto bit = t.abilities.find(kChat);
+  if (bit == t.abilities.end()) return words;
+  bool everything = obj::truthy(free_roam);
+  if (!everything && words.size() >= 2) {
+    everything = (words[0] & ALL_ABILITIES[0]) == ALL_ABILITIES[0] && (words[1] & ALL_ABILITIES[1]) == ALL_ABILITIES[1];
+  }
+  bool done = false;
+  if (!everything && missions.is_array()) {
+    for (const auto& m : t.missions) {
+      const std::vector<std::string>& names = m.second.abilities;
+      if (std::find(names.begin(), names.end(), kChat) == names.end()) continue;
+      done = py.contains(missions, obj::U(m.first));
+      if (py.failed()) return words;
+      if (done) break;
+    }
+  }
+  if (!everything && !done) return words;
+  std::vector<uint64_t> out = words;
+  const size_t word = static_cast<size_t>(bit->second / 64);
+  if (out.size() < word + 1) out.resize(word + 1, 0);
+  out[word] |= uint64_t(1) << (bit->second % 64);
+  return out;
+}
+
 void add_bucks(obj::Py& py, const Tables& t, Player& p, const V& d) {
   if (py.lt(d, obj::I(0))) {
     p.bucks = py.max(obj::I(0), py.add(p.bucks, d));

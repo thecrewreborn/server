@@ -131,6 +131,8 @@ std::optional<std::pair<int64_t, int64_t>> instant_challenge(const Tables& t, in
 std::optional<std::pair<int64_t, int64_t>> summit_skill_reward(const Tables& t, uint64_t activity, int64_t value,
                                                                int64_t level, Raised* raised);
 std::vector<uint64_t> abilities(obj::Py& py, const Tables& t, const V& missions);
+std::vector<uint64_t> with_chat(obj::Py& py, const Tables& t, const std::vector<uint64_t>& words, const V& missions,
+                                const V& free_roam);
 std::optional<uint64_t> table_key(const V& v);
 
 void add_bucks(obj::Py& py, const Tables& t, Player& p, const V& d);

@@ -236,7 +236,16 @@ HandlerResult get_player(Ctx& ctx, const Bytes&, const Registered&) {
   bit_set(p.map_state, 27);
   if (py.failed()) return failed();
   if (obj::truthy(p.progress) || obj::truthy(p.map_state) || obj::truthy(p.missions_done)) values[77] = Val::u(0);
-  bit_set(p.abilities, 26);
+  {
+    std::optional<Bytes> abilities;
+    if (obj::truthy(p.abilities)) {
+      abilities = pack::u64_array(py, p.abilities);
+      if (!abilities) return failed();
+    }
+    Raised r;
+    if (!sent_abilities(*ctx.core, p, &abilities, &r)) return HandlerResult::fail(r);
+    if (abilities) values[26] = Val::of(std::move(*abilities));
+  }
   bit_set(p.rewarded, 28);
   bit_set(p.table_bits, 29);
   std::optional<Bytes> perks = bytes_of(py, p.perks);

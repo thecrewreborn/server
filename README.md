@@ -238,6 +238,18 @@ club_rewards = off
 
 Restart the server after a change. Game version 1.21 and PC only.
 
+## Chat
+
+The game's chat between players is off by default. To switch it on, set under `[player]` in `config.ini`:
+
+```ini
+chat = on
+```
+
+A player can then use the chat after the first story mission, as in the original game, and at once with
+`abilities = all`. The setting counts at each player's next login; no restart is needed and the saves stay as they
+are. Chat is not tested on this server yet and may not work. Game version 1.21 and PC only.
+
 ## Multiplayer
 
 `multiplayer` under `[world]` in `config.ini`:
@@ -496,6 +508,7 @@ These rules apply to every server, at home and on the internet:
   on the network path can do this.
 - A dropped repeat request (see "What the server checks") should look to the game like a lost connection; this is
   not yet tested on a console.
+- `chat = on` gives players the game's chat, but chat between two players is not tested yet.
 
 ## Bugs and ideas
 

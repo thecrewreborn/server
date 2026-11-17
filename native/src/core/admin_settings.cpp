@@ -40,6 +40,7 @@ const std::vector<Key>& keys() {
       {"player", "crew_credits_refill", "switch", "on", true, {}},
       {"player", "dlc", "switch", "off", false, {}},
       {"player", "club_rewards", "switch", "on", false, {}},
+      {"player", "chat", "switch", "off", true, {}},
       {"world", "multiplayer", "choice", "lan", true, {"lan", "on", "off"}},
       {"world", "bots", "switch", "off", false, {}},
       {"world", "afk_kick", "switch", "off", false, {}},
@@ -79,7 +80,7 @@ std::string start_refusal(const config::Config& c, std::vector<std::string>* war
   std::string t;
   if (failed(c.relay_address(), &t) || failed(c.http_port(), &t) || failed(c.save_path(), &t) ||
       failed(c.save_path_configured(), &t) || failed(c.abilities(), &t) || failed(c.unlocks(), &t) ||
-      failed(c.dlc(), &t) || failed(c.club_rewards(), &t) || failed(c.https_port(), &t) || failed(c.tls_cert(), &t) || failed(c.advertised_ip(), &t) ||
+      failed(c.dlc(), &t) || failed(c.club_rewards(), &t) || failed(c.chat(), &t) || failed(c.https_port(), &t) || failed(c.tls_cert(), &t) || failed(c.advertised_ip(), &t) ||
       failed(c.bots(), &t) || failed(c.afk_kick(), &t) || failed(c.proxy_key(), &t) || failed(c.crew_credits(), &t) ||
       failed(c.crew_credits_refill(), &t) || failed(c.multiplayer(), &t) || failed(c.link_home(), &t)) {
     return t;

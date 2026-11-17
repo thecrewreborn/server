@@ -21,6 +21,8 @@ bool finish_mission(Core& core, Player& p, uint64_t mission, int64_t score, int6
                     Raised* raised, int64_t group = 1, const Bytes* body = nullptr, size_t car_at = 0x28,
                     std::optional<int64_t>* part = nullptr);
 
+bool sent_abilities(Core& core, const Player& p, std::optional<Bytes>* packed, Raised* raised);
+
 struct InstantEnd;
 constexpr size_t IC_SEEN = 64;
 bool pay_instant_challenge(Core& core, Player& p, const InstantEnd& e, int64_t now_us,

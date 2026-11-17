@@ -738,6 +738,7 @@ HandlerResult mission_end(Ctx& ctx, const Bytes& body, const Registered&) {
   Py py;
   std::optional<Bytes> abilities = pack::u64_array(py, p.abilities);
   if (!abilities) return failed(py.raised());
+  if (!sent_abilities(*ctx.core, p, &abilities, &r)) return failed(r);
   pk.raw(granted).raw(*abilities).raw(*car).raw(wire::empty_array()).I(0);
   return reply_of(0x02459285, pk);
 }
@@ -801,6 +802,29 @@ Bytes rating(uint64_t player_id) {
   wire::put_u64(out, player_id);
   out.insert(out.end(), kRest, kRest + sizeof(kRest));
   return out;
+}
+
+bool sent_abilities(Core& core, const Player& p, std::optional<Bytes>* packed, Raised* raised) {
+  config::Result<bool> on = core.config().chat();
+  if (!on.ok()) {
+    *raised = Raised{on.error.type, on.error.message};
+    return false;
+  }
+  const rewards::Tables* t = rewards::tables(core);
+  if (!*on.value || !t) return true;
+  std::vector<uint64_t> words;
+  if (*packed) {
+    Py py;
+    for (const V& w : py.iter(p.abilities)) words.push_back(w.is_bool() ? (w.as_bool() ? 1 : 0) : w.as_u64().value_or(0));
+  }
+  Py py;
+  std::vector<uint64_t> chat = rewards::with_chat(py, *t, words, p.missions_done, p.free_roam);
+  if (py.failed()) {
+    *raised = py.raised();
+    return false;
+  }
+  if (chat != words) *packed = wire::u64_array(chat);
+  return true;
 }
 
 std::optional<bool> pay_gifts(Core& core, Player& p, Raised* raised) {
