@@ -132,7 +132,7 @@ class Ubi {
   Reply search_entities(bool profiles, const std::string& profile, const std::string& query, const std::string& auth,
                         const std::string& host);
   Reply write_entity(const std::optional<std::string>& eid, const json::Value& body, const std::string& auth,
-                     const std::string& host);
+                     const std::string& host, const std::string* profile = nullptr);
   Reply delete_entity(const std::string& eid, const json::Value& body, const std::string& auth);
   Reply get_entity(const std::string& eid, const std::string& auth, const std::string& host);
   Reply ghost_storage(const std::string& method, const std::string& eid, const std::string& raw,

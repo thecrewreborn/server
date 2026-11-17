@@ -1278,11 +1278,15 @@ Reply Ubi::search_entities(bool profiles, const std::string& profile, const std:
 }
 
 Reply Ubi::write_entity(const std::optional<std::string>& eid, const json::Value& body, const std::string& auth,
-                        const std::string& host) {
+                        const std::string& host, const std::string* path_profile) {
   Raised err;
   std::optional<std::string> owner = entity_owner(auth, &err);
   if (!err.type.empty()) return raised_reply(err);
   const Value* body_pid = body.get("profileId");
+  if (owner && path_profile) {
+    Value pid = str(*path_profile);
+    if (!own_profile(*owner, &pid)) return refusal(403, kNotOwner);
+  }
   if (!owner || (body_pid && !own_profile(*owner, body_pid))) return refusal(403, kNotOwner);
   const std::string stem = save_name(*owner);
   entities::File data = entities::load(core_, stem);
@@ -1623,6 +1627,9 @@ Reply Ubi::route(const std::string& method, const std::string& full_path, const 
   std::string search_kind, search_id;
   if (match_entity_search(path, &search_kind, &search_id) && method == "GET") {
     return search_entities(search_kind == "profiles", search_id, query, auth, host);
+  }
+  if (search_kind == "profiles" && (method == "POST" || method == "PUT")) {
+    return write_entity(std::nullopt, body, auth, host, &search_id);
   }
   std::string club_what;
   if (match_club(path, &name, &club_what) && (method == "GET" || (method == "PUT" && club_what == "actions"))) {
