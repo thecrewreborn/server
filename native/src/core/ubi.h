@@ -47,6 +47,7 @@ std::string ubi_time(const LocalTime& t);
 std::string ticket_name(const std::string& auth);
 std::string credential(const std::string& auth);
 bool trusted(const std::string& ip);
+std::optional<uint32_t> client_ipv4(const std::string& ip);
 bool name_allowed(const std::string& name);
 std::pair<std::string, std::string> login_name(const json::Value& body, const std::string& auth);
 std::vector<std::pair<std::string, std::string>> parse_qsl(const std::string& qs);

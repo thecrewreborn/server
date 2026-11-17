@@ -77,6 +77,7 @@ struct RelayOptions {
   std::string dlc = "all";
   bool club = true;
   bool club_saves = true;
+  bool peer_store = true;
   Bytes proxy_key;
   Bytes proxy_iv;
 };

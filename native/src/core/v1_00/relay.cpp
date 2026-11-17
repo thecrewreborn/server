@@ -75,6 +75,7 @@ v1_21::RelayOptions with_dlc_none(v1_21::RelayOptions o) {
   o.dlc = "none";
   o.club = false;
   o.club_saves = false;
+  o.peer_store = false;
   return o;
 }
 

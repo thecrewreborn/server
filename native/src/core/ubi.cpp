@@ -423,6 +423,14 @@ bool trusted(const std::string& ip) {
   return v6->first == 0 && v6->second == 1;
 }
 
+std::optional<uint32_t> client_ipv4(const std::string& ip) {
+  std::string addr = ip.substr(0, ip.find('%'));
+  if (std::optional<uint32_t> v4 = parse_ipv4(addr)) return v4;
+  std::optional<std::pair<uint64_t, uint64_t>> v6 = parse_ipv6(addr);
+  if (v6 && v6->first == 0 && (v6->second >> 32) == 0xFFFF) return static_cast<uint32_t>(v6->second);
+  return std::nullopt;
+}
+
 bool name_allowed(const std::string& name) {
   if (name.empty() || name.size() > kNameMax) return false;
   for (char c : name) {

@@ -24,6 +24,7 @@ constexpr uint32_t P_PEER = 0x62230DFA;
 constexpr uint32_t P_ORBIS = 0x9A42C791;
 constexpr uint32_t P_PUNCH = 0x0547E4F3;
 constexpr uint32_t SESSION_NUMBER = 1;
+constexpr const char STORE_NAME[] = "peers.json";
 
 enum class Platform { kNone, kPs4, kPc };
 
@@ -35,6 +36,9 @@ struct Peer {
   double y = 0.0;
   double seen = 0.0;
   int64_t order = 0;
+  double stamp = 0.0;
+  bool restored = false;
+  Bytes announced;
 
   uint32_t key() const;
   Platform platform() const;
@@ -46,8 +50,11 @@ class Peers {
  public:
   explicit Peers(Core& core) : core_(core) {}
 
-  void add(uint64_t pid, Bytes info, Bytes entity, double x, double y);
+  void add(uint64_t pid, Bytes info, Bytes entity, double x, double y, Bytes announced = Bytes());
   void forget(uint64_t pid);
+  void set_store(std::string path) { store_ = std::move(path); }
+  const std::string& store() const { return store_; }
+  int64_t load(const std::string& path);
   void moved(uint64_t pid, double x, double y);
   std::vector<std::pair<double, size_t>> others(uint64_t pid, double x, double y) const;
   std::vector<size_t> hosts(uint64_t pid) const;
@@ -63,10 +70,12 @@ class Peers {
  private:
   double clock() const;
   Peer* find(uint64_t pid);
+  void save();
 
   Core& core_;
   std::vector<Peer> by_id_;
   int64_t count_ = 0;
+  std::string store_;
 };
 
 std::vector<std::pair<uint32_t, Bytes>> entity_properties(const Bytes& entity);
@@ -76,6 +85,8 @@ std::pair<uint32_t, Bytes> platform_property(Platform platform, const std::strin
 bool multiplayer(Core& core, std::string* mode, Raised* raised);
 bool enabled(Core& core, bool* on, Raised* raised);
 bool acting_id(Core& core, const Ctx& ctx, std::optional<uint64_t>* out, Raised* raised);
+
+Bytes seen_from(const Bytes& info, const std::string& client_ip);
 
 bool info_end(const Bytes& body, size_t p, size_t* end, Raised* raised);
 

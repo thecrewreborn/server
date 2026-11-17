@@ -193,6 +193,7 @@ Relay::Relay(Core& core, RelayOptions options, RelayHost* host)
       return;
     }
     store_.reset(new session::SessionStore(files, files.join(files.dirname(abs), session::STORE_NAME)));
+    if (o_.peer_store) core.peers().set_store(files.join(files.dirname(abs), peers::STORE_NAME));
     if (o_.club_saves) core.v1_21_state().club_saves = files.join(files.dirname(abs), "players");
   }
   say_window_ = clock();
@@ -288,6 +289,13 @@ void Relay::restore() {
   if (kept) {
     print("[" + ts() + "] relay port " + std::to_string(o_.port) + ": " + std::to_string(kept) +
           " game session(s) from before the restart kept");
+  }
+  if (o_.peer_store) {
+    int64_t players = core_.peers().load(core_.peers().store());
+    if (players) {
+      print("[" + ts() + "] relay port " + std::to_string(o_.port) + ": " + std::to_string(players) +
+            " multiplayer player(s) from before the restart kept");
+    }
   }
 }
 

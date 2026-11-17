@@ -265,6 +265,12 @@ On the PC the chat window opens and shows your own messages; chat between two PC
 Any other word stops the start with a message. A `config.ini` made from the `config.example.ini` of 0.0.3 or older
 contains `multiplayer = on`. On a server on the internet, change it to `lan` or `off`.
 
+Players connect to each other directly, not through the server. The server tells each game the address it sees the
+other game's connection come from, so a VPN or a second network adapter on a PC no longer matters (except for a game
+on the server's own computer). A console reaches a PC only when the PC lets the game in: allow `TheCrew.exe` through
+the Windows Firewall, on the network type your home network uses (often "Public" by default); without that rule a PS4
+cannot join that PC's session or accept its crew invite. After a server restart, players who kept playing still find each other; nobody needs to go back to free roam.
+
 ## Player pictures
 
 The PS4 uploads its user's profile picture once per game start, right after the login, over HTTPS. Only a device of
@@ -478,8 +484,8 @@ These rules apply to every server, at home and on the internet:
   at most 254 configurations, the garage 1100. A tuner purchase the server refuses does not write the save.
 - The server answers a request the game sends again from its store of recent replies. When that reply is no longer
   stored, the server drops the request, so a purchase is never made twice.
-- `save/accounts.json`, `save/tickets.json` and `sessions.json` are readable only by the user that runs the
-  server. `tickets.json` keeps a hash of each login ticket, never the ticket itself.
+- `save/accounts.json`, `save/tickets.json`, `sessions.json` and `peers.json` are readable only by the user that
+  runs the server. `tickets.json` keeps a hash of each login ticket, never the ticket itself.
 - Multiplayer serves only logged-in games, with `lan` only those from the home network while `link_home` is on.
 - A `config.ini` the server cannot read (for example one with a second `[server]` heading), or an unknown
   `link_home` or `multiplayer` value, stops the start with a message.
