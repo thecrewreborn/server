@@ -693,11 +693,12 @@ std::optional<Reply> Ubi::check_login(const std::string& name, const std::string
                      "no device key: PC patch older than 0.0.4 or no server id yet (start the server first)");
     }
     return refused(client_ip, name,
-                   "no console key: PS4 patch older than 0.0.4, the console found an older server first, UDP 4001 "
-                   "not reachable, plain HTTP server, or the server changed after the game started (restart the "
-                   "game)",
-                   "no console key (PS4 patch older than 0.0.4, older server found first, UDP 4001 blocked, plain "
-                   "HTTP server, or the server changed after the game started: restart the game)");
+                   "no console key: the game got no answer from this server when it asked for its id (it "
+                   "started before the server, or UDP 4001 is blocked): log in again, or restart the game; "
+                   "less likely: PS4 patch older than 0.0.4, another server answered first, plain HTTP server",
+                   "no console key (the game got no answer from this server when it asked for its id: it "
+                   "started before the server, or UDP 4001 is blocked; log in again, or restart the game. Less "
+                   "likely: PS4 patch older than 0.0.4, another server answered first, plain HTTP server)");
   }
   if (verdict == "unavailable") return refused(client_ip, name, "account store unavailable");
   if (verdict == "full") {
