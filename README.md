@@ -569,6 +569,10 @@ These rules apply to every server, at home and on the internet:
 - `chat = on` gives PC players the game's text chat; the PS4 version has no text chat, and chat between two PCs is
   not tested yet.
 
+## Support
+
+The Crew Reborn is free. If it is useful to you, you can support the work at https://ko-fi.com/knutwurst.
+
 ## Bugs and ideas
 
 Report them at https://github.com/thecrewreborn/server/issues (a GitHub account is needed). The `captures` folder
