@@ -473,7 +473,8 @@ int run_server(const std::vector<std::string>& argv) {
     int client_port = req.client_port;
     std::string host = req.host;
     if (hooks) hooks->http_client(req.headers, &client_ip, &client_port, &host);
-    ubi::Reply r = core.ubi().route(req.method, req.path, body, host, client_ip, client_port, req.auth, req.raw);
+    ubi::Reply r = core.ubi().route(req.method, req.path, body, host, client_ip, client_port, req.auth, req.raw,
+                                    req.headers.get(ubi::kSessionHeader));
     if (r.raised) {
       out.raised = true;
       out.exception = r.exception.line();

@@ -561,15 +561,28 @@ void Ubi::load_tickets() {
     const json::Value* ip = e.get("ip");
     const json::Value* claim = e.get("claim");
     std::optional<double> wall = stored_time(e.get("issued"));
+    const json::Value* session = e.get("session");
+    std::optional<double> session_wall = 0.0;
+    if (session) {
+      session_wall = stored_time(e.get("session_issued"));
+      if (!session->is_string() || !(session->as_string().empty() || hex_key(session->as_string()))) {
+        session_wall = std::nullopt;
+      }
+    }
     if (!name || !name->is_string() || !name_allowed(name->as_string()) || !login || !login->is_string() ||
         !name_allowed(login->as_string()) || !stored_text(platform) || !stored_text(ip) ||
-        !(!claim || claim->is_null() || stored_text(claim)) || !wall) {
+        !(!claim || claim->is_null() || stored_text(claim)) || !wall || !session_wall) {
       continue;
     }
     if (wall_now - *wall > session::STORE_MAX_AGE) continue;
     Ticket entry{name->as_string(), platform->as_string(), t - std::max(0.0, wall_now - *wall),
                  claim && claim->is_string() ? std::optional<std::string>(claim->as_string()) : std::nullopt,
-                 login->as_string(), ip->as_string(), *wall};
+                 login->as_string(), ip->as_string(), *wall, std::nullopt, 0, 0};
+    if (session) {
+      entry.session = session->as_string();
+      entry.session_at = t - std::max(0.0, wall_now - *session_wall);
+      entry.session_wall = *session_wall;
+    }
     tickets_.set(m.key, entry);
     profiles_.set(stable_id("profile", entry.login), {entry.login, entry.platform});
     sessions_.set(entry.ip, entry.login);
@@ -588,6 +601,10 @@ void Ubi::save_tickets() {
     e.set("ip", json::Value::string(t.ip));
     e.set("issued", json::Value::number(t.wall));
     e.set("claim", t.claim ? json::Value::string(*t.claim) : json::Value());
+    if (t.session) {
+      e.set("session", json::Value::string(*t.session));
+      e.set("session_issued", json::Value::number(t.session_wall));
+    }
     entries.set(kv.first, std::move(e));
   }
   FileStat st;
@@ -665,7 +682,7 @@ bool Ubi::live_ticket(const std::string& auth, Raised* raised) {
 }
 
 bool Ubi::issue(const std::string& ticket, const std::string& name, const std::string& platform,
-                const std::string& login, const std::string& client_ip, Raised* raised) {
+                const std::string& login, const std::string& client_ip, const std::string& session, Raised* raised) {
   double t = now();
   std::string account = account_key(name);
   std::optional<std::string> claim = accounts_->account_id(name, raised);
@@ -677,9 +694,60 @@ bool Ubi::issue(const std::string& ticket, const std::string& name, const std::s
   for (auto it = active_.begin(); it != active_.end();) {
     it = t - it->second >= kTicketTtl ? active_.erase(it) : std::next(it);
   }
-  tickets_.set(ticket_key(ticket), Ticket{name, platform, t, claim, login, client_ip, core_.env().time()});
+  const double wall = core_.env().time();
+  Ticket entry{name, platform, t, claim, login, client_ip, wall, ticket_key(session), t, wall};
+  tickets_.set(ticket_key(ticket), entry);
   save_tickets();
   return true;
+}
+
+namespace {
+
+std::string session_key(const std::string& session) {
+  return ticket_key(latin1_to_utf8(strip_ws_latin1(session)));
+}
+
+bool same_digest(const std::string& a, const std::string& b) {
+  if (a.size() != b.size()) return false;
+  unsigned char diff = 0;
+  for (size_t i = 0; i < a.size(); i++) diff |= static_cast<unsigned char>(a[i] ^ b[i]);
+  return diff == 0;
+}
+
+}
+
+std::optional<std::string> Ubi::session_check(const std::string& auth, const std::optional<std::string>& session) {
+  std::optional<AuthTicket> a = auth_ticket(auth);
+  if (!a) return std::nullopt;
+  const double t = now();
+  const Ticket* entry = tickets_.get(ticket_key(std::string(strip_ws_latin1(a->ticket))));
+  if (!entry || !entry->session || expired(*entry, t)) return std::nullopt;
+  if (entry->session->empty()) return std::string("belongs to a logged-out session");
+  if (!session) {
+    if (t - entry->session_at < kTicketTtl - kSessionGrace) return std::string("missing");
+    return std::nullopt;
+  }
+  if (!same_digest(session_key(*session), *entry->session)) return std::string("does not match");
+  return std::nullopt;
+}
+
+std::string Ubi::session_auth(const std::string& auth, const std::optional<std::string>& session,
+                              const std::string& client_ip) {
+  std::optional<std::string> why = session_check(auth, session);
+  if (!why) return auth;
+  say(client_ip, "http " + client_ip + ": " + kSessionHeader + " " + *why + ", the ticket counts as invalid");
+  return std::string();
+}
+
+void Ubi::end_session(const std::string& auth, const std::optional<std::string>& session) {
+  std::optional<AuthTicket> a = auth_ticket(auth);
+  if (!a || !session) return;
+  Ticket* entry = tickets_.get(ticket_key(std::string(strip_ws_latin1(a->ticket))));
+  if (!entry || !entry->session || entry->session->empty() || !same_digest(session_key(*session), *entry->session)) {
+    return;
+  }
+  entry->session = std::string();
+  save_tickets();
 }
 
 void Ubi::prune(Times& table, double window, double now) {
@@ -911,9 +979,11 @@ json::Value Ubi::session(const json::Value& body, const std::string& client_ip, 
   std::string ticket = b64encode("offline-ticket:" + uuid4_text(random));
   core_.env().urandom(random, sizeof(random));
   std::string token = b64encode("offline-token:" + uuid4_text(random));
+  core_.env().urandom(random, sizeof(random));
+  std::string session_id = uuid4_text(random);
   std::optional<std::string> shown = accounts_->display_name(name, raised);
   if (!raised->type.empty()) return Value();
-  if (!issue(ticket, shown ? *shown : name, platform, name, client_ip, raised)) return Value();
+  if (!issue(ticket, shown ? *shown : name, platform, name, client_ip, session_id, raised)) return Value();
   Value reply = obj({{"platformType", str(platform)},
                      {"ticket", str(ticket)},
                      {"token", str(token)},
@@ -928,8 +998,7 @@ json::Value Ubi::session(const json::Value& body, const std::string& client_ip, 
                      {"serverTime", str(ubi_time(civil_utc(sec, us)))},
                      {"clientIp", str(client_ip)},
                      {"initializeUser", Value::boolean(false)}});
-  core_.env().urandom(random, sizeof(random));
-  reply.set("sessionId", str(uuid4_text(random)));
+  reply.set("sessionId", str(session_id));
   reply.set("accountIssues", Value::array());
   return reply;
 }
@@ -1559,9 +1628,10 @@ Reply Ubi::ghost_storage(const std::string& method, const std::string& eid, cons
 }
 
 Reply Ubi::route(const std::string& method, const std::string& full_path, const json::Value& body,
-                 const std::string& host, const std::string& client_ip, int client_port, const std::string& auth,
-                 const std::string& raw) {
+                 const std::string& host, const std::string& client_ip, int client_port, const std::string& auth_in,
+                 const std::string& raw, const std::optional<std::string>& session_id) {
   Reply r;
+  std::string auth = auth_in;
   auto raising = [](const Raised& why) {
     Reply e;
     e.raised = true;
@@ -1648,6 +1718,7 @@ Reply Ubi::route(const std::string& method, const std::string& full_path, const 
   if (match_storage(path, &storage_id)) return ghost_storage(method, storage_id, raw, query);
   if (ends_with(path, "/profiles/sessions")) {
     if (method == "DELETE") {
+      end_session(auth, session_id);
       logout(client_ip);
       r.json = Value::object();
       return r;
@@ -1700,7 +1771,7 @@ Reply Ubi::route(const std::string& method, const std::string& full_path, const 
   }
   if (method == "POST" && match_events_post(path, &name)) {
     Raised err;
-    instant_events(name, body, auth, &err);
+    instant_events(name, body, session_auth(auth, session_id, client_ip), &err);
     if (!err.type.empty()) return raising(err);
     r.json = Value::object();
     return r;
@@ -1737,12 +1808,15 @@ Reply Ubi::route(const std::string& method, const std::string& full_path, const 
   }
   std::optional<std::string> entity;
   if (match_entity_path(path, &entity)) {
+    auth = session_auth(auth, session_id, client_ip);
     if (method == "GET") return entity ? get_entity(*entity, auth, host) : json_reply(200, no_entities());
     if (method == "POST" || method == "PUT") return write_entity(entity, body, auth, host);
     if (method == "DELETE" && entity) return delete_entity(*entity, body, auth);
   }
   std::string search_kind, search_id;
-  if (match_entity_search(path, &search_kind, &search_id) && method == "GET") {
+  const bool searched = match_entity_search(path, &search_kind, &search_id);
+  if (searched) auth = session_auth(auth, session_id, client_ip);
+  if (searched && method == "GET") {
     return search_entities(search_kind == "profiles", search_id, query, auth, host);
   }
   if (search_kind == "profiles" && (method == "POST" || method == "PUT")) {
@@ -1751,7 +1825,7 @@ Reply Ubi::route(const std::string& method, const std::string& full_path, const 
   std::string club_what;
   if (match_club(path, &name, &club_what) && (method == "GET" || (method == "PUT" && club_what == "actions"))) {
     Raised err;
-    std::optional<std::string> who = club_owner(name, auth, &err);
+    std::optional<std::string> who = club_owner(name, session_auth(auth, session_id, client_ip), &err);
     if (!err.type.empty()) return raising(err);
     if (who) {
       if (club_what == "rewards") {

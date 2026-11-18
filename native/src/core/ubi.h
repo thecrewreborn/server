@@ -40,6 +40,8 @@ constexpr int kClaimAllLimit = 200;
 constexpr int kLoginLimit = 30;
 constexpr double kLoginWindow = 600.0;
 constexpr size_t kNameMax = 32;
+constexpr const char kSessionHeader[] = "Ubi-SessionId";
+constexpr double kSessionGrace = 900.0;
 
 std::string stable_id(const std::string& kind, const std::string& name);
 std::string uuid4_text(const uint8_t* b);
@@ -71,9 +73,12 @@ struct Ticket {
   std::optional<std::string> claim;
   std::string login, ip;
   double wall = 0;
+  std::optional<std::string> session;
+  double session_at = 0, session_wall = 0;
   bool operator==(const Ticket& o) const {
     return name == o.name && platform == o.platform && issued == o.issued && claim == o.claim && login == o.login &&
-           ip == o.ip && wall == o.wall;
+           ip == o.ip && wall == o.wall && session == o.session && session_at == o.session_at &&
+           session_wall == o.session_wall;
   }
 };
 
@@ -85,7 +90,8 @@ class Ubi {
   explicit Ubi(Core& core);
 
   Reply route(const std::string& method, const std::string& path, const json::Value& body, const std::string& host,
-              const std::string& client_ip, int client_port, const std::string& auth, const std::string& raw);
+              const std::string& client_ip, int client_port, const std::string& auth, const std::string& raw,
+              const std::optional<std::string>& session_id = std::nullopt);
   void say(const std::string& client_ip, const std::string& text, bool verified = false);
   bool live_ticket(const std::string& auth, Raised* raised = nullptr);
   std::optional<std::pair<std::string, std::string>> ticket_owner(const std::string& ticket, bool refresh = false,
@@ -108,7 +114,11 @@ class Ubi {
   void print(const std::string& text);
   bool expired(const Ticket& t, double now);
   bool issue(const std::string& ticket, const std::string& name, const std::string& platform, const std::string& login,
-             const std::string& client_ip, Raised* raised);
+             const std::string& client_ip, const std::string& session, Raised* raised);
+  std::optional<std::string> session_check(const std::string& auth, const std::optional<std::string>& session);
+  std::string session_auth(const std::string& auth, const std::optional<std::string>& session,
+                           const std::string& client_ip);
+  void end_session(const std::string& auth, const std::optional<std::string>& session);
   void load_tickets();
   void save_tickets();
   static void prune(Times& table, double window, double now);
