@@ -14,3 +14,4 @@ android/build/
 android/app/build/
 android/app/jni/
 android/local.properties
+report.json
