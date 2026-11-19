@@ -473,6 +473,8 @@ Result<bool> Config::crew_credits_refill() const { return switch_on("player", "c
 Result<bool> Config::club_rewards() const { return switch_on("player", "club_rewards", "on"); }
 Result<bool> Config::chat() const { return switch_on("player", "chat", "off"); }
 
+Result<bool> Config::report_enabled() const { return switch_on("report", "enabled", "off"); }
+
 Result<std::string> Config::dlc() const {
   Result<std::string> r = get("player", "dlc", "off");
   TCR_PROPAGATE(std::string, r);

@@ -31,4 +31,13 @@ class ServerContext {
   Impl* impl_;
 };
 
+struct PostResult {
+  int status = 0;
+  std::string body;
+  std::string error;
+};
+
+bool post(const std::string& url, const std::string& body, const std::string& user_agent, double timeout,
+          PostResult* out);
+
 }

@@ -48,6 +48,7 @@ const std::vector<Key>& keys() {
       {"ui", "open", "switch", "on", false, {}},
       {"ui", "port", "number", "8090", false, {}},
       {"ui", "password", "hidden", "", false, {}},
+      {"report", "enabled", "switch", "off", true, {}},
   };
   return k;
 }

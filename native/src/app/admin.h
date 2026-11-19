@@ -20,6 +20,9 @@ struct AdminOptions {
 
 void start_admin_page(Core& core, AdminOptions options);
 
+std::string admin_page_title();
+std::string admin_login_title();
+
 void request_stop();
 void request_restart();
 

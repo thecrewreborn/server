@@ -3,6 +3,7 @@
 #include <algorithm>
 #include <cmath>
 #include <cstdio>
+#include <cstring>
 
 #include "core/core.h"
 #include "core/entities.h"
@@ -735,6 +736,9 @@ std::string Ubi::session_auth(const std::string& auth, const std::optional<std::
                               const std::string& client_ip) {
   std::optional<std::string> why = session_check(auth, session);
   if (!why) return auth;
+  core_.tally().add(*why == "missing"           ? "refused.session_missing"
+                    : *why == "does not match" ? "refused.session_mismatch"
+                                               : "refused.session_ended");
   say(client_ip, "http " + client_ip + ": " + kSessionHeader + " " + *why + ", the ticket counts as invalid");
   return std::string();
 }
@@ -782,8 +786,30 @@ void Ubi::give_back(Times& table, double window, const std::string& ip, double s
   prune(table, window, now());
 }
 
+namespace {
+
+std::string refusal_kind(const std::string& why) {
+  struct Kind {
+    const char* start;
+    const char* kind;
+  };
+  static const Kind kinds[] = {
+      {"name not allowed", "name_not_allowed"},  {"too many failed logins", "too_many_failed"},
+      {"too many logins", "too_many_logins"},    {"too many new names", "too_many_new_names"},
+      {"wrong password", "wrong_password"},      {"no device key", "no_device_key"},
+      {"no console key", "no_console_key"},      {"account store unavailable", "store_unavailable"},
+  };
+  for (const Kind& k : kinds) {
+    if (why.compare(0, std::strlen(k.start), k.start) == 0) return k.kind;
+  }
+  return why.find("devices") != std::string::npos ? "device_limit" : "other";
+}
+
+}
+
 Reply Ubi::refused(const std::string& client_ip, const std::string& name, const std::string& why,
                    const std::string& short_why) {
+  core_.tally().add("refused." + refusal_kind(why));
   std::string suppressed;
   bool allowed = refusals_.allow(client_ip + std::string(1, '\0') + why, now(), &suppressed);
   if (!suppressed.empty()) print(suppressed);
@@ -1739,6 +1765,7 @@ Reply Ubi::route(const std::string& method, const std::string& full_path, const 
     std::optional<std::string> other =
         who.first != kDefaultName ? online_elsewhere(who.first, client_ip) : std::nullopt;
     if (other) {
+      core_.tally().add("refused.playing_elsewhere");
       print("login " + client_ip + " refused: " + who.first + " is playing on " + *other);
       r.status = 409;
       r.json = obj({{"error", str(who.first + " is already playing on another device")}, {"errorCode", num(409)}});

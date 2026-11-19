@@ -1,7 +1,10 @@
 #pragma once
 
 #include <array>
+#include <cstdint>
+#include <map>
 #include <memory>
+#include <set>
 #include <optional>
 #include <string>
 
@@ -19,6 +22,31 @@ struct Overrides {
   bool reward_tables = true;
   bool car_catalog = true;
   std::string skill_part_announce = "arr3";
+};
+
+class Tally {
+ public:
+  void add(const std::string& key, int64_t n = 1) { counts_[key] += n; }
+  void seen(const std::string& group, const std::string& who) { seen_[group].insert(who); }
+  const std::map<std::string, int64_t>& counts() const { return counts_; }
+  std::map<std::string, int64_t> distinct() const {
+    std::map<std::string, int64_t> out;
+    for (const auto& g : seen_) out[g.first] = static_cast<int64_t>(g.second.size());
+    return out;
+  }
+  void settle(const std::map<std::string, int64_t>& used) {
+    for (const auto& u : used) {
+      auto it = counts_.find(u.first);
+      if (it == counts_.end()) continue;
+      it->second -= u.second;
+      if (it->second <= 0) counts_.erase(it);
+    }
+    seen_.clear();
+  }
+
+ private:
+  std::map<std::string, int64_t> counts_;
+  std::map<std::string, std::set<std::string>> seen_;
 };
 
 namespace ubi {
@@ -59,6 +87,8 @@ class Core {
 
   v1_21::ModuleState& v1_21_state();
 
+  Tally& tally() { return tally_; }
+
   std::optional<std::string>& entities_folder() { return entities_folder_; }
 
  private:
@@ -76,6 +106,7 @@ class Core {
   std::unique_ptr<config::Config> config_;
   std::optional<std::string> config_stamp_;
   std::optional<std::string> entities_folder_;
+  Tally tally_;
 };
 
 }

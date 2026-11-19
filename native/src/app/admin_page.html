@@ -296,6 +296,9 @@ code, pre, .mono { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, "
 .panel-head h2 { margin: 0; }
 .panel-head a { margin-left: auto; color: var(--accent); text-decoration: none; font-weight: 500; white-space: nowrap; }
 #log-lines .error { color: var(--error-text); }
+#report-panel pre { max-height: 360px; overflow: auto; white-space: pre-wrap; overflow-wrap: anywhere; margin: 8px 0 0; }
+#report-panel ul { margin: 0 0 12px; padding-left: 20px; max-width: 80ch; }
+#report-panel li { margin: 2px 0; }
 #viewer pre {
   background: var(--code);
   border: 1px solid var(--line);
@@ -774,7 +777,25 @@ li.item.open .tick { background: none; border: 2px solid var(--line); }
       hidden_set: "set (type a new one to change it)",
       hidden_unset: "not set",
       confirm_clear: "Remove the login of this page? Everyone in the home network can then open it.",
-      settings_error: "config.ini cannot be read: {text}"
+      settings_error: "config.ini cannot be read: {text}",
+      report_title: "Status report",
+      report_intro: "Off by default. With [report] enabled = on the server sends a short anonymous report over HTTPS to {endpoint}: shortly after each start and then once a day. Nothing is sent while it is off. Switching it off deletes the random id (report.json in the server folder). A change counts at once.",
+      report_what: "What a report holds:",
+      report_f1: "A random id, made when you switch the report on. It is not linked to you, your players or your devices.",
+      report_f2: "The server version, its build record with signature, and the SHA-256 of the program file: this shows whether the server is an official download or a changed copy.",
+      report_f3: "The names the server and this page show.",
+      report_f4: "The system: Windows, macOS, Linux or Android, its version, the processor type and the Android API level.",
+      report_f5: "The uptime.",
+      report_f6: "Settings: dlc, chat, multiplayer, link_home, club_rewards, abilities, crew_credits_refill, bots, afk_kick; whether the server address is public, whether HTTPS runs, whether the ports are the defaults, whether this page is on and asks for a login, whether a save path is set.",
+      report_f7: "Counts since the last report: logins and distinct players per game version and platform, the most players at once, claimed names, crew joins, missions and activities finished (seen every 30 seconds), refused logins and errors by kind, discovery answers, game sessions kept over a restart, unexpected stops.",
+      report_never: "Never sent: player names, ids, addresses, saves, or this server's keys and login data. The receiver uses the IP address of the connection for the country and does not store it.",
+      report_id: "Install id: {id}",
+      report_none: "No report sent yet.",
+      report_last_ok: "Last report: {when}, sent.",
+      report_last_failed: "Last report: {when}, not sent ({error}).",
+      report_next: "Next report: {when}",
+      report_last_payload: "The last report, exactly as it was sent",
+      report_preview: "The next report as it would go out now"
     },
     de: {
       title: "The Crew Reborn Server",
@@ -958,7 +979,25 @@ li.item.open .tick { background: none; border: 2px solid var(--line); }
       hidden_set: "gesetzt (zum Ändern einen neuen Wert eingeben)",
       hidden_unset: "nicht gesetzt",
       confirm_clear: "Die Anmeldung für diese Seite entfernen? Dann kann jeder im Heimnetz sie öffnen.",
-      settings_error: "config.ini kann nicht gelesen werden: {text}"
+      settings_error: "config.ini kann nicht gelesen werden: {text}",
+      report_title: "Statusbericht",
+      report_intro: "Standardmäßig aus. Mit [report] enabled = on sendet der Server einen kurzen anonymen Bericht über HTTPS an {endpoint}: kurz nach jedem Start und danach einmal am Tag. Solange er aus ist, wird nichts gesendet. Beim Ausschalten wird die zufällige Kennung gelöscht (report.json im Serverordner). Eine Änderung gilt sofort.",
+      report_what: "Was ein Bericht enthält:",
+      report_f1: "Eine zufällige Kennung, die beim Einschalten entsteht. Sie ist nicht mit dir, deinen Spielern oder deinen Geräten verknüpft.",
+      report_f2: "Die Serverversion, ihren Build-Eintrag mit Signatur und den SHA-256 der Programmdatei: Daran ist zu erkennen, ob der Server ein offizieller Download oder eine veränderte Kopie ist.",
+      report_f3: "Die Namen, die der Server und diese Seite anzeigen.",
+      report_f4: "Das System: Windows, macOS, Linux oder Android, seine Version, die Prozessorart und das Android-API-Level.",
+      report_f5: "Die Laufzeit.",
+      report_f6: "Einstellungen: dlc, chat, multiplayer, link_home, club_rewards, abilities, crew_credits_refill, bots, afk_kick; ob die Serveradresse öffentlich ist, ob HTTPS läuft, ob die Ports den Standardwerten entsprechen, ob diese Seite an ist und eine Anmeldung verlangt, ob ein Speicherpfad gesetzt ist.",
+      report_f7: "Zählungen seit dem letzten Bericht: Anmeldungen und verschiedene Spieler je Spielversion und Plattform, die meisten Spieler gleichzeitig, vergebene Namen, Crew-Beitritte, abgeschlossene Missionen und Aktivitäten (alle 30 Sekunden erfasst), abgewiesene Anmeldungen und Fehler nach Art, Antworten auf die Netzwerksuche, über einen Neustart erhaltene Spielsitzungen, unerwartete Beendigungen.",
+      report_never: "Nie gesendet: Spielernamen, Kennungen, Adressen, Spielstände, Schlüssel oder Zugangsdaten dieses Servers. Der Empfänger nutzt die IP-Adresse der Verbindung für das Land und speichert sie nicht.",
+      report_id: "Installationskennung: {id}",
+      report_none: "Noch kein Bericht gesendet.",
+      report_last_ok: "Letzter Bericht: {when}, gesendet.",
+      report_last_failed: "Letzter Bericht: {when}, nicht gesendet ({error}).",
+      report_next: "Nächster Bericht: {when}",
+      report_last_payload: "Der letzte Bericht, genau so, wie er gesendet wurde",
+      report_preview: "Der nächste Bericht, wie er jetzt gesendet würde"
     }
   };
   const TOKEN = document.querySelector('meta[name="admin-token"]').content;
@@ -983,7 +1022,7 @@ li.item.open .tick { background: none; border: 2px solid var(--line); }
   let facts = null, clients = [], names = [], saves = [];
   let logLines = [], logLast = 0;
   let viewing = null;
-  let settings = null;
+  let settings = null, reportView = null;
   let players = [], shownPlayer = null, livePlayer = null, savedPlayer = null;
 
   function t(key, vars) {
@@ -1659,10 +1698,36 @@ li.item.open .tick { background: none; border: 2px solid var(--line); }
         table([t("k_key"), t("k_value"), t("k_source"), t("k_effect"), ""], rows)
       ]));
     });
+    if (reportView) box.appendChild(reportPanel(reportView));
+  }
+  function reportPanel(r) {
+    const parts = [
+      el("h2", { text: t("report_title") }),
+      el("p", { class: "hint", text: t("report_intro", { endpoint: r.endpoint || "" }) }),
+      el("p", { text: t("report_what") }),
+      el("ul", null, ["report_f1", "report_f2", "report_f3", "report_f4", "report_f5", "report_f6", "report_f7"].map((k) => el("li", { text: t(k) }))),
+      el("p", { class: "hint", text: t("report_never") })
+    ];
+    if (r.id) parts.push(el("p", { class: "mono", text: t("report_id", { id: r.id }) }));
+    if (r.enabled) {
+      if (r.last) parts.push(el("p", { text: r.last.ok ? t("report_last_ok", { when: when(r.last.at) }) : t("report_last_failed", { when: when(r.last.at), error: r.last.error }) }));
+      else parts.push(el("p", { text: t("report_none") }));
+      if (r.next_at) parts.push(el("p", { text: t("report_next", { when: when(r.next_at) }) }));
+    }
+    if (r.last && r.last.payload) {
+      parts.push(el("h3", { text: t("report_last_payload") }));
+      parts.push(el("pre", { text: r.last.payload }));
+    }
+    if (r.preview) {
+      parts.push(el("h3", { text: t("report_preview") }));
+      parts.push(el("pre", { text: r.preview }));
+    }
+    return el("div", { class: "panel", id: "report-panel" }, parts);
   }
   async function refreshSettings() {
     try {
       settings = await get("/api/settings");
+      reportView = await get("/api/report").catch(() => null);
       renderSettings();
     } catch (e) { notice(e.message, true); }
   }

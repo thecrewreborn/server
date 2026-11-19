@@ -33,12 +33,45 @@ EOF
   if [ "$8" != "-" ]; then echo "set(CMAKE_RC_COMPILER \"$8\")" >> "$1/toolchain.cmake"; fi
 }
 
+version() {
+  if [ -f "$NATIVE/VERSION" ]; then
+    tr -d ' \r\n' < "$NATIVE/VERSION"
+  else
+    sed -n 's/^VERSION *= *["'"'"']\([^"'"'"']*\)["'"'"'].*/\1/p' "$NATIVE/../tcreborn/version.py"
+  fi
+}
+
+record() {
+  commit="" dirty=false when=""
+  if commit=$(git -C "$NATIVE" rev-parse --verify -q HEAD 2> /dev/null); then
+    when=$(TZ=UTC0 git -C "$NATIVE" log -1 --format=%cd --date=format-local:%Y-%m-%dT%H:%M:%SZ)
+    if [ -n "$(git -C "$NATIVE" status --porcelain --untracked-files=no -- .)" ]; then dirty=true; fi
+  else
+    commit=""
+  fi
+  printf '{"product":"TheCrewReborn-Server","version":"%s","commit":"%s","dirty":%s,"target":"%s","time":"%s"}' \
+    "$(version)" "$commit" "$dirty" "$1" "$when"
+}
+
+signature() {
+  if [ -n "${TCR_BUILD_KEY:-}" ]; then
+    printf '%s' "$1" > "$2"
+    s=$(openssl pkeyutl -sign -rawin -inkey "$TCR_BUILD_KEY" -in "$2" | openssl base64 -A)
+    rm -f "$2"
+    [ -n "$s" ] || { echo "cannot sign the build record with $TCR_BUILD_KEY" >&2; exit 1; }
+    printf '%s' "$s"
+  fi
+}
+
 build() {
   target=$1
   dir="$NATIVE/build-$target"
   exe=TheCrewReborn-Server
   mkdir -p "$dir"
-  set -- -S "$NATIVE" -B "$dir" -DCMAKE_BUILD_TYPE=Release
+  rec=$(record "$target")
+  sig=$(signature "$rec" "$dir/record.json")
+  set -- -S "$NATIVE" -B "$dir" -DCMAKE_BUILD_TYPE=Release \
+    "-DTCR_BUILD_RECORD=$rec" "-DTCR_BUILD_SIGNATURE=$sig"
   case "$target" in
     macos-universal)
       set -- "$@" "-DCMAKE_OSX_ARCHITECTURES=arm64;x86_64" -DCMAKE_OSX_DEPLOYMENT_TARGET=11.0
@@ -80,8 +113,18 @@ build() {
   mkdir -p "$DIST/$target"
   cp "$dir/$exe" "$DIST/$target/$exe"
   $strip_cmd "$DIST/$target/$exe"
-  printf '%s  %s bytes\n' "$DIST/$target/$exe" "$(wc -c < "$DIST/$target/$exe" | tr -d ' ')"
+  printf '%s  %s bytes%s\n' "$DIST/$target/$exe" "$(wc -c < "$DIST/$target/$exe" | tr -d ' ')" \
+    "$([ -n "$sig" ] && echo ", signed" || echo "")"
 }
+
+if [ "${1:-}" = "--record" ]; then
+  [ -n "${2:-}" ] || { echo "usage: native/build.sh --record <target>" >&2; exit 2; }
+  rec=$(record "$2")
+  tmp=$(mktemp)
+  sig=$(signature "$rec" "$tmp")
+  printf '%s\n%s\n' "$rec" "$sig"
+  exit 0
+fi
 
 for t in $TARGETS; do
   build "$t"

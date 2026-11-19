@@ -2,6 +2,7 @@
 #include "server/tls.h"
 
 #include <cstdio>
+#include <cstdlib>
 #include <cstring>
 #include <vector>
 
@@ -695,6 +696,270 @@ bool ensure(const std::string& cert_path, const std::string& key_path, const std
   }
   *wrote = true;
   return true;
+}
+
+namespace {
+
+#include "server/tls_roots.inc"
+
+struct ClientConn {
+  plat::Socket sock = plat::kNoSocket;
+  plat::Error os;
+};
+
+int client_recv(void* ctx, unsigned char* buf, size_t len) {
+  ClientConn* c = static_cast<ClientConn*>(ctx);
+  long r = plat::sock_recv(c->sock, buf, len > 0x7fffffff ? 0x7fffffff : len, &c->os);
+  if (r == plat::kWouldBlock) return MBEDTLS_ERR_SSL_WANT_READ;
+  if (r < 0) return kRecvFailed;
+  return static_cast<int>(r);
+}
+
+int client_send(void* ctx, const unsigned char* buf, size_t len) {
+  ClientConn* c = static_cast<ClientConn*>(ctx);
+  long r = plat::sock_send(c->sock, buf, len > 0x7fffffff ? 0x7fffffff : len, &c->os);
+  if (r == plat::kWouldBlock) return MBEDTLS_ERR_SSL_WANT_WRITE;
+  if (r < 0) return kSendFailed;
+  return static_cast<int>(r);
+}
+
+mbedtls_x509_crt* roots() {
+  static mbedtls_x509_crt* chain = nullptr;
+  if (!chain) {
+    chain = new mbedtls_x509_crt;
+    mbedtls_x509_crt_init(chain);
+    for (const Root& r : kRoots) mbedtls_x509_crt_parse_der(chain, r.der, r.size);
+  }
+  return chain;
+}
+
+struct Url {
+  bool tls = true;
+  std::string host;
+  int port = 443;
+  std::string path = "/";
+};
+
+bool parse_url(const std::string& url, Url* out, std::string* why) {
+  std::string rest;
+  if (url.compare(0, 8, "https://") == 0) {
+    rest = url.substr(8);
+  } else if (url.compare(0, 7, "http://") == 0) {
+    rest = url.substr(7);
+    out->tls = false;
+    out->port = 80;
+  } else {
+    *why = "not an http(s) address";
+    return false;
+  }
+  size_t slash = rest.find('/');
+  std::string authority = slash == std::string::npos ? rest : rest.substr(0, slash);
+  if (slash != std::string::npos) out->path = rest.substr(slash);
+  size_t colon = authority.find(':');
+  out->host = authority.substr(0, colon);
+  if (colon != std::string::npos) out->port = std::atoi(authority.substr(colon + 1).c_str());
+  if (out->host.empty() || out->port <= 0 || out->port > 65535) {
+    *why = "no host or port in the address";
+    return false;
+  }
+  if (!out->tls && out->host != "127.0.0.1") {
+    *why = "plain http only to 127.0.0.1";
+    return false;
+  }
+  return true;
+}
+
+template <class Send>
+bool send_all(plat::Socket s, const std::string& data, double deadline, Send send, std::string* why) {
+  size_t done = 0;
+  while (done < data.size()) {
+    int r = send(reinterpret_cast<const unsigned char*>(data.data()) + done, data.size() - done);
+    if (r > 0) {
+      done += static_cast<size_t>(r);
+      continue;
+    }
+    plat::Error err;
+    int w = r == MBEDTLS_ERR_SSL_WANT_READ ? plat::wait_readable(s, remaining(deadline), &err)
+            : r == MBEDTLS_ERR_SSL_WANT_WRITE ? plat::wait_writable(s, remaining(deadline), &err)
+                                               : -2;
+    if (w == 1) continue;
+    *why = w == 0 ? "timed out" : w == -2 ? "send failed: " + mbed_text(r) : "send failed: " + err.text;
+    return false;
+  }
+  return true;
+}
+
+}
+
+bool post(const std::string& url, const std::string& body, const std::string& user_agent, double timeout,
+          PostResult* out) {
+  *out = PostResult();
+  const double deadline = plat::monotonic() + timeout;
+  Url u;
+  if (!parse_url(url, &u, &out->error)) return false;
+  std::string ip, why;
+  if (!plat::resolve_ipv4(u.host, u.port, &ip, &why)) {
+    out->error = "cannot resolve " + u.host + ": " + why;
+    return false;
+  }
+  plat::Error err;
+  plat::Socket s = plat::tcp_connect(ip, u.port, remaining(deadline), &err);
+  if (s == plat::kNoSocket) {
+    out->error = "cannot connect to " + u.host + ": " + (err.code ? err.text : std::string("timed out"));
+    return false;
+  }
+  std::string request = "POST " + u.path + " HTTP/1.1\r\nHost: " + u.host +
+                        ((u.tls && u.port == 443) || (!u.tls && u.port == 80) ? "" : ":" + std::to_string(u.port)) +
+                        "\r\nUser-Agent: " + user_agent +
+                        "\r\nContent-Type: application/json\r\nContent-Length: " + std::to_string(body.size()) +
+                        "\r\nConnection: close\r\n\r\n" + body;
+  std::string reply;
+  constexpr size_t kMaxReply = 16384 + 4096;
+  bool ok = true;
+  if (!u.tls) {
+    ok = send_all(s, request, deadline, [&](const unsigned char* p, size_t n) {
+      plat::Error e;
+      long r = plat::sock_send(s, p, n, &e);
+      if (r == plat::kWouldBlock) return MBEDTLS_ERR_SSL_WANT_WRITE;
+      return r < 0 ? kSendFailed : static_cast<int>(r);
+    }, &out->error);
+    while (ok && reply.size() < kMaxReply) {
+      char buf[4096];
+      plat::Error e;
+      long r = plat::sock_recv(s, buf, sizeof(buf), &e);
+      if (r == 0) break;
+      if (r > 0) {
+        reply.append(buf, static_cast<size_t>(r));
+        continue;
+      }
+      if (r != plat::kWouldBlock) {
+        out->error = "receive failed: " + e.text;
+        ok = false;
+        break;
+      }
+      int w = plat::wait_readable(s, remaining(deadline), &e);
+      if (w != 1) {
+        out->error = "timed out";
+        ok = false;
+      }
+    }
+  } else if (!psa_ready()) {
+    out->error = "the crypto library did not start";
+    ok = false;
+  } else {
+    ClientConn conn;
+    conn.sock = s;
+    mbedtls_ssl_config conf;
+    mbedtls_ssl_context ssl;
+    {
+      plat::Lock lock(g_lock);
+      mbedtls_ssl_config_init(&conf);
+      mbedtls_ssl_init(&ssl);
+      int r = mbedtls_ssl_config_defaults(&conf, MBEDTLS_SSL_IS_CLIENT, MBEDTLS_SSL_TRANSPORT_STREAM,
+                                          MBEDTLS_SSL_PRESET_DEFAULT);
+      if (r == 0) {
+        mbedtls_ssl_conf_rng(&conf, system_rng, nullptr);
+        mbedtls_ssl_conf_min_tls_version(&conf, MBEDTLS_SSL_VERSION_TLS1_2);
+        mbedtls_ssl_conf_max_tls_version(&conf, MBEDTLS_SSL_VERSION_TLS1_3);
+        mbedtls_ssl_conf_authmode(&conf, MBEDTLS_SSL_VERIFY_REQUIRED);
+        mbedtls_ssl_conf_ca_chain(&conf, roots(), nullptr);
+        r = mbedtls_ssl_setup(&ssl, &conf);
+      }
+      if (r == 0) r = mbedtls_ssl_set_hostname(&ssl, u.host.c_str());
+      if (r != 0) {
+        out->error = "TLS setup failed: " + mbed_text(r);
+        ok = false;
+      }
+      mbedtls_ssl_set_bio(&ssl, &conn, client_send, client_recv, nullptr);
+    }
+    auto wait = [&](int r) {
+      plat::Error e;
+      int w = r == MBEDTLS_ERR_SSL_WANT_READ ? plat::wait_readable(s, remaining(deadline), &e)
+              : r == MBEDTLS_ERR_SSL_WANT_WRITE ? plat::wait_writable(s, remaining(deadline), &e)
+                                                 : -2;
+      if (w == 1) return true;
+      if (w == 0) {
+        out->error = "timed out";
+      } else if (w == -2) {
+        uint32_t flags = mbedtls_ssl_get_verify_result(&ssl);
+        if (r == MBEDTLS_ERR_X509_CERT_VERIFY_FAILED && flags) {
+          char buf[256];
+          mbedtls_x509_crt_verify_info(buf, sizeof(buf), "", flags);
+          std::string text = buf;
+          while (!text.empty() && (text.back() == '\n' || text.back() == ' ')) text.pop_back();
+          for (size_t i = 0; (i = text.find('\n', i)) != std::string::npos;) text.replace(i, 1, "; ");
+          out->error = "certificate refused: " + text;
+        } else if (r == kRecvFailed || r == kSendFailed) {
+          out->error = "connection failed: " + conn.os.text;
+        } else {
+          out->error = "TLS failed: " + mbed_text(r);
+        }
+      } else {
+        out->error = "connection failed: " + e.text;
+      }
+      return false;
+    };
+    while (ok) {
+      int r;
+      {
+        plat::Lock lock(g_lock);
+        r = mbedtls_ssl_handshake(&ssl);
+      }
+      if (r == 0) break;
+      if (!wait(r)) ok = false;
+    }
+    if (ok) {
+      size_t done = 0;
+      while (ok && done < request.size()) {
+        int r;
+        {
+          plat::Lock lock(g_lock);
+          r = mbedtls_ssl_write(&ssl, reinterpret_cast<const unsigned char*>(request.data()) + done,
+                                request.size() - done);
+        }
+        if (r > 0) {
+          done += static_cast<size_t>(r);
+        } else if (!wait(r)) {
+          ok = false;
+        }
+      }
+    }
+    while (ok && reply.size() < kMaxReply) {
+      unsigned char buf[4096];
+      int r;
+      {
+        plat::Lock lock(g_lock);
+        r = mbedtls_ssl_read(&ssl, buf, sizeof(buf));
+      }
+      if (r > 0) {
+        reply.append(reinterpret_cast<const char*>(buf), static_cast<size_t>(r));
+        continue;
+      }
+      if (r == 0 || r == MBEDTLS_ERR_SSL_PEER_CLOSE_NOTIFY || r == MBEDTLS_ERR_SSL_CONN_EOF) break;
+      if (r == MBEDTLS_ERR_SSL_RECEIVED_NEW_SESSION_TICKET) continue;
+      if (!wait(r)) {
+        if (reply.find("\r\n\r\n") != std::string::npos) out->error.clear();
+        else ok = false;
+        break;
+      }
+    }
+    {
+      plat::Lock lock(g_lock);
+      mbedtls_ssl_free(&ssl);
+      mbedtls_ssl_config_free(&conf);
+    }
+  }
+  plat::close_socket(s);
+  if (!ok && reply.empty()) return false;
+  if (reply.compare(0, 5, "HTTP/") != 0 || reply.find(' ') == std::string::npos) {
+    out->error = reply.empty() ? (out->error.empty() ? "no reply" : out->error) : "not an HTTP reply";
+    return false;
+  }
+  out->error.clear();
+  out->status = std::atoi(reply.c_str() + reply.find(' ') + 1);
+  size_t head_end = reply.find("\r\n\r\n");
+  if (head_end != std::string::npos) out->body = reply.substr(head_end + 4, 16384);
+  return out->status > 0;
 }
 
 }

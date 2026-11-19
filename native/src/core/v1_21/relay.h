@@ -136,6 +136,7 @@ class Relay {
   virtual bool guest_request(uint32_t rpc) const;
   uint32_t get_player_ = GET_PLAYER;
   size_t chunk_ = wire::CHUNK;
+  const char* game_ = "121";
 
   struct Budget {
     double tokens, reply_bytes, at;

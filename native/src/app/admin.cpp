@@ -584,6 +584,13 @@ server::Response open_folder(Core& core, const json::Value& body) {
   return json_reply(200, out);
 }
 
+std::string title_of(const unsigned char* data, size_t n) {
+  std::string html(reinterpret_cast<const char*>(data), n);
+  size_t a = html.find("<title>"), b = html.find("</title>");
+  if (a == std::string::npos || b == std::string::npos || b < a) return "";
+  return html.substr(a + 7, std::min<size_t>(b - a - 7, 200));
+}
+
 server::Response route(const server::Request& req) {
   State& s = *g_state;
   Core& core = *s.core;
@@ -647,6 +654,7 @@ server::Response route(const server::Request& req) {
     if (path == "/api/names") return json_reply(200, tcr::admin::names(core));
     if (path == "/api/saves") return json_reply(200, tcr::admin::saves(core, s.o.relays));
     if (path == "/api/settings") return json_reply(200, tcr::admin::settings(core));
+    if (path == "/api/report") return json_reply(200, status_report_view(core));
     if (path == "/api/log") return log_view(query);
     if (path == "/api/save") return save_view(core, query, false);
     if (path == "/api/save/download") return save_view(core, query, true);
@@ -686,6 +694,9 @@ server::Response route(const server::Request& req) {
 }
 
 }
+
+std::string admin_page_title() { return title_of(kAdminPage, sizeof(kAdminPage)); }
+std::string admin_login_title() { return title_of(kAdminLogin, sizeof(kAdminLogin)); }
 
 void start_admin_page(Core& core, AdminOptions options) {
   config::Result<std::optional<bool>> enabled = core.config().ui_enabled();

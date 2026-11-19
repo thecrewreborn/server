@@ -110,6 +110,8 @@ class ServerService : Service() {
         pb.environment()["TCREBORN_HOME"] = files.home.absolutePath
         pb.environment()["TZ"] = posixTimeZone()
         pb.environment()["HOME"] = files.home.absolutePath
+        pb.environment()["TCREBORN_ANDROID_API"] = android.os.Build.VERSION.SDK_INT.toString()
+        pb.environment()["TCREBORN_ANDROID_RELEASE"] = android.os.Build.VERSION.RELEASE ?: ""
         val p = try {
             log.appendText("\n--- app: starting ${exe.absolutePath}\n")
             pb.start()

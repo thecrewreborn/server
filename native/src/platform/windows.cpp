@@ -290,6 +290,43 @@ Addr local_addr(Socket s) {
   return to_addr(sa);
 }
 
+Socket tcp_connect(const std::string& ip, int port, double seconds, Error* err) {
+  if (err) *err = Error();
+  sockaddr_in sa;
+  if (ip.empty() || !fill_addr(ip.c_str(), port, &sa)) {
+    if (err) *err = win_error(WSAEINVAL);
+    return kNoSocket;
+  }
+  SOCKET s = WSASocketW(AF_INET, SOCK_STREAM, IPPROTO_TCP, nullptr, 0, WSA_FLAG_NO_HANDLE_INHERIT);
+  if (s == INVALID_SOCKET) {
+    set_wsa(err);
+    return kNoSocket;
+  }
+  u_long one = 1;
+  ioctlsocket(s, FIONBIO, &one);
+  if (connect(s, reinterpret_cast<sockaddr*>(&sa), sizeof(sa)) != 0) {
+    if (WSAGetLastError() != WSAEWOULDBLOCK) {
+      set_wsa(err);
+      closesocket(s);
+      return kNoSocket;
+    }
+    int r = wait_socket(static_cast<Socket>(s), POLLWRNORM, seconds, err);
+    if (r <= 0) {
+      closesocket(s);
+      return kNoSocket;
+    }
+    int code = 0;
+    int len = sizeof(code);
+    if (getsockopt(s, SOL_SOCKET, SO_ERROR, reinterpret_cast<char*>(&code), &len) != 0) code = WSAGetLastError();
+    if (code != 0) {
+      if (err) *err = win_error(static_cast<DWORD>(code));
+      closesocket(s);
+      return kNoSocket;
+    }
+  }
+  return static_cast<Socket>(s);
+}
+
 int wait_readable(Socket s, double seconds, Error* err) { return wait_socket(s, POLLRDNORM, seconds, err); }
 int wait_writable(Socket s, double seconds, Error* err) { return wait_socket(s, POLLWRNORM, seconds, err); }
 
@@ -823,6 +860,42 @@ std::string env_var(const char* name) {
   n = GetEnvironmentVariableW(wname.c_str(), &value[0], n);
   value.resize(n);
   return narrow(value);
+}
+
+SystemInfo system_info() {
+  SystemInfo out;
+  out.family = "windows";
+  using RtlGetVersionFn = LONG(WINAPI*)(OSVERSIONINFOW*);
+  HMODULE ntdll = GetModuleHandleW(L"ntdll.dll");
+  RtlGetVersionFn get_version =
+      ntdll ? reinterpret_cast<RtlGetVersionFn>(reinterpret_cast<void*>(GetProcAddress(ntdll, "RtlGetVersion")))
+            : nullptr;
+  OSVERSIONINFOW v;
+  memset(&v, 0, sizeof(v));
+  v.dwOSVersionInfoSize = sizeof(v);
+  if (get_version && get_version(&v) == 0) {
+    out.version = std::to_string(v.dwMajorVersion) + "." + std::to_string(v.dwMinorVersion) + "." +
+                  std::to_string(v.dwBuildNumber);
+  }
+  using IsWow64Process2Fn = BOOL(WINAPI*)(HANDLE, USHORT*, USHORT*);
+  HMODULE kernel = GetModuleHandleW(L"kernel32.dll");
+  IsWow64Process2Fn wow =
+      kernel ? reinterpret_cast<IsWow64Process2Fn>(reinterpret_cast<void*>(GetProcAddress(kernel, "IsWow64Process2")))
+             : nullptr;
+  USHORT process = 0, machine = 0;
+  if (wow && wow(GetCurrentProcess(), &process, &machine)) {
+    if (machine == 0xAA64) out.arch = "arm64";
+    else if (machine == 0x8664) out.arch = "x86_64";
+    else if (machine == 0x014c) out.arch = "x86";
+  }
+  if (out.arch.empty()) {
+    SYSTEM_INFO si;
+    GetNativeSystemInfo(&si);
+    if (si.wProcessorArchitecture == PROCESSOR_ARCHITECTURE_AMD64) out.arch = "x86_64";
+    else if (si.wProcessorArchitecture == 12) out.arch = "arm64";
+    else out.arch = "other";
+  }
+  return out;
 }
 
 const char* const kTextNewline = "\r\n";

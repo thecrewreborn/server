@@ -3,8 +3,11 @@
 #include <cstdint>
 #include <optional>
 #include <string>
+#include <vector>
 
+#include "core/admin.h"
 #include "core/discovery.h"
+#include "core/json.h"
 #include "core/env.h"
 #include "core/v1_21/relay.h"
 #include "platform/files.h"
@@ -62,5 +65,19 @@ class SystemRelayHost final : public v1_21::RelayHost {
   void log_failed(const std::string& path, const std::string& why) override;
   bool local_ip_for(const std::string& peer, std::string* ip, Raised* raised) override;
 };
+
+extern const char kServerName[];
+
+struct ReportSetup {
+  std::vector<admin::RelayView> relays;
+  double started_mono = 0.0;
+  int http_port = 0, https_port = 0, relay_port = 0;
+  std::string page_title;
+  std::string login_title;
+};
+
+void start_status_report(Core& core, ReportSetup setup);
+json::Value status_report_view(Core& core);
+void status_report_stopping();
 
 }

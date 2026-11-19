@@ -83,6 +83,7 @@ v1_21::RelayOptions with_dlc_none(v1_21::RelayOptions o) {
 
 Relay::Relay(Core& core, v1_21::RelayOptions options, v1_21::RelayHost* host)
     : v1_21::Relay(core, with_dlc_none(std::move(options)), host), key_(kHandshakeKey, kHandshakeKey + 32) {
+  game_ = "100";
   get_player_ = GET_OR_CREATE_PLAYER;
   chunk_ = CHUNK;
 }

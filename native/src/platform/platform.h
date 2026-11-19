@@ -34,6 +34,7 @@ struct Addr {
 Socket tcp_listen(const char* ip, int port, int backlog, bool reuse, Error* err);
 Socket tcp_accept(Socket listener, double seconds, Addr* peer, Error* err);
 Addr local_addr(Socket s);
+Socket tcp_connect(const std::string& ip, int port, double seconds, Error* err);
 
 int wait_readable(Socket s, double seconds, Error* err);
 int wait_writable(Socket s, double seconds, Error* err);
@@ -138,6 +139,14 @@ std::string dir_name(const std::string& path);
 std::string join_path(const std::string& a, const std::string& b);
 std::string executable_path();
 std::string env_var(const char* name);
+
+struct SystemInfo {
+  std::string family;
+  std::string version;
+  std::string arch;
+  int android_api = 0;
+};
+SystemInfo system_info();
 
 extern const char* const kTextNewline;
 

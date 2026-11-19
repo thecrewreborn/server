@@ -287,6 +287,7 @@ void Relay::restore() {
     kept++;
   }
   if (kept) {
+    core_.tally().add("sessions_restored", kept);
     print("[" + ts() + "] relay port " + std::to_string(o_.port) + ": " + std::to_string(kept) +
           " game session(s) from before the restart kept");
   }
@@ -646,9 +647,13 @@ void Relay::log(json::Value entry) {
   if (!host_->append_log(o_.log_path, json::dumps(kept) + "\n", &why)) host_->log_failed(o_.log_path, why);
 }
 
-void Relay::send_failed(const Addr& to, const std::string& error) { say(to, "cannot send a reply: " + error); }
+void Relay::send_failed(const Addr& to, const std::string& error) {
+  core_.tally().add("errors.send");
+  say(to, "cannot send a reply: " + error);
+}
 
 void Relay::handler_error(const Bytes& data, const Addr& from, const std::string& traceback) {
+  core_.tally().add("errors.handler");
   Bytes head(data.begin(), data.begin() + static_cast<std::ptrdiff_t>(std::min<size_t>(data.size(), 32)));
   say(from, "handler error on " + py::hex(head) + "\n" + traceback);
   json::Value e = json::Value::object();
@@ -1104,6 +1109,7 @@ bool Relay::bind_player(Session& sess, const Addr& addr, const Bytes& request, b
   if (!owner || account_key(owner->first) != account_key(*name)) {
     if (!sess.refused) {
       sess.refused = true;
+      core_.tally().add("refused.unknown_ticket");
       say(addr, "GET_PLAYER with an unknown ticket: refused", true);
     }
     *bound = false;
@@ -1141,6 +1147,11 @@ bool Relay::bind_player(Session& sess, const Addr& addr, const Bytes& request, b
   for (const Addr& a : others) drop(a);
   remember(&sess, addr);
   const char* device = platform == "uplay" ? "PC" : "PS4";
+  {
+    const std::string kind = std::string(platform == "uplay" ? "pc_" : platform == "psn" ? "ps4_" : "other_") + game_;
+    core_.tally().add("login." + kind);
+    core_.tally().seen(kind, account);
+  }
   std::string line = "[" + ts() + "] " + player + " connected from " + addr.ip + " (" + device + ")";
   const std::string& save = ctx->player.path;
   if (!save.empty()) {

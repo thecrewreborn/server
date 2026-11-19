@@ -23,6 +23,7 @@
 #include <sys/stat.h>
 #include <spawn.h>
 #include <sys/types.h>
+#include <sys/utsname.h>
 #include <sys/wait.h>
 #include <time.h>
 #include <unistd.h>
@@ -30,6 +31,7 @@
 #if defined(__APPLE__)
 #include <Security/AuthSession.h>
 #include <mach-o/dyld.h>
+#include <sys/sysctl.h>
 #include <sys/random.h>
 #endif
 
@@ -235,6 +237,48 @@ Addr local_addr(Socket s) {
   memset(&sa, 0, sizeof(sa));
   getsockname(static_cast<int>(s), reinterpret_cast<sockaddr*>(&sa), &len);
   return to_addr(sa);
+}
+
+Socket tcp_connect(const std::string& ip, int port, double seconds, Error* err) {
+  if (err) *err = Error();
+  sockaddr_in sa;
+  if (ip.empty() || !fill_addr(ip.c_str(), port, &sa)) {
+    set_error(err, EINVAL);
+    return kNoSocket;
+  }
+  int fd = socket(AF_INET, SOCK_STREAM, 0);
+  if (fd < 0) {
+    set_error(err, errno);
+    return kNoSocket;
+  }
+  set_cloexec(fd);
+  set_nonblocking(fd);
+#if defined(SO_NOSIGPIPE)
+  int one = 1;
+  setsockopt(fd, SOL_SOCKET, SO_NOSIGPIPE, &one, sizeof(one));
+#endif
+  if (connect(fd, reinterpret_cast<sockaddr*>(&sa), sizeof(sa)) != 0) {
+    if (errno != EINPROGRESS && errno != EINTR) {
+      int code = errno;
+      ::close(fd);
+      set_error(err, code);
+      return kNoSocket;
+    }
+    int r = wait_fd(fd, POLLOUT, seconds, err);
+    if (r <= 0) {
+      ::close(fd);
+      return kNoSocket;
+    }
+    int code = 0;
+    socklen_t len = sizeof(code);
+    if (getsockopt(fd, SOL_SOCKET, SO_ERROR, &code, &len) != 0) code = errno;
+    if (code != 0) {
+      ::close(fd);
+      set_error(err, code);
+      return kNoSocket;
+    }
+  }
+  return fd;
 }
 
 int wait_readable(Socket s, double seconds, Error* err) { return wait_fd(static_cast<int>(s), POLLIN, seconds, err); }
@@ -724,6 +768,73 @@ std::string executable_path() {
 std::string env_var(const char* name) {
   const char* v = getenv(name);
   return v ? v : "";
+}
+
+namespace {
+
+#if !defined(__APPLE__)
+std::string property(const std::string& text, const std::string& key) {
+  size_t at = 0;
+  while (at < text.size()) {
+    size_t end = text.find('\n', at);
+    if (end == std::string::npos) end = text.size();
+    std::string line = text.substr(at, end - at);
+    if (line.compare(0, key.size() + 1, key + "=") == 0) {
+      std::string v = line.substr(key.size() + 1);
+      while (!v.empty() && (v.back() == '\r' || v.back() == ' ')) v.pop_back();
+      return v;
+    }
+    at = end + 1;
+  }
+  return "";
+}
+#endif
+
+std::string machine_arch(const std::string& m) {
+  if (m == "aarch64" || m == "arm64") return "arm64";
+  if (m == "x86_64" || m == "amd64") return "x86_64";
+  return m;
+}
+
+}
+
+SystemInfo system_info() {
+  SystemInfo out;
+  utsname u;
+  std::string machine, release;
+  if (uname(&u) == 0) {
+    machine = u.machine;
+    release = u.release;
+  }
+#if defined(__APPLE__)
+  out.family = "macos";
+  char buf[64] = {0};
+  size_t n = sizeof(buf) - 1;
+  if (sysctlbyname("kern.osproductversion", buf, &n, nullptr, 0) == 0) out.version = buf;
+  int translated = 0;
+  size_t tn = sizeof(translated);
+  if (sysctlbyname("sysctl.proc_translated", &translated, &tn, nullptr, 0) == 0 && translated == 1) machine = "arm64";
+  out.arch = machine_arch(machine);
+#else
+  out.family = "linux";
+  out.version = release;
+  out.arch = machine_arch(machine);
+  if (!env_var("ANDROID_DATA").empty() || !env_var("ANDROID_ROOT").empty()) {
+    out.family = "android";
+    std::string props;
+    Error e;
+    if (read_file("/system/build.prop", &props, &e)) {
+      std::string v = property(props, "ro.build.version.release");
+      if (!v.empty()) out.version = v;
+      out.android_api = std::atoi(property(props, "ro.build.version.sdk").c_str());
+    }
+    std::string api = env_var("TCREBORN_ANDROID_API");
+    if (!api.empty() && std::atoi(api.c_str()) > 0) out.android_api = std::atoi(api.c_str());
+    std::string release_name = env_var("TCREBORN_ANDROID_RELEASE");
+    if (!release_name.empty()) out.version = release_name;
+  }
+#endif
+  return out;
 }
 
 const char* const kTextNewline = "\n";

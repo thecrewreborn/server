@@ -65,7 +65,7 @@ const ParserSpec& server_parser() {
     p.prog = "TheCrewReborn-Server";
     p.usage = kUsage;
     p.help = kHelp;
-    p.version = std::string("The Crew Reborn server ") + kVersion;
+    p.version = std::string(kServerName) + " " + kVersion;
     p.options = {
         {{"-h", "--help"}, "help", OptionSpec::kHelp, OptionSpec::kText},
         {{"--version"}, "version", OptionSpec::kVersion, OptionSpec::kText},
@@ -213,8 +213,9 @@ bool move_into_version_folders(Files& files, const std::string& root, int* code)
 
 class LoopSender final : public discovery::Sender {
  public:
-  LoopSender(server::UdpLoop& loop, const plat::Addr& to) : loop_(loop), to_(to) {}
+  LoopSender(server::UdpLoop& loop, const plat::Addr& to, Tally& tally) : loop_(loop), to_(to), tally_(tally) {}
   bool send(const Bytes& reply) override {
+    tally_.add("discovery_answers");
     plat::Error err;
     return loop_.send(server::Datagram{std::string(reply.begin(), reply.end()), to_}, &err);
   }
@@ -222,6 +223,7 @@ class LoopSender final : public discovery::Sender {
  private:
   server::UdpLoop& loop_;
   plat::Addr to_;
+  Tally& tally_;
 };
 
 struct RelayPort {
@@ -268,6 +270,7 @@ void watch_interrupt() {
     say("\nServer stopped.");
     if (g_restart.load() && !plat::interrupted()) {
       server::CoreLock lock;
+      status_report_stopping();
       say("Restarting the server.\n");
       plat::Error err;
       if (plat::restart_self(g_args, &err)) std::_Exit(0);
@@ -276,6 +279,7 @@ void watch_interrupt() {
     }
     if (g_serving.load()) {
       server::CoreLock lock;
+      status_report_stopping();
       std::_Exit(0);
     }
     std::_Exit(0);
@@ -344,7 +348,7 @@ int run_server(const std::vector<std::string>& argv) {
   const std::string save = args->get("save", default_save);
   const bool verbose = args->flags.count("verbose") != 0;
 
-  say(std::string("The Crew Reborn server ") + kVersion);
+  say(std::string(kServerName) + " " + kVersion);
   TestHooks* hooks = TestHooks::from_environment(core, env);
   {
     std::vector<std::string> lines;
@@ -597,8 +601,8 @@ int run_server(const std::vector<std::string>& argv) {
     plat::Error err;
     if (!discovery_loop.open("0.0.0.0", discovery_port(), true, &err)) return crash(err);
   }
-  discovery_loop.start(512, [&finder, &discovery_loop](const std::string& data, const plat::Addr& from) {
-    LoopSender sender(discovery_loop, from);
+  discovery_loop.start(512, [&finder, &discovery_loop, &core](const std::string& data, const plat::Addr& from) {
+    LoopSender sender(discovery_loop, from, core.tally());
     finder.datagram(Bytes(data.begin(), data.end()), from.ip, sender);
     return std::vector<server::Datagram>();
   }, nullptr);
@@ -675,7 +679,16 @@ int run_server(const std::vector<std::string>& argv) {
     ao.facts.started_wall = started_wall;
     ao.facts.started_mono = started_mono;
     ao.hooks = hooks;
+    ReportSetup report;
+    report.relays = ao.relays;
+    report.started_mono = started_mono;
+    report.http_port = http_bound;
+    report.https_port = https_bound;
+    report.relay_port = static_cast<int>(port);
+    report.page_title = admin_page_title();
+    report.login_title = admin_login_title();
     start_admin_page(core, std::move(ao));
+    start_status_report(core, std::move(report));
   }
   say("\nServer address: " + server_address(lan, https_bound) +
       "\nReady. Start The Crew on your PS4 or PC; the game finds the server on the local network by itself.\n"

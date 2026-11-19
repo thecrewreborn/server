@@ -387,6 +387,34 @@ A server on the internet (`[server] ip` is a public address, or `link_home = off
 To use it from elsewhere, forward the port through SSH: `ssh -L 8090:127.0.0.1:8090 user@server`, then open
 `http://127.0.0.1:8090/` on your own computer.
 
+## Status report (optional)
+
+The server can send a short anonymous status report to the project. It is off by default and sends nothing until
+you switch it on: set `enabled = on` under `[report]` in `config.ini`, or use the switch on the admin page's
+Settings tab. The change counts at once, without a restart.
+
+When it is on, the server sends one report over HTTPS to `https://crewreborn-stats.knutwurst.workers.dev/ingest`
+about a minute after the start (at most one an hour, so restarts do not add more) and then once a day. A report that
+cannot be sent is tried again the next day; the server writes one line about it and goes on. A report holds:
+
+- a random id, made when you switch the report on and kept in `report.json` in the server folder. Switching the
+  report off deletes that file and the id with it.
+- the server's version, its build record (version, commit, target platform, commit time) with a signature, and the
+  SHA-256 of the server program. This tells an official download from a changed or self-built copy.
+- the names the server and its admin page show.
+- the system: Windows, macOS, Linux or Android, its version, the processor type and, on Android, the API level.
+- the uptime.
+- some settings: `dlc`, `chat`, `multiplayer`, `link_home`, `club_rewards`, `abilities`, `crew_credits_refill`,
+  `bots`, `afk_kick`, whether `[server] ip` is a public address, whether HTTPS runs, whether the ports are the
+  defaults, whether the admin page is on and has a password, whether a save path is set.
+- counts since the last report: logins and distinct players per game version and platform, the most players at
+  once, claimed names, crew joins, missions and activities finished, refused logins and errors by kind, answers to
+  the games' network search, game sessions kept over a restart, and stops the server did not finish cleanly.
+
+A report never holds player names, ids, addresses, saves, passwords or keys. The receiver uses the address of the
+connection to find the country and does not store the address. The admin page's Settings tab shows this list, the
+exact text of the last report, and what the next report would look like.
+
 ## Running a server on the internet
 
 The same server runs on the internet; there is nothing to switch on, because names are always checked. You need a
