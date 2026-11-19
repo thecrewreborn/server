@@ -389,9 +389,13 @@ To use it from elsewhere, forward the port through SSH: `ssh -L 8090:127.0.0.1:8
 
 ## Status report (optional)
 
-The server can send a short anonymous status report to the project. It is off by default and sends nothing until
-you switch it on: set `enabled = on` under `[report]` in `config.ini`, or use the switch on the admin page's
-Settings tab. The change counts at once, without a restart.
+The server can send a short anonymous status report to the project. It helps a lot: without it, bugs are much
+harder to find and fix. It is off until you say yes. The first time you open the admin page, it asks you once, with
+"Yes, send reports" and "No, don't send"; it writes your answer to `[report] enabled` in `config.ini` (`on` or
+`off`) and does not ask again. Until you answer, the server's console shows one line that points to the page. You
+can change your answer at any time with the switch on the admin page's Settings tab, or with `enabled = on` or
+`off` in `config.ini` (a value you write there yourself counts as your answer too). The change counts at once,
+without a restart.
 
 When it is on, the server sends one report over HTTPS to `https://crewreborn-stats.knutwurst.workers.dev/ingest`
 about a minute after the start (at most one an hour, so restarts do not add more) and then once a day. A report that
@@ -412,8 +416,8 @@ cannot be sent is tried again the next day; the server writes one line about it 
   the games' network search, game sessions kept over a restart, and stops the server did not finish cleanly.
 
 A report never holds player names, ids, addresses, saves, passwords or keys. The receiver uses the address of the
-connection to find the country and does not store the address. The admin page's Settings tab shows this list, the
-exact text of the last report, and what the next report would look like.
+connection only to find the country and to limit how often reports arrive, and does not store the address. On the admin page, Settings, "What is sent?" shows
+this list, the exact text of the last report, and what the next report would look like.
 
 ## Running a server on the internet
 

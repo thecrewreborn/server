@@ -107,6 +107,7 @@ class Config {
   Result<std::string> ui_port() const;
   Result<std::string> ui_password() const;
   Result<bool> report_enabled() const;
+  Result<bool> report_chosen() const;
 
  private:
   Result<std::string> get(const std::string& section, const std::string& option, const std::string& fallback) const;

@@ -296,9 +296,37 @@ code, pre, .mono { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, "
 .panel-head h2 { margin: 0; }
 .panel-head a { margin-left: auto; color: var(--accent); text-decoration: none; font-weight: 500; white-space: nowrap; }
 #log-lines .error { color: var(--error-text); }
-#report-panel pre { max-height: 360px; overflow: auto; white-space: pre-wrap; overflow-wrap: anywhere; margin: 8px 0 0; }
-#report-panel ul { margin: 0 0 12px; padding-left: 20px; max-width: 80ch; }
-#report-panel li { margin: 2px 0; }
+#report-panel .row { margin: 0; }
+#report-panel .hint { margin-bottom: 14px; }
+.linklike { border: 0; background: none; padding: 0; min-height: 0; color: var(--accent); font-weight: 500; text-decoration: underline; text-underline-offset: 3px; }
+.linklike:hover { background: none; border: 0; text-decoration-thickness: 2px; }
+#report-dialog {
+  position: fixed; inset: 0; z-index: 20; display: flex; align-items: center; justify-content: center;
+  padding: 16px; background: rgba(0, 0, 0, 0.6);
+}
+#report-dialog .dialog {
+  width: 100%; max-width: 560px; max-height: calc(100vh - 32px); overflow: auto; background: var(--panel);
+  color: var(--text); border: 1px solid var(--line); border-radius: 10px; padding: 22px 24px 20px;
+  box-shadow: 0 18px 48px rgba(0, 0, 0, 0.35);
+}
+#report-dialog .dialog.wide { max-width: 760px; }
+#report-dialog .dialog:focus { outline: none; }
+#report-dialog h2 { margin: 0 0 12px; }
+#report-dialog p { margin: 0 0 12px; }
+#report-dialog .safe { padding: 10px 12px; border-radius: 8px; background: var(--soft); }
+#report-dialog .choice, #report-dialog .foot {
+  position: sticky; bottom: -20px; display: grid; grid-template-columns: 1fr 1fr; gap: 10px;
+  margin: 18px -24px -20px; padding: 14px 24px 20px; background: var(--panel); border-top: 1px solid var(--line);
+}
+#report-dialog .choice button { width: 100%; min-height: 46px; font-weight: 600; white-space: normal; }
+#report-dialog .foot { display: flex; justify-content: flex-end; }
+#report-dialog ul { margin: 0 0 12px; padding-left: 20px; }
+#report-dialog li { margin: 3px 0; }
+#report-dialog h3 { font-size: 15px; margin: 16px 0 6px; }
+#report-dialog pre {
+  max-height: 300px; overflow: auto; white-space: pre-wrap; overflow-wrap: anywhere; margin: 0;
+  background: var(--code); border: 1px solid var(--line); border-radius: 8px; padding: 10px 12px; font-size: 12.5px;
+}
 #viewer pre {
   background: var(--code);
   border: 1px solid var(--line);
@@ -310,6 +338,7 @@ code, pre, .mono { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, "
 }
 #notice {
   position: fixed;
+  z-index: 30;
   right: 24px;
   bottom: 24px;
   max-width: 480px;
@@ -457,6 +486,13 @@ li.item.open .tick { background: none; border: 2px solid var(--line); }
   #tab-log .row { gap: 8px 12px; margin-bottom: 8px; }
   #log-lines { min-height: 0; font-size: 11.5px; line-height: 1.4; padding: 8px; }
   #notice { left: 12px; right: 12px; bottom: 12px; max-width: none; }
+  #report-dialog { padding: 10px; align-items: flex-end; }
+  #report-dialog .dialog { padding: 18px 16px 16px; max-height: calc(100vh - 20px); }
+  #report-dialog .choice, #report-dialog .foot { bottom: -16px; margin: 14px -16px -16px; padding: 12px 16px 16px; }
+  #report-dialog p { font-size: 15px; }
+}
+@media (max-width: 380px) {
+  #report-dialog .choice { grid-template-columns: 1fr; }
 }
 </style>
 </head>
@@ -591,6 +627,9 @@ li.item.open .tick { background: none; border: 2px solid var(--line); }
   </section>
 </main>
 <div id="notice" role="status" hidden></div>
+<div id="report-dialog" hidden>
+  <div class="dialog" id="report-box" role="dialog" aria-modal="true" aria-labelledby="report-box-title" tabindex="-1"></div>
+</div>
 <script>
 "use strict";
 (function () {
@@ -779,7 +818,26 @@ li.item.open .tick { background: none; border: 2px solid var(--line); }
       confirm_clear: "Remove the login of this page? Everyone in the home network can then open it.",
       settings_error: "config.ini cannot be read: {text}",
       report_title: "Status report",
-      report_intro: "Off by default. With [report] enabled = on the server sends a short anonymous report over HTTPS to {endpoint}: shortly after each start and then once a day. Nothing is sent while it is off. Switching it off deletes the random id (report.json in the server folder). A change counts at once.",
+      report_switch: "Send anonymous status reports",
+      report_hint: "Shortly after each start and then once a day: version, system, uptime, a few settings and counts. No player names, saves or login data.",
+      report_unchosen: "Not chosen yet: off until you switch it on.",
+      report_on: "On",
+      report_off: "Off",
+      report_details: "What is sent?",
+      report_details_title: "What a status report holds",
+      report_intro: "The server sends the report over HTTPS to {endpoint}: shortly after each start (at most one an hour) and then once a day. Nothing is sent while it is off. Switching it off deletes the random id (report.json in the server folder). A change counts at once.",
+      consent_title: "Send anonymous status reports?",
+      consent_what: "Shortly after each start and then once a day, the server would send the project a short report: version and build, system, uptime, a few settings, and counts such as logins, finished missions and errors by kind.",
+      consent_why: "This helps the development a lot: without these reports, bugs are much harder to find and fix.",
+      consent_safe: "No player names, no saves, no login data. Your IP address is not stored; it is only used to find the country and to limit how often reports arrive.",
+      consent_later: "You can change your answer at any time under Settings.",
+      consent_yes: "Yes, send reports",
+      consent_no: "No, don't send",
+      consent_saved_on: "Status reports are on. You can switch them off under Settings.",
+      consent_saved_off: "No status reports are sent. You can switch them on under Settings.",
+      report_saved_on: "Status reports are on.",
+      report_saved_off: "Status reports are off.",
+      back: "Back",
       report_what: "What a report holds:",
       report_f1: "A random id, made when you switch the report on. It is not linked to you, your players or your devices.",
       report_f2: "The server version, its build record with signature, and the SHA-256 of the program file: this shows whether the server is an official download or a changed copy.",
@@ -788,7 +846,7 @@ li.item.open .tick { background: none; border: 2px solid var(--line); }
       report_f5: "The uptime.",
       report_f6: "Settings: dlc, chat, multiplayer, link_home, club_rewards, abilities, crew_credits_refill, bots, afk_kick; whether the server address is public, whether HTTPS runs, whether the ports are the defaults, whether this page is on and asks for a login, whether a save path is set.",
       report_f7: "Counts since the last report: logins and distinct players per game version and platform, the most players at once, claimed names, crew joins, missions and activities finished (seen every 30 seconds), refused logins and errors by kind, discovery answers, game sessions kept over a restart, unexpected stops.",
-      report_never: "Never sent: player names, ids, addresses, saves, or this server's keys and login data. The receiver uses the IP address of the connection for the country and does not store it.",
+      report_never: "Never sent: player names, ids, addresses, saves, or this server's keys and login data. The receiver uses the IP address of the connection only for the country and to limit how often reports arrive, and does not store it.",
       report_id: "Install id: {id}",
       report_none: "No report sent yet.",
       report_last_ok: "Last report: {when}, sent.",
@@ -981,7 +1039,26 @@ li.item.open .tick { background: none; border: 2px solid var(--line); }
       confirm_clear: "Die Anmeldung für diese Seite entfernen? Dann kann jeder im Heimnetz sie öffnen.",
       settings_error: "config.ini kann nicht gelesen werden: {text}",
       report_title: "Statusbericht",
-      report_intro: "Standardmäßig aus. Mit [report] enabled = on sendet der Server einen kurzen anonymen Bericht über HTTPS an {endpoint}: kurz nach jedem Start und danach einmal am Tag. Solange er aus ist, wird nichts gesendet. Beim Ausschalten wird die zufällige Kennung gelöscht (report.json im Serverordner). Eine Änderung gilt sofort.",
+      report_switch: "Anonyme Statusberichte senden",
+      report_hint: "Kurz nach jedem Start und danach einmal am Tag: Version, System, Laufzeit, einige Einstellungen und Zählungen. Keine Spielernamen, Spielstände oder Zugangsdaten.",
+      report_unchosen: "Noch nicht gewählt: aus, bis du es einschaltest.",
+      report_on: "An",
+      report_off: "Aus",
+      report_details: "Was wird gesendet?",
+      report_details_title: "Was ein Statusbericht enthält",
+      report_intro: "Der Server sendet den Bericht über HTTPS an {endpoint}: kurz nach jedem Start (höchstens einen pro Stunde) und danach einmal am Tag. Solange er aus ist, wird nichts gesendet. Beim Ausschalten wird die zufällige Kennung gelöscht (report.json im Serverordner). Eine Änderung gilt sofort.",
+      consent_title: "Anonyme Statusberichte senden?",
+      consent_what: "Der Server würde dem Projekt kurz nach jedem Start und danach einmal am Tag einen kurzen Bericht schicken: Version und Build, System, Laufzeit, einige Einstellungen und Zählungen wie Anmeldungen, abgeschlossene Missionen und Fehler nach Art.",
+      consent_why: "Das hilft der Entwicklung sehr: Ohne diese Berichte sind Fehler viel schwerer zu finden und zu beheben.",
+      consent_safe: "Keine Spielernamen, keine Spielstände, keine Zugangsdaten. Deine IP-Adresse wird nicht gespeichert; sie dient nur dazu, das Land zu bestimmen und zu begrenzen, wie oft Berichte ankommen.",
+      consent_later: "Du kannst deine Antwort jederzeit unter Einstellungen ändern.",
+      consent_yes: "Ja, Berichte senden",
+      consent_no: "Nein, nicht senden",
+      consent_saved_on: "Statusberichte sind an. Unter Einstellungen kannst du sie ausschalten.",
+      consent_saved_off: "Es werden keine Statusberichte gesendet. Unter Einstellungen kannst du sie einschalten.",
+      report_saved_on: "Statusberichte sind an.",
+      report_saved_off: "Statusberichte sind aus.",
+      back: "Zurück",
       report_what: "Was ein Bericht enthält:",
       report_f1: "Eine zufällige Kennung, die beim Einschalten entsteht. Sie ist nicht mit dir, deinen Spielern oder deinen Geräten verknüpft.",
       report_f2: "Die Serverversion, ihren Build-Eintrag mit Signatur und den SHA-256 der Programmdatei: Daran ist zu erkennen, ob der Server ein offizieller Download oder eine veränderte Kopie ist.",
@@ -990,7 +1067,7 @@ li.item.open .tick { background: none; border: 2px solid var(--line); }
       report_f5: "Die Laufzeit.",
       report_f6: "Einstellungen: dlc, chat, multiplayer, link_home, club_rewards, abilities, crew_credits_refill, bots, afk_kick; ob die Serveradresse öffentlich ist, ob HTTPS läuft, ob die Ports den Standardwerten entsprechen, ob diese Seite an ist und eine Anmeldung verlangt, ob ein Speicherpfad gesetzt ist.",
       report_f7: "Zählungen seit dem letzten Bericht: Anmeldungen und verschiedene Spieler je Spielversion und Plattform, die meisten Spieler gleichzeitig, vergebene Namen, Crew-Beitritte, abgeschlossene Missionen und Aktivitäten (alle 30 Sekunden erfasst), abgewiesene Anmeldungen und Fehler nach Art, Antworten auf die Netzwerksuche, über einen Neustart erhaltene Spielsitzungen, unerwartete Beendigungen.",
-      report_never: "Nie gesendet: Spielernamen, Kennungen, Adressen, Spielstände, Schlüssel oder Zugangsdaten dieses Servers. Der Empfänger nutzt die IP-Adresse der Verbindung für das Land und speichert sie nicht.",
+      report_never: "Nie gesendet: Spielernamen, Kennungen, Adressen, Spielstände, Schlüssel oder Zugangsdaten dieses Servers. Der Empfänger nutzt die IP-Adresse der Verbindung nur für das Land und um zu begrenzen, wie oft Berichte ankommen, und speichert sie nicht.",
       report_id: "Installationskennung: {id}",
       report_none: "Noch kein Bericht gesendet.",
       report_last_ok: "Letzter Bericht: {when}, gesendet.",
@@ -1678,8 +1755,9 @@ li.item.open .tick { background: none; border: 2px solid var(--line); }
     if (!settings) return;
     $("settings-path").textContent = settings.path || "";
     if (settings.error) box.appendChild(el("div", { class: "panel" }, [el("p", { class: "empty", text: t("settings_error", { text: settings.error }) })]));
+    if (reportView) box.appendChild(reportPanel(reportView));
     const sections = [];
-    (settings.settings || []).forEach((k) => { if (sections.indexOf(k.section) < 0) sections.push(k.section); });
+    (settings.settings || []).forEach((k) => { if (k.section !== "report" && sections.indexOf(k.section) < 0) sections.push(k.section); });
     sections.forEach((section) => {
       const rows = settings.settings.filter((k) => k.section === section).map((k) => {
         const input = settingInput(k);
@@ -1698,15 +1776,30 @@ li.item.open .tick { background: none; border: 2px solid var(--line); }
         table([t("k_key"), t("k_value"), t("k_source"), t("k_effect"), ""], rows)
       ]));
     });
-    if (reportView) box.appendChild(reportPanel(reportView));
   }
   function reportPanel(r) {
-    const parts = [
+    const on = !!r.enabled;
+    const button = (value) => el("button", {
+      type: "button", "aria-pressed": String(on === value), text: t(value ? "report_on" : "report_off"),
+      onclick: () => { if (on !== value) chooseReport(value); }
+    });
+    return el("div", { class: "panel", id: "report-panel" }, [
       el("h2", { text: t("report_title") }),
+      el("p", { class: "hint", text: t("report_hint") + (r.chosen === false ? " " + t("report_unchosen") : "") }),
+      el("div", { class: "row" }, [
+        el("span", { id: "report-switch-label", text: t("report_switch") }),
+        el("div", { class: "switch", role: "group", "aria-labelledby": "report-switch-label" }, [button(false), button(true)]),
+        el("button", { type: "button", class: "linklike", text: t("report_details"), onclick: () => openReport("details", false) })
+      ])
+    ]);
+  }
+
+  let reportShown = null, reportFrom = false, reportReturn = null;
+  function reportDetails(r) {
+    const parts = [
       el("p", { class: "hint", text: t("report_intro", { endpoint: r.endpoint || "" }) }),
-      el("p", { text: t("report_what") }),
       el("ul", null, ["report_f1", "report_f2", "report_f3", "report_f4", "report_f5", "report_f6", "report_f7"].map((k) => el("li", { text: t(k) }))),
-      el("p", { class: "hint", text: t("report_never") })
+      el("p", { class: "safe", text: t("report_never") })
     ];
     if (r.id) parts.push(el("p", { class: "mono", text: t("report_id", { id: r.id }) }));
     if (r.enabled) {
@@ -1722,8 +1815,79 @@ li.item.open .tick { background: none; border: 2px solid var(--line); }
       parts.push(el("h3", { text: t("report_preview") }));
       parts.push(el("pre", { text: r.preview }));
     }
-    return el("div", { class: "panel", id: "report-panel" }, parts);
+    return parts;
   }
+  function renderReportDialog() {
+    const box = $("report-box");
+    box.textContent = "";
+    if (!reportShown || !reportView) { $("report-dialog").hidden = true; return; }
+    const r = reportView;
+    box.className = reportShown === "details" ? "dialog wide" : "dialog";
+    if (reportShown === "ask") {
+      [
+        el("h2", { id: "report-box-title", text: t("consent_title") }),
+        el("p", { text: t("consent_what") }),
+        el("p", { text: t("consent_why") }),
+        el("p", { class: "safe", text: t("consent_safe") }),
+        el("p", { class: "hint" }, [
+          document.createTextNode(t("consent_later") + " "),
+          el("button", { type: "button", class: "linklike", text: t("report_details"), onclick: () => openReport("details", true) })
+        ]),
+        el("div", { class: "choice" }, [
+          el("button", { type: "button", id: "report-no", text: t("consent_no"), onclick: () => chooseReport(false) }),
+          el("button", { type: "button", id: "report-yes", class: "primary", text: t("consent_yes"), onclick: () => chooseReport(true) })
+        ])
+      ].forEach((n) => box.appendChild(n));
+    } else {
+      box.appendChild(el("h2", { id: "report-box-title", text: t("report_details_title") }));
+      reportDetails(r).forEach((n) => box.appendChild(n));
+      box.appendChild(el("div", { class: "foot" }, [
+        el("button", { type: "button", id: "report-close", text: t(reportFrom ? "back" : "close"), onclick: closeReport })
+      ]));
+    }
+    $("report-dialog").hidden = false;
+  }
+  function openReport(view, fromQuestion) {
+    if (!reportShown) reportReturn = document.activeElement;
+    reportShown = view;
+    reportFrom = fromQuestion;
+    renderReportDialog();
+    $("report-box").scrollTop = 0;
+    $("report-box").focus();
+  }
+  function closeReport() {
+    if (reportShown === "details" && reportFrom) { openReport("ask", false); return; }
+    reportShown = null;
+    renderReportDialog();
+    if (reportReturn && reportReturn.focus) reportReturn.focus();
+    reportReturn = null;
+  }
+  async function chooseReport(on) {
+    try {
+      await post("/api/report", { enabled: on });
+    } catch (e) { notice(e.message, true); return; }
+    const asked = reportShown === "ask";
+    reportShown = null;
+    renderReportDialog();
+    if (reportReturn && reportReturn.focus) reportReturn.focus();
+    reportReturn = null;
+    notice(t(asked ? (on ? "consent_saved_on" : "consent_saved_off") : (on ? "report_saved_on" : "report_saved_off")), false);
+    try { reportView = await get("/api/report"); } catch (e) { }
+    if (tab === "settings") await refreshSettings();
+  }
+  async function askAboutReport() {
+    try { reportView = await get("/api/report"); } catch (e) { return; }
+    if (reportView && reportView.chosen === false && !reportShown) openReport("ask", false);
+  }
+  $("report-dialog").addEventListener("keydown", (e) => {
+    if (e.key === "Escape" && reportShown === "details") { e.preventDefault(); closeReport(); return; }
+    if (e.key !== "Tab") return;
+    const items = Array.prototype.filter.call($("report-box").querySelectorAll("button"), (b) => !b.disabled);
+    if (!items.length) return;
+    const first = items[0], last = items[items.length - 1];
+    if (e.shiftKey && (document.activeElement === first || document.activeElement === $("report-box"))) { e.preventDefault(); last.focus(); }
+    else if (!e.shiftKey && document.activeElement === last) { e.preventDefault(); first.focus(); }
+  });
   async function refreshSettings() {
     try {
       settings = await get("/api/settings");
@@ -1932,6 +2096,7 @@ li.item.open .tick { background: none; border: 2px solid var(--line); }
     renderPlayers();
     renderPlayer();
     renderSavedPlayer();
+    renderReportDialog();
     setStatus(!stopped && !restarted);
   }
 
@@ -1961,6 +2126,7 @@ li.item.open .tick { background: none; border: 2px solid var(--line); }
 
   translateStatic();
   showTab(location.hash.slice(1));
+  askAboutReport();
   setInterval(poll, 1500);
 })();
 </script>

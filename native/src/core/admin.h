@@ -93,6 +93,8 @@ json::Value settings(Core& core);
 
 json::Value set_setting(Core& core, const json::Value& body, int* status, std::string* said);
 
+json::Value set_report_choice(Core& core, const json::Value& body, int* status, std::string* said);
+
 std::string valid_utf8(const std::string& s, size_t limit = static_cast<size_t>(-1));
 
 std::string unescape_non_ascii(const std::string& dumped);

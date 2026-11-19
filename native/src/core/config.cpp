@@ -474,6 +474,12 @@ Result<bool> Config::club_rewards() const { return switch_on("player", "club_rew
 Result<bool> Config::chat() const { return switch_on("player", "chat", "off"); }
 
 Result<bool> Config::report_enabled() const { return switch_on("report", "enabled", "off"); }
+Result<bool> Config::report_chosen() const {
+  Result<std::string> r = get("report", "enabled", "ask");
+  TCR_PROPAGATE(bool, r);
+  std::string w = py::lower(py::strip(*r.value));
+  return Result<bool>::of(!w.empty() && w != "ask");
+}
 
 Result<std::string> Config::dlc() const {
   Result<std::string> r = get("player", "dlc", "off");

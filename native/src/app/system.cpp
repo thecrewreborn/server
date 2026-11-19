@@ -502,6 +502,7 @@ json::Value status_report_view(Core& core) {
   Report* r = g_report;
   out.set("endpoint", str_value(r ? r->url : std::string(kReportUrl)));
   out.set("enabled", json::Value::boolean(setting_or(core.config().report_enabled(), false)));
+  out.set("chosen", json::Value::boolean(setting_or(core.config().report_chosen(), true)));
   if (!r) return out;
   out.set("id", r->on ? str_value(r->id) : json::Value::null());
   if (r->on && r->last.at > 0) {

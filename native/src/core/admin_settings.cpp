@@ -1,3 +1,4 @@
+#include <optional>
 #include <string>
 #include <vector>
 
@@ -149,57 +150,69 @@ json::Value settings(Core& core) {
   return out;
 }
 
+namespace {
+
+json::Value fail_with(int* status, int code, const std::string& text) {
+  *status = code;
+  json::Value v = json::Value::object();
+  v.set("error", json::Value::string(text));
+  return v;
+}
+
+std::optional<json::Value> write_changes(Core& core, const std::vector<config::Change>& changes,
+                                         const std::optional<std::string>& stamp, int* status,
+                                         std::string* new_stamp, std::vector<std::string>* warnings) {
+  const std::string path = config_path(core);
+  std::string text, now_stamp;
+  OsError err;
+  if (!config::read_with_stamp(*core.files(), path, &text, &now_stamp, &err)) {
+    return fail_with(status, 500, "cannot read " + path + ": " + err.text());
+  }
+  auto changed = [&]() {
+    json::Value v = fail_with(status, 409, "config.ini changed since the page read it: reload the settings");
+    v.set("changed", json::Value::boolean(true));
+    return v;
+  };
+  if (stamp && now_stamp != *stamp) return changed();
+  std::string candidate = text;
+  for (const config::Change& c : changes) candidate = config::set_value(candidate, c.section, c.key, c.value);
+  config::Config c(candidate, path, core.home(), py::native_paths(), core.files());
+  std::string refusal = start_refusal(c, warnings);
+  if (!refusal.empty()) return fail_with(status, 400, refusal);
+  switch (config::save_values(*core.files(), path, now_stamp, changes, new_stamp, &err)) {
+    case config::SaveOutcome::kChanged:
+      return changed();
+    case config::SaveOutcome::kFailed:
+      return fail_with(status, 500, "cannot write " + path + ": " + err.text());
+    case config::SaveOutcome::kLink:
+      return fail_with(status, 409, path + " is a symbolic link: the page does not replace it. Change the file it "
+                                         "points to by hand, or set TCREBORN_CONFIG to that file.");
+    case config::SaveOutcome::kSaved:
+      break;
+  }
+  return std::nullopt;
+}
+
+}
+
 json::Value set_setting(Core& core, const json::Value& body, int* status, std::string* said) {
   auto field = [&](const char* name) -> std::optional<std::string> {
     const json::Value* v = body.get(name);
     if (!v || !v->is_string()) return std::nullopt;
     return v->as_string();
   };
-  auto fail = [&](int code, const std::string& text) {
-    *status = code;
-    json::Value v = json::Value::object();
-    v.set("error", json::Value::string(text));
-    return v;
-  };
   std::optional<std::string> section = field("section"), key = field("key"), value = field("value"),
                              stamp = field("stamp");
-  if (!section || !key || !value || !stamp) return fail(400, "section, key, value and stamp must be texts");
+  if (!section || !key || !value || !stamp) return fail_with(status, 400, "section, key, value and stamp must be texts");
   const Key* k = find_key(*section, *key);
-  if (!k) return fail(404, "no such setting: [" + *section + "] " + *key);
+  if (!k) return fail_with(status, 404, "no such setting: [" + *section + "] " + *key);
   if (!config::value_ok(*value) || value->size() > 1024) {
-    return fail(400, "the value must be one line of at most 1024 bytes");
+    return fail_with(status, 400, "the value must be one line of at most 1024 bytes");
   }
-  const std::string path = config_path(core);
-  std::string text, now_stamp;
-  OsError err;
-  if (!config::read_with_stamp(*core.files(), path, &text, &now_stamp, &err)) {
-    return fail(500, "cannot read " + path + ": " + err.text());
-  }
-  if (now_stamp != *stamp) {
-    json::Value v = fail(409, "config.ini changed since the page read it: reload the settings");
-    v.set("changed", json::Value::boolean(true));
-    return v;
-  }
-  std::string candidate = config::set_value(text, *section, *key, *value);
-  config::Config c(candidate, path, core.home(), py::native_paths(), core.files());
-  std::vector<std::string> warnings;
-  std::string refusal = start_refusal(c, &warnings);
-  if (!refusal.empty()) return fail(400, refusal);
+  std::vector<config::Change> changes = {{*section, *key, *value}};
   std::string new_stamp;
-  switch (config::save_value(*core.files(), path, *stamp, *section, *key, *value, &new_stamp, &err)) {
-    case config::SaveOutcome::kChanged: {
-      json::Value v = fail(409, "config.ini changed since the page read it: reload the settings");
-      v.set("changed", json::Value::boolean(true));
-      return v;
-    }
-    case config::SaveOutcome::kFailed:
-      return fail(500, "cannot write " + path + ": " + err.text());
-    case config::SaveOutcome::kLink:
-      return fail(409, path + " is a symbolic link: the page does not replace it. Change the file it points to by "
-                        "hand, or set TCREBORN_CONFIG to that file.");
-    case config::SaveOutcome::kSaved:
-      break;
-  }
+  std::vector<std::string> warnings;
+  if (std::optional<json::Value> e = write_changes(core, changes, stamp, status, &new_stamp, &warnings)) return *e;
   bool secret = std::string(k->type) == "hidden";
   *said = "config.ini [" + *section + "] " + *key + (secret ? " changed" : " = " + *value) +
           (k->live ? " (counts at once)" : " (counts after a restart)");
@@ -212,6 +225,25 @@ json::Value set_setting(Core& core, const json::Value& body, int* status, std::s
   json::Value w = json::Value::array();
   for (const std::string& line : warnings) w.push(json::Value::string(line));
   v.set("warnings", w);
+  return v;
+}
+
+json::Value set_report_choice(Core& core, const json::Value& body, int* status, std::string* said) {
+  const json::Value* enabled = body.get("enabled");
+  if (!enabled || !enabled->is_bool()) return fail_with(status, 400, "enabled must be true or false");
+  const bool on = enabled->as_bool();
+  std::string new_stamp;
+  std::vector<std::string> warnings;
+  if (std::optional<json::Value> e = write_changes(core, {{"report", "enabled", on ? "on" : "off"}}, std::nullopt,
+                                                   status, &new_stamp, &warnings)) {
+    return *e;
+  }
+  *said = std::string("config.ini [report] enabled = ") + (on ? "on" : "off") + " (counts at once)";
+  *status = 200;
+  json::Value v = json::Value::object();
+  v.set("ok", json::Value::boolean(true));
+  v.set("enabled", json::Value::boolean(on));
+  v.set("text", json::Value::string(*said));
   return v;
 }
 

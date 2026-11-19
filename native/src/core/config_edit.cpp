@@ -147,6 +147,11 @@ bool read_with_stamp(Files& files, const std::string& path, std::string* text, s
 SaveOutcome save_value(Files& files, const std::string& path, const std::string& expected_stamp,
                        const std::string& section, const std::string& key, const std::string& value,
                        std::string* new_stamp, OsError* err) {
+  return save_values(files, path, expected_stamp, {Change{section, key, value}}, new_stamp, err);
+}
+
+SaveOutcome save_values(Files& files, const std::string& path, const std::string& expected_stamp,
+                        const std::vector<Change>& changes, std::string* new_stamp, OsError* err) {
   std::string text, stamp;
   FileStat link;
   OsError lerr;
@@ -154,11 +159,10 @@ SaveOutcome save_value(Files& files, const std::string& path, const std::string&
   if (there && (link.mode & 0xF000) == 0xA000) return SaveOutcome::kLink;
   if (!read_with_stamp(files, path, &text, &stamp, err)) return SaveOutcome::kFailed;
   if (stamp != expected_stamp) return SaveOutcome::kChanged;
+  for (const Change& c : changes) text = set_value(text, c.section, c.key, c.value);
   FileStat st;
   const uint32_t mode = there ? (link.mode & 07777) : 0644;
-  if (!files.write_atomic_mode(path, set_value(text, section, key, value), mode, &st, err)) {
-    return SaveOutcome::kFailed;
-  }
+  if (!files.write_atomic_mode(path, text, mode, &st, err)) return SaveOutcome::kFailed;
   *new_stamp = stamp_of(st);
   return SaveOutcome::kSaved;
 }

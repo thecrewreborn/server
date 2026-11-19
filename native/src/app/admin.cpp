@@ -679,6 +679,13 @@ server::Response route(const server::Request& req) {
     if (!said.empty()) say_action(core, said);
     return json_reply(status, out);
   }
+  if (path == "/api/report") {
+    int status = 500;
+    std::string said;
+    json::Value out = tcr::admin::set_report_choice(core, body, &status, &said);
+    if (!said.empty()) say_action(core, said);
+    return json_reply(status, out);
+  }
   if (path == "/api/logout") return logout(req);
   if (path == "/api/restart") {
     say_action(core, "restart");
@@ -758,6 +765,10 @@ void start_admin_page(Core& core, AdminOptions options) {
     say("Admin page: http://" + ip + ":" + std::to_string(g_state->port) + "/ (home network" + pw + ")");
   } else {
     say("Admin page: " + local_url + " (only on this computer: " + local_only + pw + ")");
+  }
+  config::Result<bool> chosen = core.config().report_chosen();
+  if (chosen.ok() && !*chosen.value) {
+    say("Status report: off until you choose; the admin page asks once (or set [report] enabled in config.ini)");
   }
   if (*open.value && !g_state->o.test_mode && desktop()) open_later(local_url, "the browser");
 }

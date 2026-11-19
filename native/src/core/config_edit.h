@@ -1,6 +1,7 @@
 #pragma once
 
 #include <string>
+#include <vector>
 
 #include "core/files.h"
 
@@ -21,6 +22,13 @@ enum class SaveOutcome { kSaved, kChanged, kFailed, kLink };
 SaveOutcome save_value(Files& files, const std::string& path, const std::string& expected_stamp,
                        const std::string& section, const std::string& key, const std::string& value,
                        std::string* new_stamp, OsError* err);
+
+struct Change {
+  std::string section, key, value;
+};
+
+SaveOutcome save_values(Files& files, const std::string& path, const std::string& expected_stamp,
+                        const std::vector<Change>& changes, std::string* new_stamp, OsError* err);
 
 }
 }
