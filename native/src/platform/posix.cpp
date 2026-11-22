@@ -465,6 +465,9 @@ void catch_interrupt() {
 
 bool interrupted() { return g_interrupted != 0; }
 
+void quick_edit_off() {}
+void quick_edit_restore() {}
+
 bool restart_self(const std::vector<std::string>& args, Error* err) {
   std::string exe = executable_path();
   std::vector<char*> argv;

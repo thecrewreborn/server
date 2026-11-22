@@ -173,19 +173,41 @@ const Peer* Peers::get(uint64_t pid) const {
   return nullptr;
 }
 
-void Peers::add(uint64_t pid, Bytes info, Bytes entity, double x, double y, Bytes announced) {
+void Peers::trim() {
   double now = clock();
   std::vector<Peer> kept;
   kept.reserve(by_id_.size());
   for (Peer& p : by_id_) {
-    if (!(now - p.seen > STALE_S)) kept.push_back(std::move(p));
+    if (!(now - p.seen > session::STORE_MAX_AGE)) kept.push_back(std::move(p));
   }
   by_id_.swap(kept);
+  if (by_id_.size() <= MAX_KEPT) return;
+  std::vector<size_t> stale;
+  for (size_t i = 0; i < by_id_.size(); i++) {
+    if (now - by_id_[i].seen > STALE_S) stale.push_back(i);
+  }
+  std::stable_sort(stale.begin(), stale.end(), [this](size_t a, size_t b) { return by_id_[a].seen < by_id_[b].seen; });
+  size_t drop = std::min(stale.size(), by_id_.size() - MAX_KEPT);
+  std::vector<bool> gone(by_id_.size(), false);
+  for (size_t k = 0; k < drop; k++) gone[stale[k]] = true;
+  kept.clear();
+  for (size_t i = 0; i < by_id_.size(); i++) {
+    if (!gone[i]) kept.push_back(std::move(by_id_[i]));
+  }
+  by_id_.swap(kept);
+}
+
+void Peers::add(uint64_t pid, Bytes info, Bytes entity, double x, double y, Bytes announced) {
+  trim();
   Peer* old = find(pid);
   int64_t order;
   if (old && clock() - old->seen <= STALE_S) {
     order = old->order;
   } else {
+    if (old) {
+      by_id_.erase(by_id_.begin() + (old - by_id_.data()));
+      old = nullptr;
+    }
     order = ++count_;
   }
   Peer p;
@@ -216,23 +238,30 @@ void Peers::forget(uint64_t pid) {
   }
 }
 
+void Peers::seen(Peer& p) {
+  if (clock() - p.seen > STALE_S) p.order = ++count_;
+  p.seen = clock();
+  p.restored = false;
+}
+
 void Peers::moved(uint64_t pid, double x, double y) {
   if (Peer* p = find(pid)) {
     p->x = x;
     p->y = y;
-    p->seen = clock();
-    p->restored = false;
+    seen(*p);
   }
+}
+
+void Peers::touch(uint64_t pid) {
+  if (Peer* p = find(pid)) seen(*p);
 }
 
 void Peers::save() {
   if (store_.empty()) return;
   Files* files = core_.files();
   if (!files) return;
-  double now = clock();
   json::Value entries = json::Value::array();
   for (const Peer& p : by_id_) {
-    if (!(now - p.seen <= STALE_S)) continue;
     json::Value e = json::Value::object();
     e.set("info", json::Value::string(py::hex(p.info)));
     e.set("entity", json::Value::string(py::hex(p.entity)));
@@ -401,8 +430,11 @@ bool acting_id(Core& core, const Ctx& ctx, std::optional<uint64_t>* out, Raised*
   return true;
 }
 
-Bytes seen_from(const Bytes& info, const std::string& client_ip) {
+Bytes seen_from(const Bytes& info, const std::string& client_ip, const std::string& server_lan) {
   std::optional<uint32_t> src = ubi::client_ipv4(client_ip);
+  if (src && (*src >> 24) == 127) {
+    src = server_lan.empty() ? std::nullopt : ubi::client_ipv4(server_lan);
+  }
   if (!src || (*src >> 24) == 127) return info;
   uint64_t at = ips_at(info);
   uint32_t first = u32_at(info, at);
@@ -473,7 +505,7 @@ bool register_peer(Core& core, const Bytes& body, const Ctx* ctx, std::optional<
     info.swap(next);
     at = ips_at(info);
     Bytes announced = slice(info, at, at + 8);
-    info = seen_from(info, ctx->client_ip);
+    info = seen_from(info, ctx->client_ip, ctx->server_lan);
     Bytes now_ips = slice(info, at, at + 8);
     if (now_ips == announced) {
       announced.clear();

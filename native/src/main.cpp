@@ -18,5 +18,7 @@ int main(int argc, char** argv) {
   if (!args.empty() && args[0] == "console-password") {
     return tcr::app::run_console_password(std::vector<std::string>(args.begin() + 1, args.end()));
   }
-  std::_Exit(tcr::app::run_server(args));
+  int status = tcr::app::run_server(args);
+  tcr::plat::quick_edit_restore();
+  std::_Exit(status);
 }

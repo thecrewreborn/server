@@ -19,6 +19,7 @@ namespace peers {
 
 constexpr size_t MAX_PEERS = 5;
 constexpr double STALE_S = 120;
+constexpr size_t MAX_KEPT = 100;
 constexpr uint32_t NET_ENTITY = 0xC8337621;
 constexpr uint32_t P_PEER = 0x62230DFA;
 constexpr uint32_t P_ORBIS = 0x9A42C791;
@@ -56,6 +57,7 @@ class Peers {
   const std::string& store() const { return store_; }
   int64_t load(const std::string& path);
   void moved(uint64_t pid, double x, double y);
+  void touch(uint64_t pid);
   std::vector<std::pair<double, size_t>> others(uint64_t pid, double x, double y) const;
   std::vector<size_t> hosts(uint64_t pid) const;
 
@@ -70,6 +72,8 @@ class Peers {
  private:
   double clock() const;
   Peer* find(uint64_t pid);
+  void seen(Peer& p);
+  void trim();
   void save();
 
   Core& core_;
@@ -86,7 +90,7 @@ bool multiplayer(Core& core, std::string* mode, Raised* raised);
 bool enabled(Core& core, bool* on, Raised* raised);
 bool acting_id(Core& core, const Ctx& ctx, std::optional<uint64_t>* out, Raised* raised);
 
-Bytes seen_from(const Bytes& info, const std::string& client_ip);
+Bytes seen_from(const Bytes& info, const std::string& client_ip, const std::string& server_lan = std::string());
 
 bool info_end(const Bytes& body, size_t p, size_t* end, Raised* raised);
 

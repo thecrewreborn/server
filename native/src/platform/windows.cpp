@@ -586,6 +586,28 @@ void catch_interrupt() { SetConsoleCtrlHandler(on_console_event, TRUE); }
 bool interrupted() { return InterlockedCompareExchange(&g_interrupted, 0, 0) != 0; }
 
 namespace {
+DWORD g_mode_before = 0;
+volatile LONG g_mode_saved = 0;
+}
+
+void quick_edit_off() {
+  HANDLE h = GetStdHandle(STD_INPUT_HANDLE);
+  if (h == INVALID_HANDLE_VALUE || h == nullptr) return;
+  DWORD mode = 0;
+  if (!GetConsoleMode(h, &mode)) return;
+  if (!(mode & ENABLE_QUICK_EDIT_MODE)) return;
+  if (!SetConsoleMode(h, (mode & ~static_cast<DWORD>(ENABLE_QUICK_EDIT_MODE)) | ENABLE_EXTENDED_FLAGS)) return;
+  g_mode_before = mode | ENABLE_EXTENDED_FLAGS;
+  InterlockedExchange(&g_mode_saved, 1);
+}
+
+void quick_edit_restore() {
+  if (InterlockedExchange(&g_mode_saved, 0) == 0) return;
+  HANDLE h = GetStdHandle(STD_INPUT_HANDLE);
+  if (h != INVALID_HANDLE_VALUE && h != nullptr) SetConsoleMode(h, g_mode_before);
+}
+
+namespace {
 struct ThreadStart {
   void (*fn)(void*);
   void* arg;

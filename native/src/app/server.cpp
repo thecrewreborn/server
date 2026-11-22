@@ -268,6 +268,7 @@ void watch_interrupt() {
   plat::start_thread([]() {
     while (!plat::interrupted() && !stop_due()) plat::sleep_seconds(0.05);
     say("\nServer stopped.");
+    plat::quick_edit_restore();
     if (g_restart.load() && !plat::interrupted()) {
       server::CoreLock lock;
       status_report_stopping();
@@ -305,6 +306,7 @@ int run_server(const std::vector<std::string>& argv) {
   server::console_log::start();
   plat::stream_errors_replace();
   plat::catch_interrupt();
+  plat::quick_edit_off();
   watch_interrupt();
   const std::string home = home_folder();
   const std::string config_path = config_file(home);

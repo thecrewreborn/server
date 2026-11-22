@@ -14,6 +14,7 @@
 #include "core/v1_21/gamedata.h"
 #include "core/v1_21/handlers.h"
 #include "core/v1_21/module_state.h"
+#include "core/v1_21/peers.h"
 #include "core/v1_21/player.h"
 #include "core/version.h"
 #include "core/wire.h"
@@ -751,7 +752,9 @@ void Ubi::end_session(const std::string& auth, const std::optional<std::string>&
     return;
   }
   entry->session = std::string();
+  std::string name = entry->name;
   save_tickets();
+  core_.peers().forget(v1_21::player_id_for(name));
 }
 
 void Ubi::prune(Times& table, double window, double now) {

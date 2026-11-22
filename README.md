@@ -154,7 +154,8 @@ To update the app, install the new APK over the old one: the app and its saves s
 ## Ports
 
 TCP 80 and 443, UDP 4000, 4001 and 4100 (4100: the base game 1.00), and TCP 8090 for the admin page. Nothing has to be opened on the router for play
-at home. When the system refuses port 80 or 443 (another program uses it, or Linux without root) the server takes 8080
+at home. For multiplayer each PC that plays also needs UDP 3001 open for `TheCrew.exe` (see "Windows Firewall on
+every PC that plays"). When the system refuses port 80 or 443 (another program uses it, or Linux without root) the server takes 8080
 and 8443 instead and tells the game; it says so when it starts. The Android app always uses 8080 and 8443. If the game doesn't find the server, set `Host` in
 `reborn.ini` (PC) or put the server address into `/data/TheCrew/server.txt` on the console (PS4).
 
@@ -317,10 +318,33 @@ Any other word stops the start with a message. A `config.ini` made from the `con
 contains `multiplayer = on`. On a server on the internet, change it to `lan` or `off`.
 
 Players connect to each other directly, not through the server. The server tells each game the address it sees the
-other game's connection come from, so a VPN or a second network adapter on a PC no longer matters (except for a game
-on the server's own computer). A console reaches a PC only when the PC lets the game in: allow `TheCrew.exe` through
-the Windows Firewall, on the network type your home network uses (often "Public" by default); without that rule a PS4
-cannot join that PC's session or accept its crew invite. After a server restart, players who kept playing still find each other; nobody needs to go back to free roam.
+other game's connection come from, so a VPN or a second network adapter on a PC no longer matters. A game on the
+server's own computer is shown with the server's address. After a server restart, players who kept playing still find
+each other; nobody needs to go back to free roam.
+
+### Windows Firewall on every PC that plays
+
+Any game can end up hosting the session, so every PC that plays multiplayer must let `TheCrew.exe` receive on UDP
+port 3001. The server's own firewall rule does not cover the game. Without the game's rule, another PC or a PS4
+cannot join that PC's session or accept its crew invite, even though both games reach the server.
+
+On each PC:
+
+1. Set the home network to Private: Settings > Network & internet > Wi-Fi or Ethernet > your network > Network
+   profile type: Private. Windows often starts with Public.
+2. Allow the game: Windows Security > Firewall & network protection > Allow an app through firewall > Change
+   settings. Find `TheCrew.exe` and tick Private. If it is missing, click "Allow another app..." and pick
+   `TheCrew.exe` in the game folder. If Windows asks at the first multiplayer start whether The Crew may use the
+   network, allow it for private networks.
+
+To check: Allow an app through firewall lists `TheCrew.exe` with Private ticked, and the network page shows Private.
+
+Instead of step 2 you can add the rule in a command prompt opened with "Run as administrator" (use the path of your
+game folder):
+
+```
+netsh advfirewall firewall add rule name="The Crew" dir=in action=allow program="C:\Games\The Crew\TheCrew.exe" protocol=UDP localport=3001 profile=private
+```
 
 ## Player pictures
 

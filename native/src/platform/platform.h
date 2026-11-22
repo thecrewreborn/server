@@ -153,6 +153,9 @@ extern const char* const kTextNewline;
 void catch_interrupt();
 bool interrupted();
 
+void quick_edit_off();
+void quick_edit_restore();
+
 bool restart_self(const std::vector<std::string>& args, Error* err);
 void wait_restart_parent();
 

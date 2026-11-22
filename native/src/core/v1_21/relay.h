@@ -163,6 +163,7 @@ class Relay {
   bool ctx_for_name(const std::string& name, std::shared_ptr<Ctx>* out, Raised* raised);
   bool ctx_for(const Addr& addr, Session* sess, std::shared_ptr<Ctx>* out, Raised* raised);
   bool public_ip(const Addr& peer, std::string* out, Raised* raised);
+  std::string server_lan(const std::string& client_ip);
   void log(json::Value entry);
   bool may_log();
   void guest_dropped(const Addr& addr, const std::string& text);

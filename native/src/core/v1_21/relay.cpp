@@ -398,6 +398,9 @@ void Relay::expire(double now) {
 }
 
 void Relay::drop(const Addr& addr) {
+  if (Entry* e = sessions_.get(addr.key())) {
+    if (e->sess && e->sess->name) core_.peers().forget(player_id_for(*e->sess->name));
+  }
   unguest(addr);
   forget_session(addr);
   const std::string k = addr.key();
@@ -599,6 +602,7 @@ bool Relay::ctx_for(const Addr& addr, Session* sess, std::shared_ptr<Ctx>* out, 
   if (!ctx_for_name(*sess->name, &ctx, raised)) return false;
   ctx->verified = true;
   ctx->client_ip = addr.ip;
+  ctx->server_lan = server_lan(addr.ip);
   const std::string* known = core_.ubi().session_platform(addr.ip);
   bool uplay = truthy(sess->platform) ? (sess->platform.is_string() && sess->platform.as_string() == "uplay")
                                       : (known && *known == "uplay");
@@ -623,6 +627,15 @@ bool Relay::public_ip(const Addr& peer, std::string* out, Raised* raised) {
     return true;
   }
   return host_->local_ip_for(peer.ip, out, raised);
+}
+
+std::string Relay::server_lan(const std::string& client_ip) {
+  std::optional<uint32_t> src = ubi::client_ipv4(client_ip);
+  if (!src || (*src >> 24) != 127) return std::string();
+  std::string ip;
+  Raised raised;
+  if (!public_ip(Addr("10.255.255.255", 1), &ip, &raised)) return std::string();
+  return ip;
 }
 
 void Relay::log(json::Value entry) {
@@ -1129,6 +1142,7 @@ bool Relay::bind_player(Session& sess, const Addr& addr, const Bytes& request, b
   ctx->pc = platform == "uplay";
   ctx->verified = true;
   ctx->client_ip = addr.ip;
+  ctx->server_lan = server_lan(addr.ip);
   sess.name = player;
   sess.platform = json::Value::string(platform);
   unguest(addr);
@@ -1211,6 +1225,7 @@ void Relay::tunnel_plain(Session& sess, const Bytes& header, const Bytes& plain,
     core_.ubi().touch(sess.ctx->player_name, addr.ip);
     core_.ubi().active(*sess.name);
   }
+  if (sess.name) core_.peers().touch(player_id_for(*sess.name));
   std::shared_ptr<Session>* proven = proven_.get(addr.key());
   if (!proven || proven->get() != &sess) {
     Entry* e = sessions_.get(addr.key());
